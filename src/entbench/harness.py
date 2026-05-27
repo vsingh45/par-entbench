@@ -226,12 +226,19 @@ COLLECTIONS AND SCHEMAS:
 - iam_roles: {role_name, permissions [array of strings], is_elevated bool}
 
 RULES:
-- For null/missing field checks use: {$or: [{field: null}, {field: {$exists: false}}]}
+- For null/missing field checks use: {"$or": [{"field": null}, {"field": {"$exists": false}}]}
 - Use $lookup for joins between collections
-- Return ONLY valid JSON, no explanation, no markdown fences
+- Do NOT add $project stages unless explicitly asked — return full documents
+- Return ONLY the aggregation pipeline stages needed to answer the query
 
-OUTPUT FORMAT (return exactly this JSON structure):
-{"collection": "sam_licenses", "pipeline": [{"$match": {...}}, {"$group": {...}}]}""",
+EXAMPLE — "Find active Adobe licenses over $50k":
+{"collection": "sam_licenses", "pipeline": [{"$match": {"publisher": "Adobe", "status": "active", "contract_value_usd": {"$gt": 50000}}}]}
+
+EXAMPLE — "Group by publisher, sum contract values":
+{"collection": "sam_licenses", "pipeline": [{"$group": {"_id": "$publisher", "total": {"$sum": "$contract_value_usd"}}}]}
+
+Return ONLY valid JSON, no explanation, no markdown fences:
+{"collection": "COLLECTION_NAME", "pipeline": [STAGE1, STAGE2, ...]}""",
 
         "extract": """You are a document extraction specialist.
 
@@ -331,6 +338,66 @@ OUTPUT FORMAT:
             return fn
 
         registry[name] = make_fn(name, prompt)
+
+    # Override mongo_query with tool_use version for guaranteed structured output
+    MONGO_TOOL = {
+        "name": "generate_pipeline",
+        "description": "Generate a MongoDB aggregation pipeline",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "collection": {
+                    "type": "string",
+                    "description": "Collection name to query",
+                    "enum": ["sam_licenses", "sam_seat_assignments", "billing_contracts", "iam_roles"],
+                },
+                "pipeline": {
+                    "type": "array",
+                    "description": "MongoDB aggregation pipeline stages",
+                    "items": {"type": "object"},
+                },
+            },
+            "required": ["collection", "pipeline"],
+        },
+    }
+
+    mongo_system = prompts["mongo_query"]
+
+    def mongo_tool_fn(subtask, tier, upstream_outputs, client, task_context=None):
+        from par.dispatcher import TIER_MODELS
+        model = TIER_MODELS[tier]
+        msg = {"task": subtask.description, "upstream_outputs": upstream_outputs}
+        if task_context:
+            for field in ["query", "collection"]:
+                if field in task_context:
+                    msg[field] = task_context[field]
+        response = client.messages.create(
+            model=model,
+            max_tokens=2000,
+            system=mongo_system,
+            tools=[MONGO_TOOL],
+            tool_choice={"type": "tool", "name": "generate_pipeline"},
+            messages=[{"role": "user", "content": json.dumps(msg)}],
+        )
+        tool_block = next((b for b in response.content if b.type == "tool_use"), None)
+        if tool_block:
+            result = tool_block.input
+        else:
+            output_text = "".join(b.text for b in response.content if hasattr(b, "text"))
+            try:
+                result = json.loads(output_text)
+                if isinstance(result, list):
+                    result = {"items": result}
+            except json.JSONDecodeError:
+                result = {"raw_output": output_text}
+        usage = {
+            "input_tokens": response.usage.input_tokens,
+            "output_tokens": response.usage.output_tokens,
+            "cached_tokens": getattr(response.usage, "cache_read_input_tokens", 0),
+        }
+        return result, usage
+
+    registry["mongo_query"] = mongo_tool_fn
 
     return registry
 

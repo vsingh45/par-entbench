@@ -91,36 +91,58 @@ def _normalize_value(v: Any) -> Any:
 def _doc_bag_equivalent(
     actual: list[dict], expected: list[dict], tolerance: float = NUMERIC_TOLERANCE
 ) -> bool:
-    """Compare document bags, order-independent, numeric tolerance applied."""
+    """
+    Compare document bags, order-independent, numeric tolerance applied.
+
+    Uses SUBSET matching: actual documents must contain all fields present
+    in expected documents (with matching values), but may have additional
+    fields (e.g. from $project stages the model adds).
+    """
     if actual is None or expected is None:
         return False
-    if len(actual) != len(expected):
+
+    # Allow actual to have more documents if expected is a subset
+    # (model may not apply LIMIT that gold doesn't specify)
+    if len(actual) < len(expected):
         return False
 
-    actual_norm = sorted(
-        [_normalize_doc(d) for d in actual], key=lambda d: str(d)
-    )
+    # Normalize expected docs
     expected_norm = sorted(
         [_normalize_doc(d) for d in expected], key=lambda d: str(d)
     )
 
-    for a_doc, e_doc in zip(actual_norm, expected_norm):
-        if dict(a_doc) != dict(e_doc):
-            # Apply numeric tolerance on per-field basis
-            a_dict = dict(a_doc)
-            e_dict = dict(e_doc)
-            if set(a_dict.keys()) != set(e_dict.keys()):
+    # For each expected doc, check that at least one actual doc contains
+    # all its key-value pairs
+    def _doc_contains(actual_doc: tuple, expected_doc: tuple) -> bool:
+        actual_dict = dict(actual_doc)
+        expected_dict = dict(expected_doc)
+        for k, ev in expected_dict.items():
+            if k not in actual_dict:
                 return False
-            for k in a_dict:
-                av, ev = a_dict[k], e_dict[k]
-                if isinstance(av, float) or isinstance(ev, float):
-                    try:
-                        if not math.isclose(float(av), float(ev), abs_tol=tolerance):
-                            return False
-                    except (TypeError, ValueError):
+            av = actual_dict[k]
+            if isinstance(av, float) or isinstance(ev, float):
+                try:
+                    if not math.isclose(float(av), float(ev), abs_tol=tolerance):
                         return False
-                elif av != ev:
+                except (TypeError, ValueError):
                     return False
+            elif av != ev:
+                return False
+        return True
+
+    actual_norm = [_normalize_doc(d) for d in actual]
+
+    # Each expected doc must be matched by at least one actual doc
+    matched_actual = set()
+    for e_doc in expected_norm:
+        found = False
+        for i, a_doc in enumerate(actual_norm):
+            if i not in matched_actual and _doc_contains(a_doc, e_doc):
+                matched_actual.add(i)
+                found = True
+                break
+        if not found:
+            return False
     return True
 
 
