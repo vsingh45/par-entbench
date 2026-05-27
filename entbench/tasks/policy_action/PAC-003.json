@@ -1,0 +1,22 @@
+{
+  "task_id": "PAC-003",
+  "task_class": "policy_action",
+  "difficulty": "hard",
+  "query": "On-call engineer 'u_9981' (role: senior-engineer) requests emergency access to production database 'db-payments-primary' to investigate a live P1 incident.",
+  "expected_specialists": ["policy_action"],
+  "policy_registry": {
+    "POL-501": "Production database access requires DBA role or active incident ticket.",
+    "POL-502": "Mission-critical resources require dual approval except during declared P1 incidents.",
+    "POL-503": "Emergency access grants must be logged and reviewed within 24 hours."
+  },
+  "context": {"user_id": "u_9981", "role": "senior-engineer", "resource": "db-payments-primary", "resource_criticality": "mission-critical", "action": "read_write", "incident_severity": "P1", "incident_ticket": "INC-20241215-0042"},
+  "gold_output": {
+    "selected_action": "allow_with_constraints",
+    "policy_compliance": {"POL-501": "pass", "POL-502": "pass_conditional", "POL-503": "pending_review"},
+    "criticality_assessment": "mission-critical",
+    "applied_constraints": ["Emergency access logged under INC-20241215-0042", "Access review required within 24 hours"],
+    "reason": "Active P1 incident ticket satisfies POL-501; P1 exception waives dual approval (POL-502); POL-503 requires post-access review within 24 hours"
+  },
+  "evaluator": {"type": "exact_match", "fields": ["selected_action", "policy_compliance", "criticality_assessment", "applied_constraints"]},
+  "bug_patterns": ["multi_policy_with_exception", "it_criticality_4tier", "constrained_allow", "post_action_compliance"]
+}

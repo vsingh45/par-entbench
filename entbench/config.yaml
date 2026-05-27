@@ -1,0 +1,63 @@
+# EntBench Configuration
+# All parameterized defaults for experiments.
+# Modify these values to adjust experiment behavior without touching code.
+
+scope:
+  fiscal_year: 2024
+  fiscal_year_start: "2024-01-01"
+  fiscal_year_end: "2025-01-01"
+
+windows:
+  usage_lookback_days: 90
+  renewal_warning_days: 90
+
+thresholds:
+  large_transaction_usd: 50000
+  cohort_high_ltv_usd: 200000
+  cohort_mid_ltv_usd: 50000
+  inactive_seat_days: 90
+  utilization_low_pct: 0.20
+
+criticality:
+  contract_value_weight: 0.4
+  critical_license_weight: 0.4
+  usage_trend_weight: 0.2
+
+billing:
+  payment_terms_days: 30
+  early_payment_discount_pct: 2.0
+  invoice_aging_buckets: [30, 60, 90, 120]
+
+crm:
+  activity_window_days: 90
+  renewal_risk_days: 60
+  tier_mismatch_threshold_pct: 30
+
+iam:
+  access_review_window_days: 180
+  elevated_permission_terms:
+    - "admin"
+    - "db.production.write"
+    - "iam.users.delete"
+    - "secrets.read"
+
+procurement:
+  vendor_consolidation_threshold: 3
+  category_overlap_pct: 50
+
+cost:
+  kill_switch_usd: 75
+  frugal_confidence_threshold: 0.70
+
+routers:
+  primary:
+    - par
+    - all_frontier
+    - all_small
+    - sink_frontier
+    - source_frontier
+    - frugal_cascade
+  ablation:
+    - par_no_rationale  # Cross-Recon only
+
+seeds: 3

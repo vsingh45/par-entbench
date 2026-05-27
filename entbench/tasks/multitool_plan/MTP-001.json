@@ -1,0 +1,14 @@
+{
+  "task_id": "MTP-001",
+  "task_class": "multitool_plan",
+  "difficulty": "easy",
+  "query": "Check how many Microsoft licenses we have in Mongo, then get last month's Microsoft spend from Snowflake, and email the summary to the SAM team.",
+  "expected_specialists": ["multitool_plan"],
+  "gold_plan": [
+    {"tool": "mongo.find", "arguments": {"collection": "sam_licenses", "filter": {"publisher": "Microsoft", "status": "active"}}},
+    {"tool": "sql.snowflake.query", "arguments": {"query": "SELECT SUM(amount_usd) FROM consumption_facts WHERE publisher='Microsoft' AND event_date >= CURRENT_DATE - INTERVAL '30 days'"}},
+    {"tool": "email.send", "arguments": {"to": "sam-team@globex.com", "subject": "Microsoft SAM Summary", "body": "Active licenses: $1.count. Last 30 days spend: $2.total"}}
+  ],
+  "evaluator": {"type": "plan_structure", "checks": ["required_tools_set_membership", "dependency_ordering_partial_order", "argument_validators"]},
+  "bug_patterns": ["data_dependency_references", "linear_chain"]
+}

@@ -1,0 +1,36 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "difficulty": "medium",
+  "domain": "iam",
+  "query": "For each IAM role with elevated permissions, reconcile granted permissions against actually exercised permissions in the last 180 days. Flag granted-but-never-used permissions as candidates for revocation.",
+  "expected_specialists": ["mongo_query", "sql_gen", "cross_recon"],
+  "substrate": "mongodb+postgres",
+  "gold_workflow": {
+    "step_1_mongo": {
+      "collection": "iam_roles",
+      "pipeline": [
+        {"$match": {"is_elevated": true}},
+        {"$unwind": "$permissions"},
+        {"$project": {"role_name": 1, "permission": "$permissions"}}
+      ]
+    },
+    "step_2_sql": {
+      "query": "SELECT DISTINCT permission FROM access_log_facts WHERE access_time >= NOW() - INTERVAL '180 days' AND result = 'allowed'"
+    },
+    "step_3_recon": {
+      "method": "left_join_mongo_primary",
+      "join_key": "permission",
+      "classification": "granted_but_unused if permission in Mongo but not in Snowflake exercised set"
+    }
+  },
+  "evaluator": {
+    "type": "multi_stage",
+    "stages": [
+      {"name": "mongo_correct", "type": "bag_equivalence"},
+      {"name": "sql_correct", "type": "bag_equivalence"},
+      {"name": "recon_correct", "type": "set_classification"}
+    ]
+  },
+  "bug_patterns": ["unwind_permissions", "set_difference_via_join", "negative_classification"]
+}

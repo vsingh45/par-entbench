@@ -1,0 +1,17 @@
+{
+  "task_id": "EXT-003",
+  "task_class": "extract",
+  "difficulty": "hard",
+  "query": "Parse the following distributed tracing log entry and extract trace_id, span_id, parent_span_id, service_name, operation_name, duration_ms, and any error fields. Note: parent_span_id may be missing for root spans.",
+  "expected_specialists": ["extract"],
+  "input_document": "2024-12-15T14:32:01.847Z [INFO] trace_id=abc123def456 span_id=span_001 service=api-gateway operation=POST /v1/orders duration_ms=247 status=200\n2024-12-15T14:32:01.851Z [INFO] trace_id=abc123def456 span_id=span_002 parent=span_001 service=order-service operation=create_order duration_ms=189 status=200\n2024-12-15T14:32:01.892Z [ERROR] trace_id=abc123def456 span_id=span_003 parent=span_002 service=payment-service operation=charge_card duration_ms=2847 status=500 error=TimeoutError error_msg='Payment gateway timeout'",
+  "gold_extraction": {
+    "spans": [
+      {"trace_id": "abc123def456", "span_id": "span_001", "parent_span_id": null, "service_name": "api-gateway", "operation_name": "POST /v1/orders", "duration_ms": 247, "error": null},
+      {"trace_id": "abc123def456", "span_id": "span_002", "parent_span_id": "span_001", "service_name": "order-service", "operation_name": "create_order", "duration_ms": 189, "error": null},
+      {"trace_id": "abc123def456", "span_id": "span_003", "parent_span_id": "span_002", "service_name": "payment-service", "operation_name": "charge_card", "duration_ms": 2847, "error": {"type": "TimeoutError", "message": "Payment gateway timeout"}}
+    ]
+  },
+  "evaluator": {"type": "field_level_f1", "threshold": 0.90, "null_vs_empty_strict": true},
+  "bug_patterns": ["multi_line_log", "optional_parent_span", "nested_error_object"]
+}

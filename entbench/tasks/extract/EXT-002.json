@@ -1,0 +1,17 @@
+{
+  "task_id": "EXT-002",
+  "task_class": "extract",
+  "difficulty": "medium",
+  "query": "Extract all line items from the invoice including SKU, description, quantity, unit price, and line total.",
+  "expected_specialists": ["extract"],
+  "input_document": "INVOICE #INV-2024-8847\n\nLine 1: SKU CLO-PRO-001 - Adobe Creative Cloud Pro Annual License - Qty 25 @ $599.00 = $14,975.00\nLine 2: SKU CLO-STD-002 - Adobe Creative Cloud Standard - Qty 10 @ $359.00 = $3,590.00\nLine 3: SKU TRG-001 - Onboarding Training - Qty 1 @ $2,500.00 = $2,500.00",
+  "gold_extraction": {
+    "line_items": [
+      {"sku": "CLO-PRO-001", "description": "Adobe Creative Cloud Pro Annual License", "quantity": 25, "unit_price_usd": 599.0, "line_total_usd": 14975.0},
+      {"sku": "CLO-STD-002", "description": "Adobe Creative Cloud Standard", "quantity": 10, "unit_price_usd": 359.0, "line_total_usd": 3590.0},
+      {"sku": "TRG-001", "description": "Onboarding Training", "quantity": 1, "unit_price_usd": 2500.0, "line_total_usd": 2500.0}
+    ]
+  },
+  "evaluator": {"type": "field_level_f1", "threshold": 0.85, "tolerance_numeric": 0.01},
+  "bug_patterns": ["multi_line_extraction", "structured_array"]
+}

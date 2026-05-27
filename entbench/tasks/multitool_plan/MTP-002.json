@@ -1,0 +1,15 @@
+{
+  "task_id": "MTP-002",
+  "task_class": "multitool_plan",
+  "difficulty": "medium",
+  "query": "Update the contract record for vendor 'TechFlow Solutions' to extend the term by 12 months. Check permissions first, then make the update, then notify the procurement team.",
+  "expected_specialists": ["multitool_plan"],
+  "gold_plan": [
+    {"tool": "iam.check_permission", "arguments": {"user_id": "$caller", "permission": "contracts.modify"}},
+    {"tool": "mongo.update", "arguments": {"collection": "billing_contracts", "filter": {"vendor_name": "TechFlow Solutions"}, "update": {"$inc": {"term_months": 12}}}, "condition": "if_previous_true"},
+    {"tool": "audit.log_action", "arguments": {"action": "contract_term_extended", "vendor": "TechFlow Solutions", "months_added": 12}},
+    {"tool": "slack.post_message", "arguments": {"channel": "#procurement", "message": "Contract for TechFlow Solutions extended by 12 months"}}
+  ],
+  "evaluator": {"type": "plan_structure", "checks": ["iam_check_first", "conditional_mutation", "audit_always_fires"]},
+  "bug_patterns": ["governance_gate", "conditional_execution", "audit_pattern"]
+}

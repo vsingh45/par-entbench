@@ -1,0 +1,16 @@
+{
+  "task_id": "SQL-001",
+  "task_class": "sql_gen",
+  "difficulty": "easy",
+  "query": "What is the total Adobe spend across all products in Q4 2024?",
+  "expected_specialists": ["sql_gen"],
+  "substrate": "postgres",
+  "gold_sql": "SELECT SUM(amount_usd) AS total_spend FROM consumption_facts WHERE publisher = 'Adobe' AND fiscal_year = 2024 AND fiscal_quarter = 4",
+  "evaluator": {
+    "type": "execution_bag_equivalence",
+    "tolerance_numeric": 0.01,
+    "result_columns": ["total_spend"]
+  },
+  "linter_check": true,
+  "bug_patterns": ["aggregation", "explicit_publisher_filter"]
+}

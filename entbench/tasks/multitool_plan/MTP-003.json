@@ -1,0 +1,14 @@
+{
+  "task_id": "MTP-003",
+  "task_class": "multitool_plan",
+  "difficulty": "hard",
+  "query": "Simultaneously fetch our Adobe license data from Mongo and Adobe's Q4 usage from Snowflake, then reconcile and post the summary to #sam-team. Budget: 6 tool calls.",
+  "expected_specialists": ["multitool_plan"],
+  "gold_plan": [
+    {"tool": "mongo.find", "arguments": {"collection": "sam_licenses", "filter": {"publisher": "Adobe", "status": "active"}}, "parallel_group": "adobe_fetch"},
+    {"tool": "sql.snowflake.query", "arguments": {"query": "SELECT product, SUM(amount_usd) FROM consumption_facts WHERE publisher='Adobe' AND fiscal_quarter=4 GROUP BY product"}, "parallel_group": "adobe_fetch"},
+    {"tool": "slack.post_message", "arguments": {"channel": "#sam-team", "message": "Adobe reconciliation: contracts from $1.results, Q4 usage from $2.results"}, "depends_on": [1, 2]}
+  ],
+  "evaluator": {"type": "plan_structure", "checks": ["parallel_group_membership", "depends_on_correct", "budget_satisfied"]},
+  "bug_patterns": ["parallel_execution", "dependency_declaration", "budget_constraint"]
+}

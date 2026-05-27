@@ -1,0 +1,16 @@
+{
+  "task_id": "SQL-003",
+  "task_class": "sql_gen",
+  "difficulty": "hard",
+  "query": "For each publisher in Adobe and Microsoft, compute the quarter-over-quarter spend change in 2024 and rank the products within each publisher by Q4 spend.",
+  "expected_specialists": ["sql_gen"],
+  "substrate": "postgres",
+  "gold_sql": "WITH quarterly_spend AS (SELECT publisher, product, fiscal_quarter, SUM(amount_usd) AS qspend FROM consumption_facts WHERE publisher IN ('Adobe', 'Microsoft') AND fiscal_year = 2024 GROUP BY publisher, product, fiscal_quarter), with_lag AS (SELECT publisher, product, fiscal_quarter, qspend, LAG(qspend) OVER (PARTITION BY publisher, product ORDER BY fiscal_quarter) AS prev_qspend FROM quarterly_spend) SELECT publisher, product, fiscal_quarter, qspend, qspend - COALESCE(prev_qspend, 0) AS qoq_change, RANK() OVER (PARTITION BY publisher ORDER BY qspend DESC, product) AS q4_rank FROM with_lag WHERE fiscal_quarter = 4",
+  "evaluator": {
+    "type": "execution_bag_equivalence",
+    "tolerance_numeric": 0.01,
+    "result_columns": ["publisher", "product", "fiscal_quarter", "qspend", "qoq_change", "q4_rank"]
+  },
+  "linter_check": true,
+  "bug_patterns": ["multi_cte", "window_function", "lag_with_partition", "rank_with_tiebreaker"]
+}

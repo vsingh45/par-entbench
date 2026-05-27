@@ -1,0 +1,18 @@
+{
+  "task_id": "SQL-002",
+  "task_class": "sql_gen",
+  "difficulty": "medium",
+  "query": "List the top 5 publishers by total spend in fiscal year 2024, with their total spend amounts.",
+  "expected_specialists": ["sql_gen"],
+  "substrate": "postgres",
+  "gold_sql": "SELECT publisher, SUM(amount_usd) AS total_spend FROM consumption_facts WHERE event_date >= '2024-01-01' AND event_date < '2025-01-01' GROUP BY publisher ORDER BY total_spend DESC LIMIT 5",
+  "evaluator": {
+    "type": "execution_bag_equivalence",
+    "tolerance_numeric": 0.01,
+    "result_columns": ["publisher", "total_spend"],
+    "order_sensitive": true
+  },
+  "linter_check": true,
+  "bug_patterns": ["group_by", "order_by_aggregate", "limit"],
+  "antipattern_to_avoid": "EXTRACT(YEAR FROM event_date) = 2024 — use date-range form for indexability"
+}

@@ -1,0 +1,49 @@
+{
+  "task_id": "XR-001",
+  "task_class": "cross_recon",
+  "difficulty": "hard",
+  "domain": "sam",
+  "query": "What is our Adobe renewal trajectory across product lines, and where should we expand, hold, or reduce? Use current contracted state from sam_licenses and Q4 2024 actual spend plus 90-day usage trend from consumption_facts.",
+  "expected_specialists": ["mongo_query", "sql_gen", "cross_recon"],
+  "substrate": "mongodb+postgres",
+  "is_running_example": true,
+  "gold_workflow": {
+    "step_1_mongo": {
+      "collection": "sam_licenses",
+      "pipeline": [
+        {"$match": {"publisher": "Adobe", "status": "active"}},
+        {"$project": {
+          "license_id": 1, "product": 1, "contract_value_usd": 1,
+          "seat_count": 1, "cost_per_seat_usd": 1, "term_end": 1,
+          "criticality_tier": 1
+        }}
+      ]
+    },
+    "step_2_sql": {
+      "query": "SELECT product, SUM(amount_usd) AS q4_spend, AVG(daily_active_seats) AS avg_active_seats FROM consumption_facts WHERE publisher = 'Adobe' AND fiscal_year = 2024 AND fiscal_quarter = 4 GROUP BY product"
+    },
+    "step_3_recon": {
+      "method": "left_join_mongo_primary",
+      "join_key": "product",
+      "null_handling": "products in Mongo but not in Snowflake get q4_spend=0, classification='no_recent_activity'",
+      "output_schema": {
+        "product": "string",
+        "contract_value_usd": "number",
+        "q4_spend_actual": "number",
+        "avg_active_seats": "number",
+        "renewal_posture": "enum: expand | hold | reduce | no_recent_activity"
+      }
+    }
+  },
+  "evaluator": {
+    "type": "multi_stage",
+    "stages": [
+      {"name": "mongo_correct", "type": "bag_equivalence"},
+      {"name": "sql_correct", "type": "bag_equivalence"},
+      {"name": "recon_correct", "type": "field_match_with_tolerance",
+       "tolerance_numeric": 0.01}
+    ],
+    "all_stages_must_pass": true
+  },
+  "bug_patterns": ["outer_join_semantics", "null_zero_handling", "multi_signal_classification"]
+}

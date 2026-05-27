@@ -1,0 +1,37 @@
+{
+  "task_id": "XR-002",
+  "task_class": "cross_recon",
+  "difficulty": "medium",
+  "domain": "billing",
+  "query": "For each active billing contract, reconcile the contracted annual value against actual invoices issued in 2024 and flag any contracts with material variance (>10%).",
+  "expected_specialists": ["mongo_query", "sql_gen", "cross_recon"],
+  "substrate": "mongodb+postgres",
+  "gold_workflow": {
+    "step_1_mongo": {
+      "collection": "billing_contracts",
+      "pipeline": [
+        {"$match": {"status": "active"}},
+        {"$project": {"contract_id": 1, "vendor_name": 1, "annual_value_usd": 1}}
+      ]
+    },
+    "step_2_sql": {
+      "query": "SELECT contract_id, SUM(amount_usd) AS total_invoiced FROM invoice_facts WHERE invoice_date >= '2024-01-01' AND invoice_date < '2025-01-01' GROUP BY contract_id"
+    },
+    "step_3_recon": {
+      "method": "left_join_mongo_primary",
+      "join_key": "contract_id",
+      "null_handling": "contracts with no invoices treated as total_invoiced=0",
+      "variance_threshold_pct": 10.0
+    }
+  },
+  "evaluator": {
+    "type": "multi_stage",
+    "stages": [
+      {"name": "mongo_correct", "type": "bag_equivalence"},
+      {"name": "sql_correct", "type": "bag_equivalence"},
+      {"name": "recon_correct", "type": "field_match_with_tolerance",
+       "tolerance_numeric": 0.01, "tolerance_pct": 0.1}
+    ]
+  },
+  "bug_patterns": ["variance_calculation", "outer_join_semantics", "threshold_classification"]
+}

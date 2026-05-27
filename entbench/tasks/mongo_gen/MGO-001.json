@@ -1,0 +1,17 @@
+{
+  "task_id": "MGO-001",
+  "task_class": "mongo_gen",
+  "difficulty": "easy",
+  "query": "Find all active Adobe licenses with contract value over $50,000.",
+  "expected_specialists": ["mongo_query"],
+  "substrate": "mongodb",
+  "collection": "sam_licenses",
+  "gold_pipeline": [
+    {"$match": {"publisher": "Adobe", "status": "active", "contract_value_usd": {"$gt": 50000}}}
+  ],
+  "evaluator": {
+    "type": "execution_bag_equivalence",
+    "result_fields": ["license_id", "publisher", "product", "contract_value_usd"]
+  },
+  "bug_patterns": ["match_filter", "numeric_threshold"]
+}

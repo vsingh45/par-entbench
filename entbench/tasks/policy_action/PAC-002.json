@@ -1,0 +1,21 @@
+{
+  "task_id": "PAC-002",
+  "task_class": "policy_action",
+  "difficulty": "medium",
+  "query": "Engineer 'u_7732' attempts to deploy a hotfix to production environment 'prod-us-east-1' outside of the approved maintenance window (current time: 2:15 AM UTC Tuesday).",
+  "expected_specialists": ["policy_action"],
+  "policy_registry": {
+    "POL-401": "Production deployments require engineer role >= senior-engineer.",
+    "POL-402": "Production deployments outside approved maintenance windows require CAB approval.",
+    "POL-403": "Approved maintenance windows are: Saturday 10 PM – Sunday 6 AM UTC."
+  },
+  "context": {"user_id": "u_7732", "role": "engineer", "environment": "prod-us-east-1", "action": "deploy", "current_time_utc": "Tuesday 02:15"},
+  "gold_output": {
+    "selected_action": "deny_pending_approvals",
+    "policy_compliance": {"POL-401": "fail", "POL-402": "fail", "POL-403": "not_applicable"},
+    "reason": "Two violations: role insufficient (POL-401); deployment outside maintenance window requires CAB approval (POL-402). POL-403 defines windows but is not itself a compliance check.",
+    "required_approvals": ["senior-engineer-override", "CAB"]
+  },
+  "evaluator": {"type": "exact_match", "fields": ["selected_action", "policy_compliance", "required_approvals"]},
+  "bug_patterns": ["multi_policy", "time_sensitive_applicability", "policy_classification"]
+}

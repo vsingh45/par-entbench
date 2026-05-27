@@ -1,0 +1,25 @@
+{
+  "task_id": "MGO-002",
+  "task_class": "mongo_gen",
+  "difficulty": "medium",
+  "query": "Group licenses by publisher and compute total contract value, average cost per seat, and license count per publisher.",
+  "expected_specialists": ["mongo_query"],
+  "substrate": "mongodb",
+  "collection": "sam_licenses",
+  "gold_pipeline": [
+    {"$match": {"status": "active"}},
+    {"$group": {
+      "_id": "$publisher",
+      "total_value": {"$sum": "$contract_value_usd"},
+      "avg_cost_per_seat": {"$avg": "$cost_per_seat_usd"},
+      "license_count": {"$sum": 1}
+    }},
+    {"$sort": {"total_value": -1}}
+  ],
+  "evaluator": {
+    "type": "execution_bag_equivalence",
+    "tolerance_numeric": 0.01,
+    "result_fields": ["_id", "total_value", "avg_cost_per_seat", "license_count"]
+  },
+  "bug_patterns": ["group_by", "multi_aggregation", "sort_after_group"]
+}

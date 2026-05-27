@@ -1,0 +1,13 @@
+{
+  "task_id": "PAC-001",
+  "task_class": "policy_action",
+  "difficulty": "easy",
+  "query": "Service account 'svc-reporting' attempts to read the quarterly financial report from S3 bucket 'finance-reports'.",
+  "expected_specialists": ["policy_action"],
+  "policy_registry": {"POL-301": "Read access to 'finance-reports' S3 bucket requires role >= finance-analyst."},
+  "context": {"service_account": "svc-reporting", "role": "service", "resource": "s3://finance-reports/Q4-2024.pdf", "action": "read"},
+  "candidate_actions": ["allow", "deny_with_reason"],
+  "gold_output": {"selected_action": "deny_with_reason", "policy_compliance": {"POL-301": "fail"}, "reason": "Service account role 'service' does not meet minimum 'finance-analyst' requirement"},
+  "evaluator": {"type": "exact_match", "fields": ["selected_action", "policy_compliance"]},
+  "bug_patterns": ["single_rbac", "role_comparison"]
+}

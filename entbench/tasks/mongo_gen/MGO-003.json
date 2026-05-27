@@ -1,0 +1,38 @@
+{
+  "task_id": "MGO-003",
+  "task_class": "mongo_gen",
+  "difficulty": "hard",
+  "query": "For each Adobe license, compute the count of assigned seats that have been inactive for more than 90 days (including seats with no recorded activity date).",
+  "expected_specialists": ["mongo_query"],
+  "substrate": "mongodb",
+  "collection": "sam_licenses",
+  "gold_pipeline": [
+    {"$match": {"publisher": "Adobe", "status": "active"}},
+    {"$lookup": {
+      "from": "sam_seat_assignments",
+      "let": {"lic_id": "$license_id"},
+      "pipeline": [
+        {"$match": {"$expr": {"$eq": ["$license_id", "$$lic_id"]}}},
+        {"$match": {
+          "$or": [
+            {"last_active_date": {"$lt": {"$dateSubtract": {"startDate": "$$NOW", "unit": "day", "amount": 90}}}},
+            {"last_active_date": null},
+            {"last_active_date": {"$exists": false}}
+          ]
+        }}
+      ],
+      "as": "inactive_seats"
+    }},
+    {"$project": {
+      "license_id": 1,
+      "product": 1,
+      "inactive_seat_count": {"$size": "$inactive_seats"}
+    }}
+  ],
+  "evaluator": {
+    "type": "execution_bag_equivalence",
+    "result_fields": ["license_id", "product", "inactive_seat_count"]
+  },
+  "bug_patterns": ["lookup_with_let", "null_handling_explicit", "missing_field_handling", "date_subtraction"],
+  "known_trap": "Using only {last_active_date: {$lt: ...}} silently excludes seats with null/missing last_active_date. Must use $or with explicit null and $exists:false checks."
+}

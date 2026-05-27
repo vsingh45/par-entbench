@@ -1,0 +1,26 @@
+{
+  "task_id": "SQLC-002",
+  "task_class": "sql_compose",
+  "difficulty": "hard",
+  "query": "Identify top 10 TPC-H customers by lifetime value in market segment 'BUILDING', then for each customer generate a personalized retention narrative referencing their order pattern.",
+  "expected_specialists": ["sql_gen", "extract"],
+  "substrate": "postgres+llm",
+  "gold_workflow": {
+    "step_1_sql": {
+      "query": "SELECT c.c_custkey, c.c_name, SUM(o.o_totalprice) AS lifetime_value, COUNT(o.o_orderkey) AS order_count FROM customer c JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name ORDER BY lifetime_value DESC LIMIT 10"
+    },
+    "step_2_consumer": {
+      "task": "Generate a retention narrative for each customer referencing their LTV and order count",
+      "expected_output_schema": {"narratives": [{"c_custkey": "integer", "narrative": "string"}]}
+    }
+  },
+  "evaluator": {
+    "type": "multi_stage",
+    "stages": [
+      {"name": "sql_correct", "type": "bag_equivalence"},
+      {"name": "consumer_correct", "type": "narrative_presence_check",
+       "required_phrases_per_entity": ["lifetime value", "orders"]}
+    ]
+  },
+  "bug_patterns": ["join_with_aggregation", "per_entity_narrative"]
+}

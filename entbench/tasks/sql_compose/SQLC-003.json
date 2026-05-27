@@ -1,0 +1,19 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "difficulty": "medium",
+  "query": "Fetch publishers with declining quarterly trends in 2024, then for each generate a renewal recommendation (hold, expand, reduce).",
+  "expected_specialists": ["sql_gen", "policy_action"],
+  "substrate": "postgres+llm",
+  "gold_workflow": {
+    "step_1_sql": {
+      "query": "WITH q AS (SELECT publisher, fiscal_quarter, SUM(amount_usd) AS qs FROM consumption_facts WHERE fiscal_year = 2024 GROUP BY publisher, fiscal_quarter) SELECT publisher, MAX(qs) FILTER (WHERE fiscal_quarter = 1) AS q1, MAX(qs) FILTER (WHERE fiscal_quarter = 4) AS q4 FROM q GROUP BY publisher HAVING MAX(qs) FILTER (WHERE fiscal_quarter = 4) < MAX(qs) FILTER (WHERE fiscal_quarter = 1)"
+    },
+    "step_2_consumer": {
+      "task": "Recommend renewal posture per publisher with decline pattern",
+      "expected_output_schema": {"recommendations": [{"publisher": "string", "recommendation": "enum: hold|expand|reduce"}]}
+    }
+  },
+  "evaluator": {"type": "multi_stage", "stages": [{"name": "sql_correct", "type": "bag_equivalence"}, {"name": "consumer_correct", "type": "classification_per_entity"}]},
+  "bug_patterns": ["filter_aggregate", "having_clause", "decline_detection"]
+}

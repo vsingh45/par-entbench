@@ -1,0 +1,21 @@
+{
+  "task_id": "EXT-001",
+  "task_class": "extract",
+  "difficulty": "easy",
+  "query": "Extract the contract effective date, expiration date, and total contract value from the following contract excerpt.",
+  "expected_specialists": ["extract"],
+  "input_document": "MASTER SERVICES AGREEMENT\n\nThis Agreement is effective as of January 15, 2024 (the 'Effective Date') and shall continue until January 14, 2025 unless terminated earlier in accordance with Section 12. Total contract value: $145,000.00 USD, payable annually in advance.",
+  "gold_extraction": {
+    "effective_date": "2024-01-15",
+    "expiration_date": "2025-01-14",
+    "total_contract_value_usd": 145000.0
+  },
+  "evaluator": {
+    "type": "field_level_f1",
+    "threshold": 0.85,
+    "tolerance_numeric": 0.01,
+    "date_normalize": "YYYY-MM-DD",
+    "null_vs_empty_strict": true
+  },
+  "bug_patterns": ["date_normalization", "currency_normalization"]
+}

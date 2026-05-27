@@ -1,0 +1,25 @@
+{
+  "task_id": "SQLC-001",
+  "task_class": "sql_compose",
+  "difficulty": "medium",
+  "query": "Generate the SQL query to fetch our top 5 publishers by spend in Q4 2024, then summarize for the SAM team which publishers are at-risk based on the data.",
+  "expected_specialists": ["sql_gen", "policy_action"],
+  "substrate": "postgres+llm",
+  "gold_workflow": {
+    "step_1_sql": {
+      "query": "SELECT publisher, SUM(amount_usd) AS q4_spend FROM consumption_facts WHERE fiscal_year = 2024 AND fiscal_quarter = 4 GROUP BY publisher ORDER BY q4_spend DESC LIMIT 5"
+    },
+    "step_2_consumer": {
+      "task": "Classify each publisher as 'at_risk', 'stable', or 'growing' based on their relative Q4 spend",
+      "expected_output_schema": {"publisher_summaries": [{"publisher": "string", "q4_spend": "number", "classification": "enum"}]}
+    }
+  },
+  "evaluator": {
+    "type": "multi_stage",
+    "stages": [
+      {"name": "sql_correct", "type": "bag_equivalence"},
+      {"name": "consumer_correct", "type": "classification_per_entity"}
+    ]
+  },
+  "bug_patterns": ["sql_to_llm_handoff", "structured_consumer_output"]
+}
