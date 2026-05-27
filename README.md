@@ -16,7 +16,7 @@ EntBench is a 300-task pilot benchmark across 7 task classes for evaluating cost
 ### 1. Install
 
 ```bash
-git clone https://github.com/vksingh/par-entbench.git
+git clone https://github.com/vsingh45/par-entbench.git
 cd par-entbench
 pip install -e ".[dev]"
 export ANTHROPIC_API_KEY=your_key_here
