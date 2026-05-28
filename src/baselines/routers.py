@@ -212,10 +212,13 @@ def frugal_cascade_dispatch(
 # "par" and "par_no_rationale" are handled in dispatcher.py / harness.py
 # These are the baseline router functions only.
 
+from par.par_lite import par_lite_dispatch  # noqa: E402
+
 ROUTER_REGISTRY = {
     "all_frontier":    all_frontier_dispatch,
     "all_small":       all_small_dispatch,
     "sink_frontier":   sink_frontier_dispatch,
     "source_frontier": source_frontier_dispatch,
     "frugal_cascade":  frugal_cascade_dispatch,
+    "par_lite":        par_lite_dispatch,
 }

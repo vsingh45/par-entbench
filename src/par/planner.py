@@ -10,12 +10,53 @@ tier assignments. PaR-no-rationale (ablation) uses a variant without it.
 """
 from __future__ import annotations
 
+import os
+
 import anthropic
 
 from .observability import compute_cost
-from .types import Plan, WorkflowState
+from .types import Plan, Subtask, WorkflowState
 
-PLANNER_MODEL = "claude-sonnet-4-6"
+PLANNER_MODEL = os.environ.get("PLANNER_MODEL", "claude-haiku-4-5-20251001")
+
+
+# ---------------------------------------------------------------------------
+# Complexity classifier (Haiku, cached system prompt)
+# ---------------------------------------------------------------------------
+
+COMPLEXITY_CLASSIFIER_PROMPT = """Classify this query as SIMPLE or COMPLEX.
+
+SIMPLE: Single-step. One SQL query, one MongoDB pipeline, one document extraction, one policy check.
+COMPLEX: Multi-step. Requires multiple specialists or cross-backend reconciliation.
+
+Reply with exactly one word: SIMPLE or COMPLEX"""
+
+_SPECIALIST_MAP: dict[str, str] = {
+    "sql_gen":      "sql_gen",
+    "mongo_gen":    "mongo_query",
+    "extract":      "extract",
+    "policy_action":"policy_action",
+    "multitool_plan":"multitool_plan",
+    "sql_compose":  "sql_gen",
+    "cross_recon":  "cross_recon",
+}
+
+
+def classify_complexity(query: str, client: anthropic.Anthropic) -> str:
+    """Return 'SIMPLE' or 'COMPLEX' for the given query using Haiku."""
+    response = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=10,
+        system=[{"type": "text", "text": COMPLEXITY_CLASSIFIER_PROMPT,
+                 "cache_control": {"type": "ephemeral"}}],
+        messages=[{"role": "user", "content": query}],
+    )
+    text = response.content[0].text.strip().upper()
+    return "COMPLEX" if "COMPLEX" in text else "SIMPLE"
+
+
+def _infer_specialist(task_class: str) -> str:
+    return _SPECIALIST_MAP.get(task_class, "sql_gen")
 
 
 # ---------------------------------------------------------------------------
@@ -142,24 +183,19 @@ PLANNER_TOOL_NO_RATIONALE = {
 # Planner invocation
 # ---------------------------------------------------------------------------
 
-def run_planner(
+def _run_full_planner(
     state: WorkflowState,
     client: anthropic.Anthropic,
     no_rationale: bool = False,
 ) -> WorkflowState:
-    """
-    Invoke the planner to produce a Plan from the user query.
-    Mutates state.plan and updates cumulative spend.
-
-    no_rationale=True activates the PaR-no-rationale ablation variant.
-    """
+    """Run the Sonnet planner and charge mid-tier cost."""
     system_prompt = PLANNER_SYSTEM_PROMPT_NO_RATIONALE if no_rationale else PLANNER_SYSTEM_PROMPT
     tool = PLANNER_TOOL_NO_RATIONALE if no_rationale else PLANNER_TOOL
 
     response = client.messages.create(
         model=PLANNER_MODEL,
-        max_tokens=2000,
-        system=system_prompt,
+        max_tokens=1000,
+        system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
         tools=[tool],
         tool_choice={"type": "tool", "name": "produce_plan"},
         messages=[{"role": "user", "content": state.query}],
@@ -174,7 +210,6 @@ def run_planner(
         plan_data["cost_rationale"] = ""
     plan = Plan(**plan_data)
 
-    # Cost tracking — planner runs on mid tier
     input_tokens = response.usage.input_tokens
     output_tokens = response.usage.output_tokens
     cached_tokens = getattr(response.usage, "cache_read_input_tokens", 0)
@@ -188,5 +223,38 @@ def run_planner(
     state.plan = plan
     state.pending_subtasks = list(plan.subtasks)
     state.cumulative_spend_usd += planner_cost
-
     return state
+
+
+def run_planner(
+    state: WorkflowState,
+    client: anthropic.Anthropic,
+    no_rationale: bool = False,
+) -> WorkflowState:
+    """
+    Cascaded planner: classify complexity with Haiku first.
+
+    SIMPLE tasks get a single-subtask plan at small tier immediately —
+    no Sonnet call. COMPLEX tasks fall through to the full Sonnet planner.
+    no_rationale=True activates the PaR-no-rationale ablation variant.
+    """
+    complexity = classify_complexity(state.query, client)
+
+    if complexity == "SIMPLE":
+        specialist = _infer_specialist(state.task_class or "")
+        plan = Plan(
+            subtasks=[Subtask(
+                id="subtask_1",
+                description=state.query,
+                specialist=specialist,
+                tier="small",
+                depends_on=[],
+            )],
+            cost_rationale="Simple task — Haiku classifier, small tier",
+        )
+        state.plan = plan
+        state.pending_subtasks = list(plan.subtasks)
+        return state
+
+    # COMPLEX: run full Sonnet planner
+    return _run_full_planner(state, client, no_rationale=no_rationale)

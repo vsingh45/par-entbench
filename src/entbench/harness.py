@@ -29,6 +29,7 @@ from par.observability import (
     finalize_trace,
     record_node_result,
 )
+from par.batch_planner import BatchPlanner
 from par.planner import run_planner
 from par.types import WorkflowState, WorkflowTrace
 
@@ -138,7 +139,7 @@ def make_specialist_registry(client: anthropic.Anthropic) -> dict:
     """
     from par.dispatcher import TIER_MODELS
 
-    def _call_specialist(subtask, tier, upstream_outputs, client, system_prompt, task_context=None):
+    def _call_specialist(subtask, tier, upstream_outputs, client, system_prompt, task_context=None, max_tokens=2000):
         model = TIER_MODELS[tier]
 
         # Build rich user message including task-specific context
@@ -163,8 +164,9 @@ def make_specialist_registry(client: anthropic.Anthropic) -> dict:
 
         response = client.messages.create(
             model=model,
-            max_tokens=2000,
-            system=system_prompt,
+            max_tokens=800,
+            system=[{"type": "text", "text": system_prompt,
+                     "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user_message}],
         )
 
@@ -327,17 +329,19 @@ OUTPUT FORMAT:
 {"selected_action": "allow", "policy_compliance": {"POL-001": "pass", "POL-002": "not_applicable"}, "reason": "Brief explanation", "applied_constraints": []}""",
     }
 
+    specialist_max_tokens = {"cross_recon": 1000}
+
     registry = {}
     for name, prompt in prompts.items():
 
-        def make_fn(n, p):
+        def make_fn(n, p, mt=2000):
             def fn(subtask, tier, upstream_outputs, client, task_context=None):
-                return _call_specialist(subtask, tier, upstream_outputs, client, p, task_context)
+                return _call_specialist(subtask, tier, upstream_outputs, client, p, task_context, max_tokens=mt)
 
             fn.__name__ = n
             return fn
 
-        registry[name] = make_fn(name, prompt)
+        registry[name] = make_fn(name, prompt, mt=specialist_max_tokens.get(name, 2000))
 
     # Override mongo_query with tool_use version for guaranteed structured output
     MONGO_TOOL = {
@@ -373,8 +377,9 @@ OUTPUT FORMAT:
                     msg[field] = task_context[field]
         response = client.messages.create(
             model=model,
-            max_tokens=2000,
-            system=mongo_system,
+            max_tokens=800,
+            system=[{"type": "text", "text": mongo_system,
+                     "cache_control": {"type": "ephemeral"}}],
             tools=[MONGO_TOOL],
             tool_choice={"type": "tool", "name": "generate_pipeline"},
             messages=[{"role": "user", "content": json.dumps(msg)}],
@@ -416,6 +421,7 @@ def run_task(
     cumulative_spend: float,
     kill_switch_ceiling: float,
     output_dir: str,
+    batch_planner: BatchPlanner | None = None,
 ) -> tuple[WorkflowTrace, float, bool]:
     random.seed(seed)
 
@@ -448,7 +454,11 @@ def run_task(
     )
 
     no_rationale = router == "par_no_rationale"
-    state = run_planner(state, client, no_rationale=no_rationale)
+    if batch_planner is not None:
+        batch_planner.no_rationale = no_rationale
+        state = batch_planner.run(state)
+    else:
+        state = run_planner(state, client, no_rationale=no_rationale)
     trace.plan = state.plan
 
     if router in ("par", "par_no_rationale"):
@@ -709,6 +719,11 @@ def main():
         help="Path to results dir; re-score existing traces with current evaluators (no API calls)",
     )
     parser.add_argument("--kill-switch-usd", type=float, default=DEFAULT_KILL_SWITCH_USD)
+    parser.add_argument(
+        "--batch-plan",
+        action="store_true",
+        help="Generate one template plan per task class and reuse it (saves planner API calls)",
+    )
     args = parser.parse_args()
 
     if args.verify_setup:
@@ -739,7 +754,7 @@ def main():
     tasks = load_tasks(args.tasks)
 
     if args.routers == "all":
-        routers = ["par"] + list(ROUTER_REGISTRY.keys()) + ["par_no_rationale"]
+        routers = ["par", "par_lite"] + list(ROUTER_REGISTRY.keys()) + ["par_no_rationale"]
     elif args.routers == "all_tiers":
         routers = ["all_small", "all_frontier"]
     else:
@@ -750,10 +765,16 @@ def main():
     print(f"Running {len(tasks)} tasks × {len(routers)} routers × {len(seeds)} seeds")
     print(f"Total combinations: {len(tasks) * len(routers) * len(seeds)}")
     print(f"Kill-switch ceiling: ${args.kill_switch_usd}")
+    if args.batch_plan:
+        print("Batch planning: ON (one planner call per task class per router+seed)")
 
     cumulative_spend = 0.0
     completed = 0
     total = len(tasks) * len(routers) * len(seeds)
+
+    # One BatchPlanner per (router, seed) so templates accumulate across tasks
+    # in the same class but don't bleed across routing strategies or seeds.
+    batch_planners: dict[tuple[str, int], BatchPlanner] = {}
 
     for task in tasks:
         for router in routers:
@@ -766,6 +787,13 @@ def main():
                     print(f"Completed {completed}/{total}")
                     sys.exit(0)
 
+                batch_planner: BatchPlanner | None = None
+                if args.batch_plan:
+                    key = (router, seed)
+                    if key not in batch_planners:
+                        batch_planners[key] = BatchPlanner(client)
+                    batch_planner = batch_planners[key]
+
                 try:
                     trace, cumulative_spend, kill_switch = run_task(
                         task=task,
@@ -776,6 +804,7 @@ def main():
                         cumulative_spend=cumulative_spend,
                         kill_switch_ceiling=args.kill_switch_usd,
                         output_dir=args.output,
+                        batch_planner=batch_planner,
                     )
                     completed += 1
                     if completed % 10 == 0:
