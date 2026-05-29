@@ -1,0 +1,9 @@
+Router,Rho,Actual_Accuracy,Naive_Predicted_Accuracy,N_Compositional_Tasks,Composition_Penalty_Rank
+all_frontier,1.27,0.278,0.431,36,1
+par_no_rationale,1.34,0.000,0.255,9,2
+source_frontier,1.45,0.194,0.444,36,3
+frugal_cascade,1.76,0.250,0.573,36,4
+all_small,1.79,0.194,0.550,36,5
+sink_frontier,1.92,0.167,0.567,36,6
+par,3.33,0.250,0.775,36,7
+par_lite,4.24,0.194,0.810,36,8

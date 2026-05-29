@@ -48,10 +48,24 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
-# Results (large files, not committed)
-results/
+# Results (large raw files not committed; summaries/archives allowed)
+results/*.json
+results/final_sweep/
+results/standalone/
+results/xr_haiku/
+results/xr_sonnet/
+results/full_sweep/
+results/prompt_check/
+results/smoke/
+results/validate/
+results/pilot*/
 *.json.gz
 *.parquet
+# But allow archives and summaries
+!results/*.tar.gz
+!results/*.csv
+!results/*.md
+!results/rho_analysis.json
 
 # Docker volumes (mounted dirs)
 postgres_data/

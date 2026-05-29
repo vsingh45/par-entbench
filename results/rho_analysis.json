@@ -1,0 +1,50 @@
+{
+  "par": {
+    "rho": 3.3306,
+    "actual_accuracy": 0.25,
+    "naive_predicted_accuracy": 0.7748,
+    "n_compositional_tasks": 36
+  },
+  "frugal_cascade": {
+    "rho": 1.7578,
+    "actual_accuracy": 0.25,
+    "naive_predicted_accuracy": 0.5733,
+    "n_compositional_tasks": 36
+  },
+  "source_frontier": {
+    "rho": 1.45,
+    "actual_accuracy": 0.1944,
+    "naive_predicted_accuracy": 0.4444,
+    "n_compositional_tasks": 36
+  },
+  "all_frontier": {
+    "rho": 1.2695,
+    "actual_accuracy": 0.2778,
+    "naive_predicted_accuracy": 0.4311,
+    "n_compositional_tasks": 36
+  },
+  "par_lite": {
+    "rho": 4.2398,
+    "actual_accuracy": 0.1944,
+    "naive_predicted_accuracy": 0.81,
+    "n_compositional_tasks": 36
+  },
+  "all_small": {
+    "rho": 1.7901,
+    "actual_accuracy": 0.1944,
+    "naive_predicted_accuracy": 0.55,
+    "n_compositional_tasks": 36
+  },
+  "sink_frontier": {
+    "rho": 1.9231,
+    "actual_accuracy": 0.1667,
+    "naive_predicted_accuracy": 0.5667,
+    "n_compositional_tasks": 36
+  },
+  "par_no_rationale": {
+    "rho": 1.3419,
+    "actual_accuracy": 0.0,
+    "naive_predicted_accuracy": 0.2548,
+    "n_compositional_tasks": 9
+  }
+}
