@@ -13,7 +13,7 @@ EntBench is a 300-task pilot benchmark across 7 task classes for evaluating cost
 
 ## Architecture
 
-![PaR-EntBench Architecture](ARCHITECTURE.svg)
+![PaR-EntBench Architecture](./ARCHITECTURE.svg)
 
 **System Overview:**
 - **Planner** (Haiku classifier + Sonnet planner + BatchPlanner) decomposes queries and assigns model tiers
