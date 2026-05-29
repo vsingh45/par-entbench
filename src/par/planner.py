@@ -17,7 +17,7 @@ import anthropic
 from .observability import compute_cost
 from .types import Plan, Subtask, WorkflowState
 
-PLANNER_MODEL = os.environ.get("PLANNER_MODEL", "claude-haiku-4-5-20251001")
+PLANNER_MODEL = os.environ.get("PLANNER_MODEL", "claude-sonnet-4-6")
 
 
 # ---------------------------------------------------------------------------

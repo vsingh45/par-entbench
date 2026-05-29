@@ -754,7 +754,7 @@ def main():
     tasks = load_tasks(args.tasks)
 
     if args.routers == "all":
-        routers = ["par", "par_lite"] + list(ROUTER_REGISTRY.keys()) + ["par_no_rationale"]
+        routers = ["par"] + list(ROUTER_REGISTRY.keys()) + ["par_no_rationale"]
     elif args.routers == "all_tiers":
         routers = ["all_small", "all_frontier"]
     else:

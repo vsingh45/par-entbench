@@ -1,0 +1,234 @@
+{
+  "experiment": {
+    "date": "2026-05-28 to 2026-05-29",
+    "planner_model": "claude-haiku-4-5-20251001",
+    "configuration": "Cascaded complexity classifier + prompt caching",
+    "kill_switch_usd": 70.0
+  },
+  "final_sweep": {
+    "tasks": 21,
+    "routers": 8,
+    "seeds": 3,
+    "completion": {
+      "tasks_completed": 449,
+      "tasks_expected": 504,
+      "completion_rate": 0.891
+    },
+    "aggregate": {
+      "total_correct": 132,
+      "total_cost_usd": 5.11,
+      "avg_cost_per_task": 0.0114
+    },
+    "by_router": {
+      "frugal_cascade": {
+        "n": 63,
+        "correct": 21,
+        "accuracy": 0.333,
+        "avg_cost": 0.0041,
+        "total_cost": 0.2552
+      },
+      "par": {
+        "n": 63,
+        "correct": 21,
+        "accuracy": 0.333,
+        "avg_cost": 0.0099,
+        "total_cost": 0.6227
+      },
+      "par_lite": {
+        "n": 63,
+        "correct": 19,
+        "accuracy": 0.302,
+        "avg_cost": 0.0102,
+        "total_cost": 0.6453
+      },
+      "all_small": {
+        "n": 63,
+        "correct": 19,
+        "accuracy": 0.302,
+        "avg_cost": 0.0039,
+        "total_cost": 0.2444
+      },
+      "all_frontier": {
+        "n": 63,
+        "correct": 19,
+        "accuracy": 0.302,
+        "avg_cost": 0.0196,
+        "total_cost": 1.2365
+      },
+      "source_frontier": {
+        "n": 62,
+        "correct": 18,
+        "accuracy": 0.290,
+        "avg_cost": 0.0149,
+        "total_cost": 0.9248
+      },
+      "sink_frontier": {
+        "n": 63,
+        "correct": 15,
+        "accuracy": 0.238,
+        "avg_cost": 0.0114,
+        "total_cost": 0.7151
+      },
+      "par_no_rationale": {
+        "n": 9,
+        "correct": 0,
+        "accuracy": 0.0,
+        "avg_cost": 0.0514,
+        "total_cost": 0.4624,
+        "note": "XR (cross_recon) tasks only"
+      }
+    }
+  },
+  "rho_analysis": {
+    "metric_definition": "ρ = (1 - actual_accuracy) / (1 - naive_predicted_accuracy). Lower is better.",
+    "by_router": {
+      "all_frontier": {
+        "rho": 1.27,
+        "actual_accuracy": 0.278,
+        "naive_predicted_accuracy": 0.431,
+        "n_compositional_tasks": 36,
+        "rank": 1
+      },
+      "par_no_rationale": {
+        "rho": 1.34,
+        "actual_accuracy": 0.0,
+        "naive_predicted_accuracy": 0.255,
+        "n_compositional_tasks": 9,
+        "rank": 2,
+        "note": "XR only"
+      },
+      "source_frontier": {
+        "rho": 1.45,
+        "actual_accuracy": 0.194,
+        "naive_predicted_accuracy": 0.444,
+        "n_compositional_tasks": 36,
+        "rank": 3
+      },
+      "frugal_cascade": {
+        "rho": 1.76,
+        "actual_accuracy": 0.25,
+        "naive_predicted_accuracy": 0.573,
+        "n_compositional_tasks": 36,
+        "rank": 4
+      },
+      "all_small": {
+        "rho": 1.79,
+        "actual_accuracy": 0.194,
+        "naive_predicted_accuracy": 0.55,
+        "n_compositional_tasks": 36,
+        "rank": 5
+      },
+      "sink_frontier": {
+        "rho": 1.92,
+        "actual_accuracy": 0.167,
+        "naive_predicted_accuracy": 0.567,
+        "n_compositional_tasks": 36,
+        "rank": 6
+      },
+      "par": {
+        "rho": 3.33,
+        "actual_accuracy": 0.25,
+        "naive_predicted_accuracy": 0.775,
+        "n_compositional_tasks": 36,
+        "rank": 7
+      },
+      "par_lite": {
+        "rho": 4.24,
+        "actual_accuracy": 0.194,
+        "naive_predicted_accuracy": 0.81,
+        "n_compositional_tasks": 36,
+        "rank": 8
+      }
+    }
+  },
+  "comparative_experiments": {
+    "xr_compositional_haiku_vs_sonnet": {
+      "haiku_planner": {
+        "router": "par",
+        "tasks": "XR (cross_recon)",
+        "seeds": 3,
+        "correct": 6,
+        "total": 36,
+        "accuracy": 0.167,
+        "avg_cost_per_task": 0.0185
+      },
+      "sonnet_planner": {
+        "router": "par",
+        "tasks": "XR (cross_recon)",
+        "seeds": 3,
+        "correct": 7,
+        "total": 36,
+        "accuracy": 0.194,
+        "avg_cost_per_task": 0.0268
+      },
+      "comparison": {
+        "accuracy_gain": "+1 correct (+1.7pp)",
+        "cost_increase": "+45% (+$0.0083/task)",
+        "verdict": "Unfavorable cost-benefit; Haiku meets target"
+      }
+    }
+  },
+  "cost_optimization_targets": {
+    "accuracy_ge_25_percent": {
+      "target": true,
+      "par_result": 0.333,
+      "met": true
+    },
+    "cost_le_0_008_per_task": {
+      "target": true,
+      "par_result": 0.0099,
+      "met": false
+    }
+  },
+  "key_insights": {
+    "composition_penalty": {
+      "metric": "ρ",
+      "par_value": 3.33,
+      "interpretation": "PaR's planner overestimates per-subtask independence by 3.3x on compositional tasks",
+      "implication": "Inter-subtask context loss dominates error rates"
+    },
+    "haiku_classifier_efficacy": {
+      "simple_tasks_fraction": 0.38,
+      "cost_savings_per_simple": "$0.0015",
+      "conclusion": "Limited impact; most tasks COMPLEX"
+    },
+    "prompt_caching": {
+      "implemented": true,
+      "effective": false,
+      "reason": "System prompts below 1024-token Sonnet minimum; cached_tokens = 0"
+    },
+    "pareto_winner": {
+      "router": "frugal_cascade",
+      "accuracy": 0.333,
+      "cost": 0.0041,
+      "vs_par": "Same accuracy, 2.4x cheaper, ρ = 1.76 vs 3.33"
+    }
+  },
+  "directories": {
+    "results": {
+      "final_sweep": "449 JSON files (21 tasks × 8 routers × 3 seeds - 55 skipped)",
+      "standalone": "18 JSON files (per-tier-class baselines for ρ)",
+      "xr_haiku": "XR compositional tasks with Haiku planner",
+      "xr_sonnet": "XR compositional tasks with Sonnet planner",
+      "rho_analysis_json": "ρ efficiency metrics"
+    },
+    "logs": {
+      "final_sweep": "Main experiment log",
+      "xr_haiku": "Haiku XR sweep log",
+      "xr_sonnet": "Sonnet XR sweep log",
+      "standalone": "Standalone calibration log"
+    }
+  },
+  "reproducibility": {
+    "environment": {
+      "PLANNER_MODEL": "claude-haiku-4-5-20251001",
+      "venv": "activate via .venv/bin/activate",
+      "env_file": "source .env"
+    },
+    "commands": {
+      "final_sweep": "par-entbench --tasks all --routers all --seeds 3 --output results/final_sweep/ --kill-switch-usd 70",
+      "standalone": "par-entbench --tasks capability_calibration --routers all_tiers --seeds 1 --output results/standalone/",
+      "rho": "par-entbench --compute-rho results/final_sweep/ --standalone results/standalone/ --rho-output results/rho_analysis.json"
+    }
+  }
+}
