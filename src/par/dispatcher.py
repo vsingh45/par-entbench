@@ -140,6 +140,8 @@ def dispatch_plan(
     Returns (node_results, kill_switch_triggered).
     """
     plan = state.plan
+    if plan is None:
+        raise ValueError(f"No plan set for task {state.task_id}")
     completed_ids: set[str] = set()
     node_results: list[NodeResult] = []
     cumulative_spend = state.cumulative_spend_usd

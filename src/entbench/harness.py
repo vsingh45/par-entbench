@@ -631,8 +631,8 @@ def compute_rho(workflow_dir: str, standalone_dir: str, output_path: str) -> dic
         }
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
-        json.dump(rho_results, f, indent=2)
+    with open(str(output_path), "w") as f:  # type: ignore[assignment]
+        json.dump(rho_results, f, indent=2)  # type: ignore[arg-type]
 
     return rho_results
 

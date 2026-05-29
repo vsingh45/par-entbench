@@ -54,7 +54,8 @@ class BatchPlanner:
             state.pending_subtasks = list(plan.subtasks)
         else:
             state = run_planner(state, self.client, no_rationale=self.no_rationale)
-            self._templates[task_class] = state.plan
+            if state.plan is not None:
+                self._templates[task_class] = state.plan
 
         return state
 

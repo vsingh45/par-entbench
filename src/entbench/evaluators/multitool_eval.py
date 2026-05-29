@@ -23,12 +23,12 @@ def _extract_plan(output: dict | None) -> list[dict] | None:
 
 def _required_tools(gold_plan: list[dict]) -> set[str]:
     """Set of tool names that must be present."""
-    return {step.get("tool") for step in gold_plan if step.get("tool")}
+    return {step.get("tool") for step in gold_plan if step.get("tool")}  # type: ignore[misc]
 
 
 def _tools_in_plan(plan: list[dict]) -> set[str]:
     """Set of tool names actually invoked."""
-    return {step.get("tool") for step in plan if step.get("tool")}
+    return {step.get("tool") for step in plan if step.get("tool")}  # type: ignore[misc]
 
 
 def _check_partial_order(predicted: list[dict], gold: list[dict]) -> bool:

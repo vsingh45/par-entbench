@@ -38,6 +38,8 @@ def _dispatch_with_tier_fn(
 ) -> tuple[list[NodeResult], bool]:
     """Dispatch ignoring the planner's tier; uses tier_fn instead."""
     plan = state.plan
+    if plan is None:
+        raise ValueError(f"No plan set for task {state.task_id}")
     completed_ids: set[str] = set()
     node_results: list[NodeResult] = []
     cumulative_spend = state.cumulative_spend_usd
@@ -222,7 +224,7 @@ def frugal_cascade_dispatch(
                 if result.error or confidence >= confidence_threshold or tier == "frontier":
                     break
 
-            node_results.append(final_result)
+            node_results.append(final_result)  # type: ignore[arg-type]
             completed_ids.add(subtask.id)
 
         remaining = [s for s in remaining if s.id not in completed_ids]

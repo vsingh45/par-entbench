@@ -57,7 +57,11 @@ def classify_complexity(query: str, client: anthropic.Anthropic) -> str:
         ],
         messages=[{"role": "user", "content": query}],
     )
-    text = response.content[0].text.strip().upper()
+    text = ""
+    for block in response.content:
+        if hasattr(block, "text"):
+            text = block.text.strip().upper()
+            break
     return "COMPLEX" if "COMPLEX" in text else "SIMPLE"
 
 
@@ -183,7 +187,7 @@ PLANNER_TOOL_NO_RATIONALE = {
     "input_schema": {
         "type": "object",
         "properties": {
-            "subtasks": PLANNER_TOOL["input_schema"]["properties"]["subtasks"],
+            "subtasks": PLANNER_TOOL["input_schema"]["properties"]["subtasks"],  # type: ignore[index]
             "cost_rationale": {"type": "string", "default": ""},
         },
         "required": ["subtasks"],
@@ -205,7 +209,7 @@ def _run_full_planner(
     system_prompt = PLANNER_SYSTEM_PROMPT_NO_RATIONALE if no_rationale else PLANNER_SYSTEM_PROMPT
     tool = PLANNER_TOOL_NO_RATIONALE if no_rationale else PLANNER_TOOL
 
-    response = client.messages.create(
+    response = client.messages.create(  # type: ignore[call-overload]
         model=PLANNER_MODEL,
         max_tokens=1000,
         system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
@@ -260,7 +264,7 @@ def run_planner(
                 Subtask(
                     id="subtask_1",
                     description=state.query,
-                    specialist=specialist,
+                    specialist=specialist,  # type: ignore[arg-type]
                     tier="small",
                     depends_on=[],
                 )

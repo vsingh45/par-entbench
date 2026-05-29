@@ -57,7 +57,7 @@ def _extract_pipeline_and_collection(output: dict | None) -> tuple[list | None, 
 def _execute_pipeline(collection: str, pipeline: list) -> list[dict] | None:
     """Execute pipeline against MongoDB. Returns docs as list of dicts. None on error."""
     try:
-        client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=3000)
+        client: Any = MongoClient(MONGO_URI, serverSelectionTimeoutMS=3000)
         db = client[DB_NAME]
         coll = db[collection]
         docs = list(coll.aggregate(pipeline))
