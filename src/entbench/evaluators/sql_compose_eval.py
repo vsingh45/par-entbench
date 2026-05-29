@@ -87,7 +87,9 @@ def evaluate_sql_compose(task: dict, trace: dict) -> tuple[bool, str]:
 
     evaluator_spec = task.get("evaluator", {})
     stages = evaluator_spec.get("stages", [])
-    consumer_stage: dict[Any, Any] = next((s for s in stages if s.get("name") == "consumer_correct"), {})
+    consumer_stage: dict[Any, Any] = next(
+        (s for s in stages if s.get("name") == "consumer_correct"), {}
+    )
     consumer_type = consumer_stage.get("type", "classification_per_entity")
 
     if consumer_type == "narrative_presence_check":
