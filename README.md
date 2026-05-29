@@ -13,14 +13,23 @@ EntBench is a 300-task pilot benchmark across 7 task classes for evaluating cost
 
 ## Architecture
 
+### Interactive Diagram (draw.io)
+[![Open in draw.io](https://img.shields.io/badge/Open-draw.io-blue?style=flat&logo=diagramsdotnet)](https://app.diagrams.net/?url=https://raw.githubusercontent.com/vsingh45/par-entbench/main/ARCHITECTURE.drawio)
+
+Click the badge above to open the interactive architecture diagram in draw.io viewer. You can:
+- Zoom and pan to explore the diagram
+- Click to edit (requires draw.io account or download)
+- Export as PNG, PDF, or SVG
+
+### Static Diagram (SVG)
 ![PaR-EntBench Architecture](./ARCHITECTURE.svg)
 
-**Diagram Options:**
-- **SVG** (static, embedded above) — view directly in GitHub
-- **draw.io** (interactive, editable) — open [ARCHITECTURE.drawio](ARCHITECTURE.drawio) in [draw.io](https://app.diagrams.net/) or Diagrams desktop app
-  - Import: File → Open → Select `ARCHITECTURE.drawio`
-  - Edit: Modify and export to PNG/SVG
-  - Share: Download or export as needed
+**Diagram Files:**
+- **SVG** ([ARCHITECTURE.svg](./ARCHITECTURE.svg)) — Static image, renders in GitHub
+- **draw.io** ([ARCHITECTURE.drawio](./ARCHITECTURE.drawio)) — Interactive, editable format
+  - Open: [Click here](https://app.diagrams.net/?url=https://raw.githubusercontent.com/vsingh45/par-entbench/main/ARCHITECTURE.drawio) or use the badge above
+  - Edit locally: Download and open in [draw.io](https://app.diagrams.net/) or Diagrams app
+  - Export: Save as PNG, PDF, SVG after editing
 
 **System Overview:**
 - **Planner** (Haiku classifier + Sonnet planner + BatchPlanner) decomposes queries and assigns model tiers
