@@ -9,6 +9,7 @@ This is the 7th router in the comparison table.
 Expected cost: ~$0.004-0.007/task blended.
 Expected accuracy: similar to PaR on complex tasks, similar to AllSmall on simple.
 """
+
 from __future__ import annotations
 
 import anthropic

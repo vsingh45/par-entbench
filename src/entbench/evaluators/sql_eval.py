@@ -3,6 +3,7 @@ SQL evaluator — executes generated SQL against Postgres, compares result bags 
 
 Used by both sql_gen tasks (single-step) and sql_compose tasks (step 1 of multi-step).
 """
+
 from __future__ import annotations
 
 import math
@@ -79,9 +80,7 @@ def _bag_equivalent(
     def normalize_row(row):
         return tuple(_normalize_value(v) for v in row)
 
-    actual_norm = sorted(
-        [normalize_row(r) for r in actual], key=lambda r: tuple(str(v) for v in r)
-    )
+    actual_norm = sorted([normalize_row(r) for r in actual], key=lambda r: tuple(str(v) for v in r))
     expected_norm = sorted(
         [normalize_row(r) for r in expected], key=lambda r: tuple(str(v) for v in r)
     )

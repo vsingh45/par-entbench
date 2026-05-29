@@ -139,7 +139,9 @@ def make_specialist_registry(client: anthropic.Anthropic) -> dict:
     """
     from par.dispatcher import TIER_MODELS
 
-    def _call_specialist(subtask, tier, upstream_outputs, client, system_prompt, task_context=None, max_tokens=2000):
+    def _call_specialist(
+        subtask, tier, upstream_outputs, client, system_prompt, task_context=None, max_tokens=2000
+    ):
         model = TIER_MODELS[tier]
 
         # Build rich user message including task-specific context
@@ -150,12 +152,12 @@ def make_specialist_registry(client: anthropic.Anthropic) -> dict:
         if task_context:
             # Pass through fields the specialist needs to do its job
             for field in [
-                "query",           # original user query
+                "query",  # original user query
                 "input_document",  # for extract tasks
-                "context",         # for policy_action (user/role/resource/action)
-                "policy_registry", # for policy_action
-                "candidate_actions",# for policy_action
-                "gold_plan",       # NOT passed (would be cheating) — excluded
+                "context",  # for policy_action (user/role/resource/action)
+                "policy_registry",  # for policy_action
+                "candidate_actions",  # for policy_action
+                "gold_plan",  # NOT passed (would be cheating) — excluded
             ]:
                 if field in task_context and field != "gold_plan":
                     msg[field] = task_context[field]
@@ -165,8 +167,9 @@ def make_specialist_registry(client: anthropic.Anthropic) -> dict:
         response = client.messages.create(
             model=model,
             max_tokens=800,
-            system=[{"type": "text", "text": system_prompt,
-                     "cache_control": {"type": "ephemeral"}}],
+            system=[
+                {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}
+            ],
             messages=[{"role": "user", "content": user_message}],
         )
 
@@ -174,6 +177,7 @@ def make_specialist_registry(client: anthropic.Anthropic) -> dict:
 
         # Strip markdown fences if present
         import re as _re
+
         output_text = _re.sub(r"^```(?:json)?\s*", "", output_text.strip())
         output_text = _re.sub(r"\s*```$", "", output_text.strip())
 
@@ -214,7 +218,6 @@ RULES:
 
 OUTPUT FORMAT (return exactly this JSON structure):
 {"sql": "SELECT ... FROM ... WHERE ..."}""",
-
         "mongo_query": """You are a MongoDB specialist for SAM operational collections.
 
 COLLECTIONS AND SCHEMAS:
@@ -241,7 +244,6 @@ EXAMPLE — "Group by publisher, sum contract values":
 
 Return ONLY valid JSON, no explanation, no markdown fences:
 {"collection": "COLLECTION_NAME", "pipeline": [STAGE1, STAGE2, ...]}""",
-
         "extract": """You are a document extraction specialist.
 
 Your job is to extract structured fields from the document provided in the task.
@@ -257,7 +259,6 @@ RULES:
 
 OUTPUT FORMAT example for a contract:
 {"effective_date": "2024-01-15", "expiration_date": "2025-01-14", "total_contract_value_usd": 145000.0}""",
-
         "cross_recon": """You are a cross-backend reconciliation specialist.
 
 You receive outputs from a MongoDB query (operational state) and a SQL query (historical data).
@@ -274,7 +275,6 @@ RULES:
 
 OUTPUT FORMAT:
 {"reconciled": [{"entity_key": "...", "mongo_value": ..., "sql_value": ..., "classification": "..."}]}""",
-
         "multitool_plan": """You are a tool orchestration specialist for an enterprise tool registry.
 
 AVAILABLE TOOLS (use EXACTLY these tool names):
@@ -300,7 +300,6 @@ RULES:
 
 OUTPUT FORMAT:
 {"plan": [{"tool": "mongo.find", "arguments": {"collection": "...", "filter": {}}, "depends_on": []}, {"tool": "slack.post_message", "arguments": {"channel": "#sam-team", "message": "Results: $1.results"}, "depends_on": [1]}]}""",
-
         "policy_action": """You are a policy evaluation specialist.
 
 You receive a context (user, role, resource, action) and a policy registry.
@@ -336,7 +335,9 @@ OUTPUT FORMAT:
 
         def make_fn(n, p, mt=2000):
             def fn(subtask, tier, upstream_outputs, client, task_context=None):
-                return _call_specialist(subtask, tier, upstream_outputs, client, p, task_context, max_tokens=mt)
+                return _call_specialist(
+                    subtask, tier, upstream_outputs, client, p, task_context, max_tokens=mt
+                )
 
             fn.__name__ = n
             return fn
@@ -353,7 +354,12 @@ OUTPUT FORMAT:
                 "collection": {
                     "type": "string",
                     "description": "Collection name to query",
-                    "enum": ["sam_licenses", "sam_seat_assignments", "billing_contracts", "iam_roles"],
+                    "enum": [
+                        "sam_licenses",
+                        "sam_seat_assignments",
+                        "billing_contracts",
+                        "iam_roles",
+                    ],
                 },
                 "pipeline": {
                     "type": "array",
@@ -369,6 +375,7 @@ OUTPUT FORMAT:
 
     def mongo_tool_fn(subtask, tier, upstream_outputs, client, task_context=None):
         from par.dispatcher import TIER_MODELS
+
         model = TIER_MODELS[tier]
         msg = {"task": subtask.description, "upstream_outputs": upstream_outputs}
         if task_context:
@@ -378,8 +385,7 @@ OUTPUT FORMAT:
         response = client.messages.create(
             model=model,
             max_tokens=800,
-            system=[{"type": "text", "text": mongo_system,
-                     "cache_control": {"type": "ephemeral"}}],
+            system=[{"type": "text", "text": mongo_system, "cache_control": {"type": "ephemeral"}}],
             tools=[MONGO_TOOL],
             tool_choice={"type": "tool", "name": "generate_pipeline"},
             messages=[{"role": "user", "content": json.dumps(msg)}],
@@ -426,14 +432,29 @@ def run_task(
     random.seed(seed)
 
     # Wrap specialist registry to inject task context into every call
-    task_context = {k: v for k, v in task.items() if k not in ("gold_sql", "gold_pipeline", "gold_extraction", "gold_output", "gold_plan", "gold_workflow")}
+    task_context = {
+        k: v
+        for k, v in task.items()
+        if k
+        not in (
+            "gold_sql",
+            "gold_pipeline",
+            "gold_extraction",
+            "gold_output",
+            "gold_plan",
+            "gold_workflow",
+        )
+    }
     context_registry = {}
     for name, fn in specialist_registry.items():
+
         def make_ctx_fn(f, ctx):
             def ctx_fn(subtask, tier, upstream_outputs, client):
                 return f(subtask, tier, upstream_outputs, client, task_context=ctx)
+
             ctx_fn.__name__ = f.__name__
             return ctx_fn
+
         context_registry[name] = make_ctx_fn(fn, task_context)
 
     state = WorkflowState(

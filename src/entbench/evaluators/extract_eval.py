@@ -7,6 +7,7 @@ Normalization:
 - Whitespace stripped
 - null vs empty string treated strictly
 """
+
 from __future__ import annotations
 
 import re
@@ -19,8 +20,14 @@ def _normalize_date(s: Any) -> str | None:
         return None
     s = str(s).strip()
     formats = [
-        "%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%B %d, %Y", "%b %d, %Y",
-        "%Y/%m/%d", "%d-%m-%Y", "%m-%d-%Y",
+        "%Y-%m-%d",
+        "%m/%d/%Y",
+        "%d/%m/%Y",
+        "%B %d, %Y",
+        "%b %d, %Y",
+        "%Y/%m/%d",
+        "%d-%m-%Y",
+        "%m-%d-%Y",
     ]
     for fmt in formats:
         try:

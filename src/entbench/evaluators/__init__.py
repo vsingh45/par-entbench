@@ -5,6 +5,7 @@ Entry point: evaluate(task, trace) -> (bool, str)
 
 Routes the task to its class-specific evaluator based on task_class.
 """
+
 from __future__ import annotations
 
 from .cross_recon_eval import evaluate_cross_recon

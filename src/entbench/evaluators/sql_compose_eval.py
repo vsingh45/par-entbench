@@ -3,6 +3,7 @@ SQL-Compose evaluator — multi-stage:
 1. SQL step uses sql_eval
 2. Downstream consumer check (narrative presence or per-entity classification)
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -18,24 +19,22 @@ def _find_node_output(trace: dict, specialist: str) -> dict | None:
     return None
 
 
-def _check_narrative_presence(
-    consumer_output: Any, required_phrases: list[str]
-) -> bool:
+def _check_narrative_presence(consumer_output: Any, required_phrases: list[str]) -> bool:
     """Each narrative must contain all required phrases."""
     if not consumer_output:
         return False
     if isinstance(consumer_output, dict):
-        narratives = consumer_output.get("narratives", []) or consumer_output.get(
-            "publisher_summaries", []
-        ) or consumer_output.get("recommendations", [])
+        narratives = (
+            consumer_output.get("narratives", [])
+            or consumer_output.get("publisher_summaries", [])
+            or consumer_output.get("recommendations", [])
+        )
     else:
         return False
     if not narratives:
         return False
     for entity in narratives:
-        text = " ".join(
-            str(v) for v in entity.values() if isinstance(v, str)
-        ).lower()
+        text = " ".join(str(v) for v in entity.values() if isinstance(v, str)).lower()
         for phrase in required_phrases:
             if phrase.lower() not in text:
                 return False
@@ -88,9 +87,7 @@ def evaluate_sql_compose(task: dict, trace: dict) -> tuple[bool, str]:
 
     evaluator_spec = task.get("evaluator", {})
     stages = evaluator_spec.get("stages", [])
-    consumer_stage = next(
-        (s for s in stages if s.get("name") == "consumer_correct"), {}
-    )
+    consumer_stage = next((s for s in stages if s.get("name") == "consumer_correct"), {})
     consumer_type = consumer_stage.get("type", "classification_per_entity")
 
     if consumer_type == "narrative_presence_check":

@@ -8,6 +8,7 @@ Flavor A retry: retry at the assigned tier up to MAX_RETRIES times,
 then escalate one tier and retry once. If escalation also fails,
 mark the node failed and pass null to downstream nodes.
 """
+
 from __future__ import annotations
 
 import time
@@ -18,14 +19,14 @@ from .observability import DEFAULT_KILL_SWITCH_USD, compute_cost
 from .types import NodeResult, Plan, Subtask, Tier, WorkflowState
 
 TIER_MODELS: dict[Tier, str] = {
-    "small":    "claude-haiku-4-5-20251001",
-    "mid":      "claude-sonnet-4-6",
+    "small": "claude-haiku-4-5-20251001",
+    "mid": "claude-sonnet-4-6",
     "frontier": "claude-opus-4-7",
 }
 
 TIER_ESCALATION: dict[Tier, Tier | None] = {
-    "small":    "mid",
-    "mid":      "frontier",
+    "small": "mid",
+    "mid": "frontier",
     "frontier": None,
 }
 
@@ -36,18 +37,17 @@ MAX_RETRIES = 3
 # Dependency resolution
 # ---------------------------------------------------------------------------
 
+
 def get_ready_subtasks(plan: Plan, completed_ids: set[str]) -> list[Subtask]:
     """Return subtasks whose dependencies are all satisfied."""
     return [
-        s for s in plan.subtasks
-        if s.id not in completed_ids
-        and all(dep in completed_ids for dep in s.depends_on)
+        s
+        for s in plan.subtasks
+        if s.id not in completed_ids and all(dep in completed_ids for dep in s.depends_on)
     ]
 
 
-def collect_upstream_outputs(
-    subtask: Subtask, node_results: list[NodeResult]
-) -> dict[str, dict]:
+def collect_upstream_outputs(subtask: Subtask, node_results: list[NodeResult]) -> dict[str, dict]:
     """Collect outputs from upstream nodes."""
     result_map = {r.subtask_id: r.output for r in node_results if r.output}
     return {dep: result_map.get(dep, {}) for dep in subtask.depends_on}
@@ -56,6 +56,7 @@ def collect_upstream_outputs(
 # ---------------------------------------------------------------------------
 # Single subtask execution with Flavor A retry
 # ---------------------------------------------------------------------------
+
 
 def execute_subtask(
     subtask: Subtask,
@@ -126,6 +127,7 @@ def execute_subtask(
 # ---------------------------------------------------------------------------
 # Main dispatcher (PaR — uses tier from planner)
 # ---------------------------------------------------------------------------
+
 
 def dispatch_plan(
     state: WorkflowState,

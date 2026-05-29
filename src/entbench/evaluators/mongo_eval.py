@@ -2,6 +2,7 @@
 MongoDB evaluator — executes generated aggregation pipeline against MongoDB,
 compares document bags to gold.
 """
+
 from __future__ import annotations
 
 import json
@@ -107,9 +108,7 @@ def _doc_bag_equivalent(
         return False
 
     # Normalize expected docs
-    expected_norm = sorted(
-        [_normalize_doc(d) for d in expected], key=lambda d: str(d)
-    )
+    expected_norm = sorted([_normalize_doc(d) for d in expected], key=lambda d: str(d))
 
     # For each expected doc, check that at least one actual doc contains
     # all its key-value pairs

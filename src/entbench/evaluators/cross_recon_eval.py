@@ -6,6 +6,7 @@ Cross-Recon evaluator — 3-stage:
 
 All 3 must pass for task_correct = True.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -55,10 +56,7 @@ def _check_recon_output(recon_output: Any, gold_step3: dict) -> tuple[bool, str]
     if expected_fields:
         sample = items[0] if items else {}
         if isinstance(sample, dict):
-            missing = [
-                f for f in expected_fields
-                if f not in sample and f != "_id"
-            ]
+            missing = [f for f in expected_fields if f not in sample and f != "_id"]
             if len(missing) > len(expected_fields) // 2:
                 return False, f"recon_missing_required_fields: {missing}"
 

@@ -8,6 +8,7 @@ subtask to a model tier in one structured output. Runs on Sonnet 4.6
 The cost_rationale field forces the planner to explicitly justify its
 tier assignments. PaR-no-rationale (ablation) uses a variant without it.
 """
+
 from __future__ import annotations
 
 import os
@@ -32,13 +33,13 @@ COMPLEX: Multi-step. Requires multiple specialists or cross-backend reconciliati
 Reply with exactly one word: SIMPLE or COMPLEX"""
 
 _SPECIALIST_MAP: dict[str, str] = {
-    "sql_gen":      "sql_gen",
-    "mongo_gen":    "mongo_query",
-    "extract":      "extract",
-    "policy_action":"policy_action",
-    "multitool_plan":"multitool_plan",
-    "sql_compose":  "sql_gen",
-    "cross_recon":  "cross_recon",
+    "sql_gen": "sql_gen",
+    "mongo_gen": "mongo_query",
+    "extract": "extract",
+    "policy_action": "policy_action",
+    "multitool_plan": "multitool_plan",
+    "sql_compose": "sql_gen",
+    "cross_recon": "cross_recon",
 }
 
 
@@ -47,8 +48,13 @@ def classify_complexity(query: str, client: anthropic.Anthropic) -> str:
     response = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=10,
-        system=[{"type": "text", "text": COMPLEXITY_CLASSIFIER_PROMPT,
-                 "cache_control": {"type": "ephemeral"}}],
+        system=[
+            {
+                "type": "text",
+                "text": COMPLEXITY_CLASSIFIER_PROMPT,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ],
         messages=[{"role": "user", "content": query}],
     )
     text = response.content[0].text.strip().upper()
@@ -149,8 +155,14 @@ PLANNER_TOOL = {
                         "description": {"type": "string"},
                         "specialist": {
                             "type": "string",
-                            "enum": ["sql_gen", "mongo_query", "extract",
-                                     "cross_recon", "multitool_plan", "policy_action"],
+                            "enum": [
+                                "sql_gen",
+                                "mongo_query",
+                                "extract",
+                                "cross_recon",
+                                "multitool_plan",
+                                "policy_action",
+                            ],
                         },
                         "tier": {"type": "string", "enum": ["small", "mid", "frontier"]},
                         "depends_on": {"type": "array", "items": {"type": "string"}},
@@ -182,6 +194,7 @@ PLANNER_TOOL_NO_RATIONALE = {
 # ---------------------------------------------------------------------------
 # Planner invocation
 # ---------------------------------------------------------------------------
+
 
 def _run_full_planner(
     state: WorkflowState,
@@ -243,13 +256,15 @@ def run_planner(
     if complexity == "SIMPLE":
         specialist = _infer_specialist(state.task_class or "")
         plan = Plan(
-            subtasks=[Subtask(
-                id="subtask_1",
-                description=state.query,
-                specialist=specialist,
-                tier="small",
-                depends_on=[],
-            )],
+            subtasks=[
+                Subtask(
+                    id="subtask_1",
+                    description=state.query,
+                    specialist=specialist,
+                    tier="small",
+                    depends_on=[],
+                )
+            ],
             cost_rationale="Simple task — Haiku classifier, small tier",
         )
         state.plan = plan

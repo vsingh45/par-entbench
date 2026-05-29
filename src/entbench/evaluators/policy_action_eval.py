@@ -3,6 +3,7 @@ Policy-Action evaluator — exact match on selected_action + compliance vocabula
 
 Compliance vocabulary (5 values): pass, pass_conditional, fail, not_applicable, pending_review
 """
+
 from __future__ import annotations
 
 COMPLIANCE_VOCAB = {"pass", "pass_conditional", "fail", "not_applicable", "pending_review"}
@@ -17,9 +18,7 @@ def evaluate_policy_action(task: dict, generated_output: dict | None) -> tuple[b
     if not gold:
         return False, "task_missing_gold_output"
 
-    fields = task.get("evaluator", {}).get(
-        "fields", ["selected_action", "policy_compliance"]
-    )
+    fields = task.get("evaluator", {}).get("fields", ["selected_action", "policy_compliance"])
 
     for field in fields:
         gold_val = gold.get(field)

@@ -13,6 +13,7 @@ Routers implemented:
   4. SourceFrontier     — frontier on root nodes only
   5. FrugalGPT cascade  — small first; escalate on low confidence
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -26,6 +27,7 @@ from par.types import NodeResult, Subtask, Tier, WorkflowState
 # ---------------------------------------------------------------------------
 # Generic dispatch using a tier-decision function
 # ---------------------------------------------------------------------------
+
 
 def _dispatch_with_tier_fn(
     state: WorkflowState,
@@ -86,9 +88,14 @@ def _dispatch_with_tier_fn(
 # 1. AllFrontier
 # ---------------------------------------------------------------------------
 
-def all_frontier_dispatch(state, client, specialist_registry, kill_switch_ceiling=DEFAULT_KILL_SWITCH_USD):
+
+def all_frontier_dispatch(
+    state, client, specialist_registry, kill_switch_ceiling=DEFAULT_KILL_SWITCH_USD
+):
     return _dispatch_with_tier_fn(
-        state, client, specialist_registry,
+        state,
+        client,
+        specialist_registry,
         tier_fn=lambda subtask, _: "frontier",
         kill_switch_ceiling=kill_switch_ceiling,
     )
@@ -98,9 +105,14 @@ def all_frontier_dispatch(state, client, specialist_registry, kill_switch_ceilin
 # 2. AllSmall
 # ---------------------------------------------------------------------------
 
-def all_small_dispatch(state, client, specialist_registry, kill_switch_ceiling=DEFAULT_KILL_SWITCH_USD):
+
+def all_small_dispatch(
+    state, client, specialist_registry, kill_switch_ceiling=DEFAULT_KILL_SWITCH_USD
+):
     return _dispatch_with_tier_fn(
-        state, client, specialist_registry,
+        state,
+        client,
+        specialist_registry,
         tier_fn=lambda subtask, _: "small",
         kill_switch_ceiling=kill_switch_ceiling,
     )
@@ -110,14 +122,19 @@ def all_small_dispatch(state, client, specialist_registry, kill_switch_ceiling=D
 # 3. SinkFrontier — frontier on terminal nodes only
 # ---------------------------------------------------------------------------
 
-def sink_frontier_dispatch(state, client, specialist_registry, kill_switch_ceiling=DEFAULT_KILL_SWITCH_USD):
+
+def sink_frontier_dispatch(
+    state, client, specialist_registry, kill_switch_ceiling=DEFAULT_KILL_SWITCH_USD
+):
     all_deps: set[str] = set()
     for s in state.plan.subtasks:
         all_deps.update(s.depends_on)
     terminal_ids = {s.id for s in state.plan.subtasks if s.id not in all_deps}
 
     return _dispatch_with_tier_fn(
-        state, client, specialist_registry,
+        state,
+        client,
+        specialist_registry,
         tier_fn=lambda subtask, _: "frontier" if subtask.id in terminal_ids else "small",
         kill_switch_ceiling=kill_switch_ceiling,
     )
@@ -127,10 +144,15 @@ def sink_frontier_dispatch(state, client, specialist_registry, kill_switch_ceili
 # 4. SourceFrontier — frontier on root nodes only
 # ---------------------------------------------------------------------------
 
-def source_frontier_dispatch(state, client, specialist_registry, kill_switch_ceiling=DEFAULT_KILL_SWITCH_USD):
+
+def source_frontier_dispatch(
+    state, client, specialist_registry, kill_switch_ceiling=DEFAULT_KILL_SWITCH_USD
+):
     root_ids = {s.id for s in state.plan.subtasks if not s.depends_on}
     return _dispatch_with_tier_fn(
-        state, client, specialist_registry,
+        state,
+        client,
+        specialist_registry,
         tier_fn=lambda subtask, _: "frontier" if subtask.id in root_ids else "small",
         kill_switch_ceiling=kill_switch_ceiling,
     )
@@ -145,7 +167,9 @@ FRUGAL_TIER_ORDER: list[Tier] = ["small", "mid", "frontier"]
 
 
 def frugal_cascade_dispatch(
-    state, client, specialist_registry,
+    state,
+    client,
+    specialist_registry,
     kill_switch_ceiling=DEFAULT_KILL_SWITCH_USD,
     confidence_threshold: float = FRUGAL_CONFIDENCE_THRESHOLD,
 ):
@@ -215,10 +239,10 @@ def frugal_cascade_dispatch(
 from par.par_lite import par_lite_dispatch  # noqa: E402
 
 ROUTER_REGISTRY = {
-    "all_frontier":    all_frontier_dispatch,
-    "all_small":       all_small_dispatch,
-    "sink_frontier":   sink_frontier_dispatch,
+    "all_frontier": all_frontier_dispatch,
+    "all_small": all_small_dispatch,
+    "sink_frontier": sink_frontier_dispatch,
     "source_frontier": source_frontier_dispatch,
-    "frugal_cascade":  frugal_cascade_dispatch,
-    "par_lite":        par_lite_dispatch,
+    "frugal_cascade": frugal_cascade_dispatch,
+    "par_lite": par_lite_dispatch,
 }

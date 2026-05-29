@@ -5,6 +5,7 @@ Pricing reflects Anthropic API rates as of May 2026. Verify against
 https://www.anthropic.com/pricing before running experiments — model
 pricing changes and cost measurements depend on accurate rates.
 """
+
 from __future__ import annotations
 
 import json
@@ -17,19 +18,19 @@ from .types import NodeResult, Tier, WorkflowTrace
 # ---------------------------------------------------------------------------
 
 PRICING = {
-    "small": {   # Claude Haiku 4.5
-        "input":      1.00 / 1_000_000,
-        "output":     5.00 / 1_000_000,
-        "cache_read": 0.10 / 1_000_000,   # 90% discount on cached input
+    "small": {  # Claude Haiku 4.5
+        "input": 1.00 / 1_000_000,
+        "output": 5.00 / 1_000_000,
+        "cache_read": 0.10 / 1_000_000,  # 90% discount on cached input
     },
-    "mid": {     # Claude Sonnet 4.6
-        "input":      3.00 / 1_000_000,
-        "output":    15.00 / 1_000_000,
+    "mid": {  # Claude Sonnet 4.6
+        "input": 3.00 / 1_000_000,
+        "output": 15.00 / 1_000_000,
         "cache_read": 0.30 / 1_000_000,
     },
     "frontier": {  # Claude Opus 4.7
-        "input":      5.00 / 1_000_000,
-        "output":    25.00 / 1_000_000,
+        "input": 5.00 / 1_000_000,
+        "output": 25.00 / 1_000_000,
         "cache_read": 0.50 / 1_000_000,
     },
 }
@@ -41,6 +42,7 @@ DEFAULT_KILL_SWITCH_USD = 75.0
 # Cost computation
 # ---------------------------------------------------------------------------
 
+
 def compute_cost(
     tier: Tier,
     input_tokens: int,
@@ -50,16 +52,13 @@ def compute_cost(
     """Compute the cost of a single model call in USD, accounting for caching."""
     p = PRICING[tier]
     fresh_input = max(0, input_tokens - cached_tokens)
-    return (
-        fresh_input    * p["input"]
-        + cached_tokens  * p["cache_read"]
-        + output_tokens  * p["output"]
-    )
+    return fresh_input * p["input"] + cached_tokens * p["cache_read"] + output_tokens * p["output"]
 
 
 # ---------------------------------------------------------------------------
 # Kill-switch
 # ---------------------------------------------------------------------------
+
 
 def check_kill_switch(
     cumulative_spend: float,
@@ -72,12 +71,16 @@ def check_kill_switch(
         if checkpoint_path and trace:
             Path(checkpoint_path).parent.mkdir(parents=True, exist_ok=True)
             with open(checkpoint_path, "w") as f:
-                json.dump({
-                    "status": "kill_switch_triggered",
-                    "cumulative_spend_usd": cumulative_spend,
-                    "ceiling_usd": ceiling,
-                    "last_task_id": trace.task_id,
-                }, f, indent=2)
+                json.dump(
+                    {
+                        "status": "kill_switch_triggered",
+                        "cumulative_spend_usd": cumulative_spend,
+                        "ceiling_usd": ceiling,
+                        "last_task_id": trace.task_id,
+                    },
+                    f,
+                    indent=2,
+                )
         return True
     return False
 
@@ -85,6 +88,7 @@ def check_kill_switch(
 # ---------------------------------------------------------------------------
 # Recording
 # ---------------------------------------------------------------------------
+
 
 def record_node_result(
     trace: WorkflowTrace,
@@ -106,9 +110,7 @@ def record_node_result(
     trace.total_latency_ms += node_result.latency_ms
     trace.node_results.append(node_result)
 
-    kill_switch_fired = check_kill_switch(
-        trace.cumulative_spend_usd, ceiling=kill_switch_ceiling
-    )
+    kill_switch_fired = check_kill_switch(trace.cumulative_spend_usd, ceiling=kill_switch_ceiling)
     return trace, kill_switch_fired
 
 

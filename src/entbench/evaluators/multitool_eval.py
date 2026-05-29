@@ -5,6 +5,7 @@ Two checks:
 1. Required tools present in the plan (set membership)
 2. Dependency ordering respects gold's partial-order constraints
 """
+
 from __future__ import annotations
 
 
@@ -49,7 +50,7 @@ def _check_partial_order(predicted: list[dict], gold: list[dict]) -> bool:
 
     gold_tools = sorted(gold_positions.keys(), key=lambda t: gold_positions[t])
     for i, t_before in enumerate(gold_tools):
-        for t_after in gold_tools[i + 1:]:
+        for t_after in gold_tools[i + 1 :]:
             if t_before in pred_positions and t_after in pred_positions:
                 if pred_positions[t_before] >= pred_positions[t_after]:
                     return False
