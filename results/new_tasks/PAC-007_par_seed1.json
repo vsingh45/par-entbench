@@ -1,0 +1,127 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_contractor_access",
+        "description": "Evaluate contractor's access request against data governance and access control policies. Determine if temporary contractor credentials are authorized to download full customer database backups, and check if the request violates data minimization, contractor data access, or backup download policies.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "audit_access_attempt",
+        "description": "Cross-reference contractor's identity, access tier, and session details against access logs. Classify the access attempt as authorized, questionable, or denied based on contractor's current access grants and backup download history.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "policy_check_contractor_access"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) policy_action at mid-tier to evaluate the access request against multiple data governance policies (contractor restrictions, data minimization, backup download authorization), and (2) cross_recon at mid-tier to reconcile the contractor's stated access level against actual granted permissions and audit logs to determine if this is anomalous behavior. Both mid-tier because policy evaluation involves multiple rules and cross-recon requires reconciling identity + session + permissions from multiple sources. Small tier insufficient for multi-signal policy evaluation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_contractor_access",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 521,
+      "output_tokens": 409,
+      "cached_tokens": 0,
+      "latency_ms": 8078,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "Contractor 'contractor-dave' is denied access to 'production_backup.tar.gz' on three grounds: (1) POL-701 restricts database backup access exclusively to full-time employees holding the DBA role — contractor-dave is neither; (2) POL-702 limits contractors strictly to de-identified query results and explicitly prohibits raw data exports or full database downloads; (3) POL-703 requires explicit project manager approval with a 7-day advance notice for any contractor data access, and no such approval or notice is recorded for this request. All three applicable policies are violated. The action is denied. The contractor should be redirected to submit a formal access request through the proper approval channel and, if legitimate analytical work is required, should be provided with de-identified query results scoped to the minimum necessary data.",
+        "applied_constraints": [
+          "Access restricted to full-time DBA employees only (POL-701)",
+          "Contractor data access limited to de-identified query results; raw exports prohibited (POL-702)",
+          "Mandatory project manager approval and 7-day notice not satisfied (POL-703)",
+          "No record of prior approval or advance notice for this contractor and resource",
+          "Full database backup download blocked for all non-DBA, non-full-time-employee principals",
+          "Incident should be logged and flagged to the security team for awareness",
+          "Contractor may reapply via formal approval process with project manager sponsorship"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "audit_access_attempt",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 780,
+      "output_tokens": 438,
+      "cached_tokens": 0,
+      "latency_ms": 7964,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "contractor-dave::production_backup.tar.gz::download",
+            "mongo_value": {
+              "user": "contractor-dave",
+              "role": "contractor",
+              "resource": "production_backup.tar.gz",
+              "action": "download",
+              "access_tier": "temporary",
+              "session_context": "local_analysis_attempt"
+            },
+            "sql_value": {
+              "POL-701": "fail",
+              "POL-702": "fail",
+              "POL-703": "fail",
+              "prior_approval_on_record": false,
+              "advance_notice_satisfied": false,
+              "backup_download_history_authorized": false,
+              "formal_request_submitted": false,
+              "project_manager_approval": null,
+              "days_notice_provided": 0
+            },
+            "classification": "denied",
+            "resolution": {
+              "selected_action": "deny",
+              "secondary_actions": [
+                "redirect_to_query",
+                "escalate_for_approval"
+              ],
+              "deny_reasons": [
+                "POL-701: contractor-dave is not a full-time employee and does not hold the DBA role; database backup access is categorically prohibited",
+                "POL-702: contractor access is strictly limited to de-identified query results; raw data exports and full backup downloads are explicitly prohibited",
+                "POL-703: no project manager approval on record and zero days advance notice provided against the required 7-day minimum"
+              ],
+              "immediate_controls": [
+                "block_download_in_progress",
+                "revoke_session_access_to_backup_resource",
+                "log_incident_to_security_team",
+                "flag_for_security_review"
+              ],
+              "remediation_path": [
+                "contractor-dave must submit a formal access request through the approved channel",
+                "request must include project manager sponsorship and be filed minimum 7 days in advance",
+                "if legitimate analytical need exists, provide de-identified query results scoped to minimum necessary data only"
+              ],
+              "risk_level": "high",
+              "audit_required": true
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.016608,
+  "total_latency_ms": 16042,
+  "cumulative_spend_usd": 0.4251520000000001
+}

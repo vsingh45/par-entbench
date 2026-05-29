@@ -1,0 +1,110 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sam_contracts_fetch",
+        "description": "Retrieve license contracts from SAM system with renewal dates, current status, and vendor information",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "consumption_query",
+        "description": "Query consumption trends from data warehouse for licenses approaching renewal, including usage patterns over last 12 months and monthly burn rate",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "risk_assessment",
+        "description": "Cross-reconcile SAM contract data with consumption trends to assess renewal risk, classify urgency tier (critical/high/medium/low), identify underutilized vs. critical licenses, and generate renewal recommendations",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sam_contracts_fetch",
+          "consumption_query"
+        ]
+      },
+      {
+        "id": "notify_procurement",
+        "description": "Generate and dispatch renewal alert notifications to procurement team with risk classification, recommended actions, and renewal timeline",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "risk_assessment"
+        ]
+      }
+    ],
+    "cost_rationale": "4 subtasks compose the full renewal workflow: (1) multitool_plan (mid) to orchestrate SAM system fetch—involves registry tooling for legacy system integration; (2) sql_gen (mid) for straightforward consumption trend query with aggregations over time; (3) cross_recon (frontier) to reconcile two data sources (contracts + consumption), classify risk urgently, and generate recommendations—this is high-complexity multi-signal assessment; (4) multitool_plan (mid) to route alerts via notification tools in the registry. This is minimal decomposition—each step is a natural breakpoint requiring a different agent capability. The frontier tier on risk_assessment is justified because it must synthesize external contract state with internal consumption signals and output actionable classification without human re-review."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sam_contracts_fetch",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 439,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 11045,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"resource\": \"sam_system.license_contracts\",\n        \"action\": \"read\",\n        \"principal\": \"current_user\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"license_contracts\",\n        \"filter\": {\n          \"status\": { \"$in\": [\"active\", \"pending_renewal\", \"expiring_soon\"] },\n          \"renewal_date\": {\n            \"$gte\": \"$$NOW\",\n            \"$lte\": { \"$dateAdd\": { \"startDate\": \"$$NOW\", \"unit\": \"day\", \"amount\": 90 } }\n          }\n        },\n        \"projection\": {\n          \"contract_id\": 1,\n          \"vendor_name\": 1,\n          \"product_name\": 1,\n          \"renewal_date\": 1,\n          \"expiry_date\": 1,\n          \"status\": 1,\n          \"total_licenses\": 1,\n          \"assigned_licenses\": 1,\n          \"annual_contract_value\": 1,\n          \"auto_renew\": 1,\n          \"owner\": 1,\n          \"vendor_contact\": 1\n        },\n        \"sort\": { \"renewal_date\": 1 }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT contract_id, vendor_name, product_name, month_year, active_users, licenses_consumed, licenses_total, ROUND((licenses_consumed / NULLIF(licenses_total, 0)) * 100, 2) AS utilization_pct, AVG(licenses_consumed) OVER (PARTITION BY contract_id ORDER BY month_year ROWS BETWEEN 5 PRECEDING AND CURRENT ROW) AS rolling_6mo_avg FROM license_consumption_trends WHERE month_year >= DATEADD('month', -6, CURRENT_DATE()) ORDER BY contract_id, month_year DESC\"\n      },\n      \"depends_on\": [2]\n    },\n    {\n      \"tool\": \"mongo.aggregate\",\n      \"arguments\": {\n        \"collection\": \"license_contracts\",\n        \"pipeline\": [\n          {\n            \"$match\": {\n              \"contract_id\": { \"$in\": \"$2.contract_id\" }\n            }\n          },\n          {\n            \"$lookup\": {\n              \"from\": \"vendor_risk_profiles\",\n              \"localField\": \"vendor_name\",\n              \"foreignField\": \"vendor_name\",\n              \"as\": \"vendor_risk\"\n            }\n          },\n          {\n            \"$project\": {\n              \"contract_id\": 1,\n              \"vendor_name\": 1,\n              \"risk_score\": { \"$arrayElemAt\": [\"$vendor_risk.risk_score\", 0] },\n              \"risk_category\": { \"$arrayElemAt\": [\"$vendor_risk.risk_category\", 0] },\n              \"last_audit_date\": { \"$arrayElemAt\": [\"$vendor_risk.last_audit_date\", 0] },\n              \"compliance_status\": { \"$arrayElemAt\": [\""
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "consumption_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 466,
+      "output_tokens": 549,
+      "cached_tokens": 0,
+      "latency_ms": 7108,
+      "output": {
+        "sql": "SELECT cf.license_id, cf.publisher, cf.product, DATE_TRUNC('month', cf.event_date) AS month, SUM(cf.amount_usd) AS monthly_spend, AVG(cf.daily_active_seats) AS avg_daily_active_seats, SUM(cf.amount_usd) / NULLIF(COUNT(DISTINCT DATE_TRUNC('month', cf.event_date)), 0) AS avg_monthly_burn_rate, COUNT(DISTINCT cf.event_id) AS event_count, SUM(SUM(cf.amount_usd)) OVER (PARTITION BY cf.license_id ORDER BY DATE_TRUNC('month', cf.event_date) ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumulative_spend, SUM(cf.amount_usd) / NULLIF(SUM(SUM(cf.amount_usd)) OVER (PARTITION BY cf.license_id), 0) AS pct_of_total_spend, AVG(AVG(cf.daily_active_seats)) OVER (PARTITION BY cf.license_id ORDER BY DATE_TRUNC('month', cf.event_date) ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS rolling_3m_avg_seats, LAG(SUM(cf.amount_usd)) OVER (PARTITION BY cf.license_id ORDER BY DATE_TRUNC('month', cf.event_date)) AS prev_month_spend, (SUM(cf.amount_usd) - LAG(SUM(cf.amount_usd)) OVER (PARTITION BY cf.license_id ORDER BY DATE_TRUNC('month', cf.event_date))) / NULLIF(LAG(SUM(cf.amount_usd)) OVER (PARTITION BY cf.license_id ORDER BY DATE_TRUNC('month', cf.event_date)), 0) * 100 AS mom_spend_change_pct FROM consumption_facts cf WHERE cf.event_date >= CURRENT_DATE - INTERVAL '12 months' AND cf.event_date < CURRENT_DATE GROUP BY cf.license_id, cf.publisher, cf.product, DATE_TRUNC('month', cf.event_date) ORDER BY cf.license_id, month"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "risk_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 2593,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8672,
+      "output": {
+        "raw_output": "{\"reconciled\":[{\"entity_key\":\"CTR-001\",\"mongo_value\":{\"contract_id\":\"CTR-001\",\"vendor_name\":\"Microsoft\",\"product_name\":\"M365 E5\",\"status\":\"expiring_soon\",\"total_licenses\":1000,\"assigned_licenses\":950,\"annual_contract_value\":850000},\"sql_value\":{\"avg_daily_active_seats\":920,\"avg_monthly_burn_rate\":70800,\"utilization_pct\":95,\"mom_spend_change_pct\":3.2},\"classification\":\"critical_expand\"},{\"entity_key\":\"CTR-002\",\"mongo_value\":{\"contract_id\":\"CTR-002\",\"vendor_name\":\"Salesforce\",\"product_name\":\"Sales Cloud\",\"status\":\"pending_renewal\",\"total_licenses\":500,\"assigned_licenses\":210,\"annual_contract_value\":420000},\"sql_value\":{\"avg_daily_active_seats\":180,\"avg_monthly_burn_rate\":35000,\"utilization_pct\":42,\"mom_spend_change_pct\":-1.5},\"classification\":\"high_reduce\"},{\"entity_key\":\"CTR-003\",\"mongo_value\":{\"contract_id\":\"CTR-003\",\"vendor_name\":\"Adobe\",\"product_name\":\"Creative Cloud\",\"status\":\"active\",\"total_licenses\":300,\"assigned_licenses\":275,\"annual_contract_value\":180000},\"sql_value\":{\"avg_daily_active_seats\":260,\"avg_monthly_burn_rate\":15000,\"utilization_pct\":91.6,\"mom_spend_change_pct\":0.8},\"classification\":\"medium_hold\"},{\"entity_key\":\"CTR-004\",\"mongo_value\":{\"contract_id\":\"CTR-004\",\"vendor_name\":\"Atlassian\",\"product_name\":\"Jira+Confluence\",\"status\":\"expiring_soon\",\"total_licenses\":800,\"assigned_licenses\":640,\"annual_contract_value\":210000},\"sql_value\":{\"avg_daily_active_seats\":610,\"avg_monthly_burn_rate\":17500,\"utilization_pct\":80,\"mom_spend_change_pct\":2.1},\"classification\":\"high_hold\"},{\"entity_key\":\"CTR-005\",\"mongo_value\":{\"contract_id\":\"CTR-005\",\"vendor_name\":\"Zoom\",\"product_name\":\"Zoom One Enterprise\",\"status\":\"pending_renewal\",\"total_licenses\":1200,\"assigned_licen"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "notify_procurement",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1119,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 11649,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"principal\": \"system:sam-renewal-workflow\",\n        \"resource\": \"procurement:notifications\",\n        \"action\": \"write\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"contracts\",\n        \"filter\": {\n          \"status\": { \"$in\": [\"expiring_soon\", \"pending_renewal\"] }\n        },\n        \"projection\": {\n          \"contract_id\": 1,\n          \"vendor_name\": 1,\n          \"product_name\": 1,\n          \"status\": 1,\n          \"renewal_date\": 1,\n          \"total_licenses\": 1,\n          \"assigned_licenses\": 1,\n          \"annual_contract_value\": 1,\n          \"owner_email\": 1,\n          \"vendor_contact\": 1\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT contract_id, renewal_date, days_until_renewal, negotiation_lead_days, auto_renewal_flag, renewal_notice_deadline, last_negotiated_discount_pct FROM contract_renewal_schedule WHERE contract_id IN ('CTR-001','CTR-002','CTR-003','CTR-004','CTR-005') ORDER BY days_until_renewal ASC\"\n      },\n      \"depends_on\": [2]\n    },\n    {\n      \"tool\": \"sql.postgres.query\",\n      \"arguments\": {\n        \"query\": \"SELECT contract_id, benchmark_market_price_per_seat, peer_utilization_avg_pct, estimated_savings_if_reduced, estimated_cost_if_expanded, risk_score, recommended_action, recommended_seat_count FROM procurement_risk_benchmarks WHERE contract_id IN ('CTR-001','CTR-002','CTR-003','CTR-004','CTR-005')\"\n      },\n      \"depends_on\": [2]\n    },\n    {\n      \"tool\": \"datadog.query_metric\",\n      \"arguments\": {\n        \"metric\": \"sam.license.utilization_trend\",\n        \"filter\": \"contract_id IN (CTR-001,CTR-002,CTR-003,CTR-004,CTR-005)\",\n        \"from\": \"now-90d\",\n        \"to\": \"now\",\n        \"aggregation\": \"avg\",\n        \"group_by\": [\"contract_id\"]\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.aggregate\",\n      \"arguments\": {\n        \"collection\": \"contracts\",\n        \"pipeline\": [\n          {\n            \"$match\": {\n              \"contract_id\": { \"$in\": [\"CTR-001\",\"CTR-002\",\"CTR-003\",\"CTR-004\",\"CTR-005\"] }\n            }\n          },\n          {\n            \"$lookup\": {\n              \"from\": \"renewal_history\",\n              \"localField\": \"contract_id\",\n              \"foreignField\": \"contract_id\",\n              \"as\": \"renewal_history\"\n            }\n          },"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.071272,
+  "total_latency_ms": 38474,
+  "cumulative_spend_usd": 0.3626690000000001
+}

@@ -1,0 +1,115 @@
+{
+  "task_id": "MTP-007",
+  "task_class": "multitool_plan",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "scan_iam",
+        "description": "Query IAM policy storage (assumed CloudTrail/audit logs) to retrieve all active IAM policies, role assignments, and permission grants. Return structured list of policies with principal, action, resource, and effect.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "audit_cloudtrail",
+        "description": "Query CloudTrail audit logs to extract recent API call activity, authentication events, privilege escalations, and access patterns. Return aggregated activity by principal and action with timestamps.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "policy_compliance_check",
+        "description": "Cross-reference IAM policies from scan_iam against enterprise security policies and compliance frameworks (e.g., least privilege, role separation, password policies). Identify policy violations, misconfigurations, and gaps. Classify violations by severity.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "scan_iam",
+          "audit_cloudtrail"
+        ]
+      },
+      {
+        "id": "compliance_report",
+        "description": "Generate comprehensive security and compliance report including: violations found, remediation recommendations, risk scores, audit trail summary, and compliance posture assessment. Include executive summary and detailed findings.",
+        "specialist": "policy_action",
+        "tier": "frontier",
+        "depends_on": [
+          "policy_compliance_check"
+        ]
+      }
+    ],
+    "cost_rationale": "Four subtasks required: (1) IAM scan (sql_gen, mid) – multi-table join across policy and role tables; (2) CloudTrail audit (sql_gen, mid) – aggregation over event logs with filtering; (3) Compliance check (cross_recon, frontier) – reconciles two policy sources (active policies vs. audit activity) to detect violations and classify risk across multiple security dimensions; (4) Report generation (policy_action, frontier) – governance-level decision: evaluates violations against compliance frameworks, renders findings, and recommends policy changes. Frontier tier for steps 3–4 because they require sophisticated multi-signal reasoning (policy intent vs. actual activity, severity classification, compliance framework matching) and executive-level governance output."
+  },
+  "node_results": [
+    {
+      "subtask_id": "scan_iam",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 485,
+      "output_tokens": 50,
+      "cached_tokens": 0,
+      "latency_ms": 2085,
+      "output": {
+        "sql": "SELECT log_id, user_id AS principal, permission AS action, resource, result AS effect, access_time, action AS event_action FROM access_log_facts ORDER BY access_time DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "audit_cloudtrail",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 476,
+      "output_tokens": 136,
+      "cached_tokens": 0,
+      "latency_ms": 2646,
+      "output": {
+        "sql": "SELECT user_id, action, permission, result, resource, DATE_TRUNC('hour', access_time) AS activity_hour, COUNT(*) AS event_count, MIN(access_time) AS first_seen, MAX(access_time) AS last_seen, COUNT(DISTINCT resource) AS distinct_resources FROM access_log_facts WHERE access_time >= NOW() - INTERVAL '30 days' GROUP BY user_id, action, permission, result, resource, DATE_TRUNC('hour', access_time) ORDER BY activity_hour DESC, event_count DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "policy_compliance_check",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 755,
+      "output_tokens": 13,
+      "cached_tokens": 0,
+      "latency_ms": 792,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "compliance_report",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 607,
+      "output_tokens": 97,
+      "cached_tokens": 0,
+      "latency_ms": 1854,
+      "output": {
+        "selected_action": "allow",
+        "policy_compliance": {
+          "POL-001": "not_applicable"
+        },
+        "reason": "Generating a security and compliance report is a read-only reporting action with no upstream violations to escalate; no applicable policy restricts this activity.",
+        "applied_constraints": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.015233,
+  "total_latency_ms": 7377,
+  "cumulative_spend_usd": 0.3779020000000001
+}
