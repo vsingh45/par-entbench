@@ -65,7 +65,6 @@ def evaluate_sql_compose(task: dict, trace: dict) -> tuple[bool, str]:
     """Evaluate SQL-Compose. Reads trace, validates each stage."""
     gold_workflow = task.get("gold_workflow", {})
     step_1_gold = gold_workflow.get("step_1_sql", {})
-    step_2_gold = gold_workflow.get("step_2_consumer", {})
 
     sql_node_output = _find_node_output(trace, "sql_gen")
     if sql_node_output is None:

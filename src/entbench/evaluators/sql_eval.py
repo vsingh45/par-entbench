@@ -86,10 +86,10 @@ def _bag_equivalent(
         [normalize_row(r) for r in expected], key=lambda r: tuple(str(v) for v in r)
     )
 
-    for a_row, e_row in zip(actual_norm, expected_norm):
+    for a_row, e_row in zip(actual_norm, expected_norm, strict=False):
         if len(a_row) != len(e_row):
             return False
-        for a_val, e_val in zip(a_row, e_row):
+        for a_val, e_val in zip(a_row, e_row, strict=False):
             if a_val is None and e_val is None:
                 continue
             if a_val is None or e_val is None:

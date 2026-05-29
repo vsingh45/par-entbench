@@ -5,7 +5,6 @@ Compliance vocabulary (5 values): pass, pass_conditional, fail, not_applicable, 
 """
 from __future__ import annotations
 
-
 COMPLIANCE_VOCAB = {"pass", "pass_conditional", "fail", "not_applicable", "pending_review"}
 
 

@@ -7,8 +7,6 @@ Two checks:
 """
 from __future__ import annotations
 
-from typing import Any
-
 
 def _extract_plan(output: dict | None) -> list[dict] | None:
     """Pull plan array from specialist output."""

@@ -22,6 +22,7 @@ from pathlib import Path
 import anthropic
 
 from baselines.routers import ROUTER_REGISTRY
+from par.batch_planner import BatchPlanner
 from par.dispatcher import dispatch_plan
 from par.observability import (
     DEFAULT_KILL_SWITCH_USD,
@@ -29,7 +30,6 @@ from par.observability import (
     finalize_trace,
     record_node_result,
 )
-from par.batch_planner import BatchPlanner
 from par.planner import run_planner
 from par.types import WorkflowState, WorkflowTrace
 

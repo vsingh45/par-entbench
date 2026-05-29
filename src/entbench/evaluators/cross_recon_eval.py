@@ -8,7 +8,6 @@ All 3 must pass for task_correct = True.
 """
 from __future__ import annotations
 
-import math
 from typing import Any
 
 from .mongo_eval import evaluate_mongo

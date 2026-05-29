@@ -14,7 +14,6 @@ from __future__ import annotations
 import anthropic
 
 from par.dispatcher import dispatch_plan
-from par.planner import classify_complexity, _infer_specialist, run_planner
 from par.observability import DEFAULT_KILL_SWITCH_USD
 from par.types import NodeResult, WorkflowState
 
