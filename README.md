@@ -11,6 +11,23 @@ PaR is an architectural pattern in which the planner agent simultaneously decomp
 
 EntBench is a 300-task pilot benchmark across 7 task classes for evaluating cost-aware routing in multi-agent LangGraph workflows. It is the first benchmark specifically designed to measure per-node tier routing decisions and compounding error (ρ) across multi-step agent workflows with structured enterprise data backends.
 
+## Architecture
+
+![PaR-EntBench Architecture](ARCHITECTURE.svg)
+
+**System Overview:**
+- **Planner** (Haiku classifier + Sonnet planner + BatchPlanner) decomposes queries and assigns model tiers
+- **8 Routers** (PaR, PaR-Lite, frugal_cascade, etc.) dispatch subtasks with different strategies
+- **6 Specialists** (SQL, Mongo, Extract, Cross-Recon, Multitool, Policy) execute subtasks
+- **Evaluation** layer tracks cost, accuracy, and composition penalty (ρ)
+- **Outputs** in JSON, CSV, and archive formats for analysis
+
+**Key Results (Haiku Planner, 21 tasks × 8 routers × 3 seeds):**
+- Best accuracy: PaR & frugal_cascade at 33.3%
+- Best cost efficiency: frugal_cascade at $0.0041/task
+- Composition penalty (ρ): PaR 3.33 vs all_frontier 1.27
+- Total cost: $5.11 USD
+
 ## Quick start
 
 ### 1. Install
