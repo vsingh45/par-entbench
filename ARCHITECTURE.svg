@@ -1,0 +1,238 @@
+<svg viewBox="0 0 1400 1000" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .title { font-size: 24px; font-weight: bold; fill: #1a1a1a; }
+      .section-title { font-size: 16px; font-weight: bold; fill: #2c3e50; }
+      .label { font-size: 12px; fill: #2c3e50; }
+      .small-text { font-size: 10px; fill: #555; }
+      .box { stroke: #34495e; stroke-width: 2; fill: #ecf0f1; }
+      .box-input { fill: #e8f8f5; }
+      .box-planner { fill: #fef5e7; }
+      .box-router { fill: #f4ecf7; }
+      .box-executor { fill: #e8f5e9; }
+      .box-eval { fill: #fce4ec; }
+      .arrow { stroke: #34495e; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+      .arrow-red { stroke: #e74c3c; stroke-width: 2; fill: none; marker-end: url(#arrowhead-red); }
+      .arrow-blue { stroke: #3498db; stroke-width: 2; fill: none; marker-end: url(#arrowhead-blue); }
+      .connector { stroke: #95a5a6; stroke-width: 1; stroke-dasharray: 5,5; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#34495e"/>
+    </marker>
+    <marker id="arrowhead-red" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#e74c3c"/>
+    </marker>
+    <marker id="arrowhead-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#3498db"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="700" y="40" text-anchor="middle" class="title">PaR-EntBench Architecture</text>
+  <text x="700" y="65" text-anchor="middle" class="small-text">Planner-as-Router + Enterprise Task Benchmark</text>
+
+  <!-- ========== INPUT LAYER ========== -->
+  <text x="50" y="110" class="section-title">Input Layer</text>
+  <rect x="50" y="130" width="220" height="80" rx="5" class="box box-input"/>
+  <text x="160" y="155" text-anchor="middle" class="label">User Query</text>
+  <text x="160" y="180" text-anchor="middle" class="small-text">Task: SQL-Gen, Mongo-Gen,</text>
+  <text x="160" y="195" text-anchor="middle" class="small-text">Extract, Cross-Recon, etc.</text>
+
+  <!-- ========== PLANNER LAYER ========== -->
+  <text x="360" y="110" class="section-title">Planner Layer (Haiku/Sonnet)</text>
+
+  <!-- Complexity Classifier -->
+  <rect x="360" y="130" width="200" height="70" rx="5" class="box box-planner"/>
+  <text x="460" y="155" text-anchor="middle" class="label">Haiku Classifier</text>
+  <text x="460" y="175" text-anchor="middle" class="small-text">SIMPLE vs COMPLEX</text>
+
+  <!-- Full Planner -->
+  <rect x="600" y="130" width="200" height="70" rx="5" class="box box-planner"/>
+  <text x="700" y="155" text-anchor="middle" class="label">Planner (Sonnet)</text>
+  <text x="700" y="175" text-anchor="middle" class="small-text">Decompose + Tier Assign</text>
+
+  <!-- Batch Planner -->
+  <rect x="840" y="130" width="200" height="70" rx="5" class="box box-planner"/>
+  <text x="940" y="155" text-anchor="middle" class="label">BatchPlanner</text>
+  <text x="940" y="175" text-anchor="middle" class="small-text">Template Cache (per class)</text>
+
+  <!-- Arrows in planner -->
+  <path d="M 270 170 L 360 170" class="arrow"/>
+  <path d="M 560 170 L 600 170" class="arrow"/>
+  <path d="M 800 170 L 840 170" class="arrow"/>
+
+  <!-- ========== ROUTER LAYER ========== -->
+  <text x="50" y="270" class="section-title">Router/Dispatch Layer</text>
+
+  <!-- Par Router -->
+  <rect x="50" y="290" width="110" height="80" rx="5" class="box box-router"/>
+  <text x="105" y="315" text-anchor="middle" class="label">PaR</text>
+  <text x="105" y="335" text-anchor="middle" class="small-text">(Planner-</text>
+  <text x="105" y="350" text-anchor="middle" class="small-text">as-Router)</text>
+
+  <!-- Par-Lite -->
+  <rect x="180" y="290" width="110" height="80" rx="5" class="box box-router"/>
+  <text x="235" y="315" text-anchor="middle" class="label">PaR-Lite</text>
+  <text x="235" y="335" text-anchor="middle" class="small-text">(Cascaded</text>
+  <text x="235" y="350" text-anchor="middle" class="small-text">Classifier)</text>
+
+  <!-- All Frontier -->
+  <rect x="310" y="290" width="110" height="80" rx="5" class="box box-router"/>
+  <text x="365" y="320" text-anchor="middle" class="label">All Frontier</text>
+  <text x="365" y="340" text-anchor="middle" class="small-text">(No Routing)</text>
+
+  <!-- All Small -->
+  <rect x="440" y="290" width="110" height="80" rx="5" class="box box-router"/>
+  <text x="495" y="320" text-anchor="middle" class="label">All Small</text>
+  <text x="495" y="340" text-anchor="middle" class="small-text">(No Routing)</text>
+
+  <!-- Frugal Cascade -->
+  <rect x="570" y="290" width="110" height="80" rx="5" class="box box-router"/>
+  <text x="625" y="315" text-anchor="middle" class="label">Frugal</text>
+  <text x="625" y="335" text-anchor="middle" class="label">Cascade</text>
+
+  <!-- Source/Sink Frontier -->
+  <rect x="700" y="290" width="110" height="80" rx="5" class="box box-router"/>
+  <text x="755" y="315" text-anchor="middle" class="label">Source/Sink</text>
+  <text x="755" y="335" text-anchor="middle" class="label">Frontier</text>
+
+  <!-- Baseline -->
+  <rect x="830" y="290" width="110" height="80" rx="5" class="box box-router"/>
+  <text x="885" y="320" text-anchor="middle" class="label">Baselines</text>
+  <text x="885" y="340" text-anchor="middle" class="small-text">(8 total)</text>
+
+  <!-- Arrows from planner to routers -->
+  <path d="M 1040 200 L 105 290" class="connector" stroke-width="1"/>
+  <path d="M 1040 200 L 235 290" class="connector" stroke-width="1"/>
+  <path d="M 1040 200 L 625 290" class="connector" stroke-width="1"/>
+
+  <!-- ========== SPECIALIST EXECUTOR LAYER ========== -->
+  <text x="50" y="450" class="section-title">Specialist Executors</text>
+
+  <rect x="50" y="470" width="95" height="60" rx="5" class="box box-executor"/>
+  <text x="97.5" y="495" text-anchor="middle" class="label">SQL-Gen</text>
+
+  <rect x="165" y="470" width="95" height="60" rx="5" class="box box-executor"/>
+  <text x="212.5" y="495" text-anchor="middle" class="label">Mongo-Query</text>
+
+  <rect x="280" y="470" width="95" height="60" rx="5" class="box box-executor"/>
+  <text x="327.5" y="495" text-anchor="middle" class="label">Extract</text>
+
+  <rect x="395" y="470" width="95" height="60" rx="5" class="box box-executor"/>
+  <text x="442.5" y="495" text-anchor="middle" class="label">Cross-Recon</text>
+
+  <rect x="510" y="470" width="95" height="60" rx="5" class="box box-executor"/>
+  <text x="557.5" y="495" text-anchor="middle" class="label">Multitool</text>
+
+  <rect x="625" y="470" width="95" height="60" rx="5" class="box box-executor"/>
+  <text x="672.5" y="495" text-anchor="middle" class="label">Policy Action</text>
+
+  <!-- Arrows from routers to specialists -->
+  <path d="M 105 370 L 200 470" class="arrow-blue"/>
+  <path d="M 235 370 L 250 470" class="arrow-blue"/>
+  <path d="M 625 370 L 600 470" class="arrow-blue"/>
+
+  <!-- ========== BACKEND SERVICES ========== -->
+  <text x="800" y="450" class="section-title">Backend Services (EntBench)</text>
+
+  <rect x="800" y="470" width="120" height="60" rx="5" class="box"/>
+  <text x="860" y="495" text-anchor="middle" class="label">PostgreSQL</text>
+  <text x="860" y="510" text-anchor="middle" class="small-text">SQL Execution</text>
+
+  <rect x="950" y="470" width="120" height="60" rx="5" class="box"/>
+  <text x="1010" y="495" text-anchor="middle" class="label">MongoDB</text>
+  <text x="1010" y="510" text-anchor="middle" class="small-text">Pipeline Execution</text>
+
+  <rect x="1100" y="470" width="120" height="60" rx="5" class="box"/>
+  <text x="1160" y="495" text-anchor="middle" class="label">External APIs</text>
+  <text x="1160" y="510" text-anchor="middle" class="small-text">(Mock Services)</text>
+
+  <!-- ========== EVALUATION LAYER ========== -->
+  <text x="50" y="620" class="section-title">Evaluation & Observability</text>
+
+  <rect x="50" y="640" width="140" height="70" rx="5" class="box box-eval"/>
+  <text x="120" y="665" text-anchor="middle" class="label">Per-Task Evaluators</text>
+  <text x="120" y="680" text-anchor="middle" class="small-text">(sql_eval, etc.)</text>
+
+  <rect x="220" y="640" width="140" height="70" rx="5" class="box box-eval"/>
+  <text x="290" y="665" text-anchor="middle" class="label">Cost Tracking</text>
+  <text x="290" y="680" text-anchor="middle" class="small-text">(compute_cost)</text>
+
+  <rect x="390" y="640" width="140" height="70" rx="5" class="box box-eval"/>
+  <text x="460" y="665" text-anchor="middle" class="label">Kill-Switch</text>
+  <text x="460" y="680" text-anchor="middle" class="small-text">($70 ceiling)</text>
+
+  <rect x="560" y="640" width="140" height="70" rx="5" class="box box-eval"/>
+  <text x="630" y="665" text-anchor="middle" class="label">ρ (Rho) Metric</text>
+  <text x="630" y="680" text-anchor="middle" class="small-text">Composition Penalty</text>
+
+  <rect x="730" y="640" width="140" height="70" rx="5" class="box box-eval"/>
+  <text x="800" y="665" text-anchor="middle" class="label">Trace Recording</text>
+  <text x="800" y="680" text-anchor="middle" class="small-text">(emit_trace)</text>
+
+  <!-- Arrows from specialists to evaluation -->
+  <path d="M 200 530 L 120 640" class="arrow-red"/>
+  <path d="M 350 530 L 290 640" class="arrow-red"/>
+  <path d="M 500 530 L 630 640" class="arrow-red"/>
+
+  <!-- ========== OUTPUT LAYER ========== -->
+  <text x="50" y="800" class="section-title">Output & Analysis</text>
+
+  <rect x="50" y="820" width="140" height="70" rx="5" class="box"/>
+  <text x="120" y="845" text-anchor="middle" class="label">JSON Results</text>
+  <text x="120" y="860" text-anchor="middle" class="small-text">(449 tasks)</text>
+
+  <rect x="220" y="820" width="140" height="70" rx="5" class="box"/>
+  <text x="290" y="845" text-anchor="middle" class="label">CSV Metrics</text>
+  <text x="290" y="860" text-anchor="middle" class="small-text">Per-Router Stats</text>
+
+  <rect x="390" y="820" width="140" height="70" rx="5" class="box"/>
+  <text x="460" y="845" text-anchor="middle" class="label">ρ Analysis</text>
+  <text x="460" y="860" text-anchor="middle" class="small-text">Efficiency Ranking</text>
+
+  <rect x="560" y="820" width="140" height="70" rx="5" class="box"/>
+  <text x="630" y="845" text-anchor="middle" class="label">Archives</text>
+  <text x="630" y="860" text-anchor="middle" class="small-text">(tar.gz formats)</text>
+
+  <rect x="730" y="820" width="140" height="70" rx="5" class="box"/>
+  <text x="800" y="845" text-anchor="middle" class="label">Paper Data</text>
+  <text x="800" y="860" text-anchor="middle" class="small-text">par_data_menu.py</text>
+
+  <!-- Arrows from evaluation to output -->
+  <path d="M 120 710 L 120 820" class="arrow"/>
+  <path d="M 290 710 L 290 820" class="arrow"/>
+  <path d="M 630 710 L 630 820" class="arrow"/>
+
+  <!-- ========== KEY METRICS BOX ========== -->
+  <rect x="900" y="620" width="450" height="270" rx="5" style="stroke: #2c3e50; stroke-width: 2; fill: #f8f9fa;"/>
+  <text x="1125" y="645" text-anchor="middle" class="section-title">Experiment Results (21 tasks × 8 routers × 3 seeds)</text>
+
+  <text x="920" y="680" class="label">Best Accuracy:</text>
+  <text x="920" y="700" class="small-text">• PaR: 33.3% ($0.0099/task)</text>
+  <text x="920" y="720" class="small-text">• Frugal Cascade: 33.3% ($0.0041/task)</text>
+
+  <text x="920" y="755" class="label">Composition Penalty (ρ):</text>
+  <text x="920" y="775" class="small-text">• PaR: 3.33 (highest penalty)</text>
+  <text x="920" y="795" class="small-text">• All-Frontier: 1.27 (best efficiency)</text>
+
+  <text x="920" y="830" class="label">Cost Optimization:</text>
+  <text x="920" y="850" class="small-text">• Total spend: $5.11 USD (Haiku sweep)</text>
+  <text x="920" y="870" class="small-text">• Target: ≥25% accuracy ✓, ≤$0.008/task ✗</text>
+
+  <!-- ========== LEGEND ========== -->
+  <text x="50" y="930" class="section-title">Legend</text>
+  <rect x="50" y="940" width="15" height="15" class="box box-input"/>
+  <text x="75" y="952" class="small-text">Input</text>
+
+  <rect x="180" y="940" width="15" height="15" class="box box-planner"/>
+  <text x="205" y="952" class="small-text">Planner</text>
+
+  <rect x="310" y="940" width="15" height="15" class="box box-router"/>
+  <text x="335" y="952" class="small-text">Router</text>
+
+  <rect x="440" y="940" width="15" height="15" class="box box-executor"/>
+  <text x="465" y="952" class="small-text">Executor</text>
+
+  <rect x="570" y="940" width="15" height="15" class="box box-eval"/>
+  <text x="595" y="952" class="small-text">Evaluation</text>
+</svg>
