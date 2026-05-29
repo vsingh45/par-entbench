@@ -15,6 +15,13 @@ EntBench is a 300-task pilot benchmark across 7 task classes for evaluating cost
 
 ![PaR-EntBench Architecture](./ARCHITECTURE.svg)
 
+**Diagram Options:**
+- **SVG** (static, embedded above) — view directly in GitHub
+- **draw.io** (interactive, editable) — open [ARCHITECTURE.drawio](ARCHITECTURE.drawio) in [draw.io](https://app.diagrams.net/) or Diagrams desktop app
+  - Import: File → Open → Select `ARCHITECTURE.drawio`
+  - Edit: Modify and export to PNG/SVG
+  - Share: Download or export as needed
+
 **System Overview:**
 - **Planner** (Haiku classifier + Sonnet planner + BatchPlanner) decomposes queries and assigns model tiers
 - **8 Routers** (PaR, PaR-Lite, frugal_cascade, etc.) dispatch subtasks with different strategies

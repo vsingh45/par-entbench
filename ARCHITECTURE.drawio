@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-05-29" agent="Claude" version="24.5.0" type="device">
+  <diagram name="PaR-EntBench Architecture" id="diagram1">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1000" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="title" value="PaR-EntBench Architecture" style="text;html=1;fontSize=24;fontStyle=1;align=center;" parent="1" vertex="1">
+          <mxGeometry x="0" y="20" width="1400" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- INPUT LAYER -->
+        <mxCell id="input_label" value="Input Layer" style="text;html=1;fontSize=14;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="50" y="90" width="150" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="input_box" value="User Query&#xa;Task: SQL-Gen, Mongo-Gen,&#xa;Extract, Cross-Recon, etc." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f8f5;strokeColor=#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="50" y="130" width="220" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- PLANNER LAYER -->
+        <mxCell id="planner_label" value="Planner Layer (Haiku/Sonnet)" style="text;html=1;fontSize=14;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="360" y="90" width="250" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="classifier" value="Haiku&#xa;Classifier&#xa;SIMPLE vs&#xa;COMPLEX" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef5e7;strokeColor=#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="360" y="130" width="180" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="planner" value="Sonnet&#xa;Planner&#xa;Decompose +&#xa;Tier Assign" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef5e7;strokeColor=#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="600" y="130" width="180" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="batch" value="BatchPlanner&#xa;Template Cache&#xa;(per class)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef5e7;strokeColor=#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="840" y="130" width="180" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Planner flow -->
+        <mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="1" source="input_box" target="classifier" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="1" source="classifier" target="planner" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="1" source="planner" target="batch" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- ROUTER LAYER -->
+        <mxCell id="router_label" value="Router/Dispatch Layer (8 Routers)" style="text;html=1;fontSize=14;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="50" y="270" width="300" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="router_par" value="PaR" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f4ecf7;strokeColor=#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="50" y="310" width="100" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="router_lite" value="PaR-Lite" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f4ecf7;strokeColor=#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="170" y="310" width="100" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="router_frontier" value="All Frontier" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f4ecf7;strokeColor=#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="290" y="310" width="100" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="router_small" value="All Small" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f4ecf7;strokeColor=#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="410" y="310" width="100" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="router_frugal" value="Frugal&#xa;Cascade" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f4ecf7;strokeColor=#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="530" y="310" width="100" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="router_source" value="Source/Sink&#xa;Frontier" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f4ecf7;strokeColor=#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="650" y="310" width="100" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="router_baseline" value="Baselines" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f4ecf7;strokeColor=#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="770" y="310" width="100" height="70" as="geometry"/>
+        </mxCell>
+
+        <!-- SPECIALIST LAYER -->
+        <mxCell id="specialist_label" value="Specialist Executors (6 Types)" style="text;html=1;fontSize=14;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="50" y="440" width="250" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="spec_sql" value="SQL-Gen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor=#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="50" y="480" width="90" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="spec_mongo" value="Mongo-Query" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor=#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="160" y="480" width="90" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="spec_extract" value="Extract" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor=#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="270" y="480" width="90" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="spec_cross" value="Cross-Recon" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor:#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="380" y="480" width="90" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="spec_multi" value="Multitool" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor:#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="490" y="480" width="90" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="spec_policy" value="Policy Action" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor:#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="600" y="480" width="90" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- BACKEND LAYER -->
+        <mxCell id="backend_label" value="Backend Services" style="text;html=1;fontSize=14;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="800" y="440" width="200" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="backend_pg" value="PostgreSQL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecf0f1;strokeColor=#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="800" y="480" width="110" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="backend_mongo" value="MongoDB" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecf0f1;strokeColor:#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="930" y="480" width="110" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="backend_api" value="External APIs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecf0f1;strokeColor:#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="1060" y="480" width="110" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- EVALUATION LAYER -->
+        <mxCell id="eval_label" value="Evaluation &amp; Observability" style="text;html=1;fontSize=14;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="50" y="610" width="250" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="eval_task" value="Task&#xa;Evaluators" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor:#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="50" y="650" width="110" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="eval_cost" value="Cost&#xa;Tracking" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor:#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="180" y="650" width="110" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="eval_kill" value="Kill-Switch&#xa;($70 ceiling)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor:#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="310" y="650" width="110" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="eval_rho" value="ρ Metric&#xa;Composition" style="rounded=1;whiteSpace=wrap;html=1;fillColor:#fce4ec;strokeColor:#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="440" y="650" width="110" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="eval_trace" value="Trace&#xa;Recording" style="rounded=1;whiteSpace=wrap;html=1;fillColor:#fce4ec;strokeColor:#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="570" y="650" width="110" height="70" as="geometry"/>
+        </mxCell>
+
+        <!-- OUTPUT LAYER -->
+        <mxCell id="output_label" value="Output &amp; Analysis" style="text;html=1;fontSize=14;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="50" y="790" width="200" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="output_json" value="JSON&#xa;(449 tasks)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ecf0f1;strokeColor:#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="50" y="830" width="110" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="output_csv" value="CSV&#xa;Metrics" style="rounded=1;whiteSpace=wrap;html=1;fillColor:#ecf0f1;strokeColor:#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="180" y="830" width="110" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="output_rho" value="ρ Analysis&#xa;Ranking" style="rounded=1;whiteSpace=wrap;html=1;fillColor:#ecf0f1;strokeColor:#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="310" y="830" width="110" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="output_arch" value="Archives&#xa;(tar.gz)" style="rounded=1;whiteSpace=wrap;html=1;fillColor:#ecf0f1;strokeColor:#34495e;strokeWidth=2;" parent="1" vertex="1">
+          <mxGeometry x="440" y="830" width="110" height="70" as="geometry"/>
+        </mxCell>
+
+        <!-- RESULTS BOX -->
+        <mxCell id="results_box" value="&lt;b&gt;Experiment Results&lt;/b&gt;&lt;br/&gt;21 tasks × 8 routers × 3 seeds&lt;br/&gt;&lt;br/&gt;&lt;b&gt;Best Accuracy:&lt;/b&gt;&lt;br/&gt;PaR &amp; frugal_cascade: 33.3%&lt;br/&gt;&lt;br/&gt;&lt;b&gt;Best Cost Efficiency:&lt;/b&gt;&lt;br/&gt;frugal_cascade: $0.0041/task&lt;br/&gt;&lt;br/&gt;&lt;b&gt;Composition Penalty (ρ):&lt;/b&gt;&lt;br/&gt;PaR: 3.33 | All-Frontier: 1.27&lt;br/&gt;&lt;br/&gt;&lt;b&gt;Total Cost:&lt;/b&gt;&lt;br/&gt;$5.11 USD (Haiku sweep)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f9fa;strokeColor:#34495e;strokeWidth=2;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="800" y="610" width="550" height="290" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
