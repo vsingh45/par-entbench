@@ -1,0 +1,42 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "difficulty": "hard",
+  "domain": "saas",
+  "query": "Analyze Datadog usage trends by comparing license allocations to actual usage metrics and growth patterns.",
+  "expected_specialists": ["mongo_query", "sql_gen", "cross_recon"],
+  "substrate": "mongodb+postgres",
+  "gold_workflow": {
+    "step_1_mongo": {
+      "collection": "sam_licenses",
+      "pipeline": [
+        {"$match": {"publisher": "Datadog", "status": "active"}},
+        {"$project": {"license_id": 1, "product": 1, "seat_count": 1, "contract_value_usd": 1, "term_end": 1}}
+      ]
+    },
+    "step_2_sql": {
+      "query": "WITH monthly_usage AS (SELECT DATE_TRUNC('month', event_date) AS month, SUM(amount_usd) AS monthly_spend FROM consumption_facts WHERE publisher = 'Datadog' GROUP BY DATE_TRUNC('month', event_date) ORDER BY month DESC LIMIT 6) SELECT AVG(monthly_spend) AS avg_spend, MAX(monthly_spend) AS peak_spend FROM monthly_usage"
+    },
+    "step_3_recon": {
+      "method": "usage_trend_analysis",
+      "output_schema": {
+        "license_id": "string",
+        "product": "string",
+        "allocated_seats": "number",
+        "avg_monthly_spend": "number",
+        "trend": "enum: growth | stable | decline",
+        "seat_adjustment": "enum: increase | maintain | decrease"
+      }
+    }
+  },
+  "evaluator": {
+    "type": "multi_stage",
+    "stages": [
+      {"name": "mongo_correct", "type": "bag_equivalence"},
+      {"name": "sql_correct", "type": "bag_equivalence"},
+      {"name": "recon_correct", "type": "field_match_with_tolerance", "tolerance_numeric": 0.01}
+    ],
+    "all_stages_must_pass": true
+  },
+  "bug_patterns": ["usage_aggregation", "trend_detection"]
+}

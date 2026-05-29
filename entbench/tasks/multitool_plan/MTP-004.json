@@ -1,0 +1,15 @@
+{
+  "task_id": "MTP-004",
+  "task_class": "multitool_plan",
+  "difficulty": "medium",
+  "query": "Generate an incident response workflow: identify the affected service from CloudWatch, fetch logs from S3, create a Slack incident channel, and post initial severity assessment.",
+  "expected_specialists": ["multitool_plan"],
+  "gold_plan": [
+    {"tool": "cloudwatch.metrics", "arguments": {"namespace": "AWS/RDS", "metric_name": "CPUUtilization", "start_time": "-30m"}},
+    {"tool": "s3.read", "arguments": {"bucket": "app-logs", "prefix": "incidents/"}},
+    {"tool": "slack.channels.create", "arguments": {"name": "incident-response-2024", "is_private": true, "topic": "Active incident response"}},
+    {"tool": "slack.messages.post", "arguments": {"channel": "incident-response-2024", "text": "Incident severity: $2.severity"}}
+  ],
+  "evaluator": {"type": "plan_structure", "checks": ["required_tools_set_membership", "dependency_ordering_partial_order"]},
+  "bug_patterns": ["service_identification", "log_aggregation", "communication_workflow"]
+}

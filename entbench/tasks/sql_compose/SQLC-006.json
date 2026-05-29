@@ -1,0 +1,25 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "difficulty": "hard",
+  "query": "Find spend anomalies by comparing current month spend to 3-month average, then classify anomalies as normal_variance, concerning, or critical.",
+  "expected_specialists": ["sql_gen", "policy_action"],
+  "substrate": "postgres+llm",
+  "gold_workflow": {
+    "step_1_sql": {
+      "query": "WITH monthly_spend AS (SELECT publisher, DATE_TRUNC('month', event_date) AS month, SUM(amount_usd) AS monthly_total FROM consumption_facts GROUP BY publisher, DATE_TRUNC('month', event_date)) SELECT publisher, monthly_total, ROUND(AVG(monthly_total) OVER (PARTITION BY publisher ORDER BY month ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING), 2) AS three_month_avg FROM monthly_spend WHERE month = DATE_TRUNC('month', CURRENT_DATE)"
+    },
+    "step_2_consumer": {
+      "task": "Classify spend as normal if within ±10% of avg, concerning if ±10-30%, critical if >30% variance",
+      "expected_output_schema": {"anomalies": [{"publisher": "string", "monthly_total": "number", "anomaly_classification": "enum"}]}
+    }
+  },
+  "evaluator": {
+    "type": "multi_stage",
+    "stages": [
+      {"name": "sql_correct", "type": "bag_equivalence"},
+      {"name": "consumer_correct", "type": "classification_per_entity"}
+    ]
+  },
+  "bug_patterns": ["window_function", "temporal_aggregation"]
+}

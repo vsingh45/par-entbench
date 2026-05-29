@@ -1,0 +1,25 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "difficulty": "hard",
+  "query": "Analyze budget allocation by product category and cost trends, then recommend reallocation strategy.",
+  "expected_specialists": ["sql_gen", "extract"],
+  "substrate": "postgres+llm",
+  "gold_workflow": {
+    "step_1_sql": {
+      "query": "SELECT product, SUM(amount_usd) AS total_spend, COUNT(*) AS transaction_count, AVG(amount_usd) AS avg_transaction FROM consumption_facts WHERE fiscal_year = 2024 GROUP BY product ORDER BY total_spend DESC"
+    },
+    "step_2_consumer": {
+      "task": "For each product, recommend allocation shift: increase if high-spend (>$500 total), maintain if medium ($200-500), decrease if low (<$200)",
+      "expected_output_schema": {"allocations": [{"product": "string", "current_spend": "number", "recommendation": "enum"}]}
+    }
+  },
+  "evaluator": {
+    "type": "multi_stage",
+    "stages": [
+      {"name": "sql_correct", "type": "bag_equivalence"},
+      {"name": "consumer_correct", "type": "classification_per_entity"}
+    ]
+  },
+  "bug_patterns": ["category_analysis", "trend_assessment"]
+}

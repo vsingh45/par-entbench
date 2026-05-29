@@ -1,0 +1,33 @@
+{
+  "task_id": "EXT-004",
+  "task_class": "extract",
+  "difficulty": "medium",
+  "query": "Extract all party names, their roles, and contact addresses from this multi-party contract.",
+  "expected_specialists": ["extract"],
+  "input_document": "MULTI-PARTY SERVICE AGREEMENT\n\nThis Agreement is entered into as of January 1, 2024 between:\n\n1. Acme Corporation, a Delaware corporation ('Service Provider'), with principal office at 123 Business Ave, San Francisco, CA 94105\n2. TechCorp Inc., a California corporation ('Primary Client'), with address 456 Innovation Drive, San Jose, CA 95110\n3. Global Partners LLC, a Nevada limited liability company ('Secondary Partner'), located at 789 Enterprise Boulevard, Las Vegas, NV 89101\n\nEach party agrees to fulfill their designated roles as outlined herein.",
+  "gold_extraction": {
+    "parties": [
+      {
+        "name": "Acme Corporation",
+        "role": "Service Provider",
+        "address": "123 Business Ave, San Francisco, CA 94105"
+      },
+      {
+        "name": "TechCorp Inc.",
+        "role": "Primary Client",
+        "address": "456 Innovation Drive, San Jose, CA 95110"
+      },
+      {
+        "name": "Global Partners LLC",
+        "role": "Secondary Partner",
+        "address": "789 Enterprise Boulevard, Las Vegas, NV 89101"
+      }
+    ]
+  },
+  "evaluator": {
+    "type": "field_level_f1",
+    "threshold": 0.85,
+    "tolerance_numeric": 0.01
+  },
+  "bug_patterns": ["multi_entity", "address_normalization"]
+}

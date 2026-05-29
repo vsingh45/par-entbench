@@ -1,0 +1,18 @@
+{
+  "task_id": "MGO-006",
+  "task_class": "mongo_gen",
+  "difficulty": "medium",
+  "query": "Count the number of seat assignments per license_id with active status.",
+  "expected_specialists": ["mongo_query"],
+  "substrate": "mongodb",
+  "collection": "sam_seat_assignments",
+  "gold_pipeline": [
+    {"$match": {"status": "active"}},
+    {"$group": {"_id": "$license_id", "seat_count": {"$sum": 1}}}
+  ],
+  "evaluator": {
+    "type": "execution_bag_equivalence",
+    "result_fields": ["_id", "seat_count"]
+  },
+  "bug_patterns": ["status_filter", "count"]
+}

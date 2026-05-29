@@ -1,0 +1,25 @@
+{
+  "task_id": "PAC-004",
+  "task_class": "policy_action",
+  "difficulty": "easy",
+  "query": "A developer attempts to access the production database for live debugging purposes.",
+  "expected_specialists": ["policy_action"],
+  "policy_registry": {
+    "POL-401": "Production database access requires Manager approval AND on-call role",
+    "POL-402": "Debug access restricted to designated staging environment"
+  },
+  "context": {
+    "user": "dev-alice",
+    "role": "developer",
+    "resource": "prod-mysql-primary",
+    "action": "query_execute"
+  },
+  "candidate_actions": ["allow", "deny_with_reason", "redirect_to_staging"],
+  "gold_output": {
+    "selected_action": "deny_with_reason",
+    "policy_compliance": {"POL-401": "fail", "POL-402": "fail"},
+    "reason": "Developer role lacks on-call designation required for production access. Redirect to staging-mysql for debugging."
+  },
+  "evaluator": {"type": "exact_match", "fields": ["selected_action", "policy_compliance"]},
+  "bug_patterns": ["role_hierarchy", "environment_restriction"]
+}

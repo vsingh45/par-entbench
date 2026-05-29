@@ -1,0 +1,15 @@
+{
+  "task_id": "MTP-005",
+  "task_class": "multitool_plan",
+  "difficulty": "medium",
+  "query": "Plan access provisioning workflow: check user's current IAM role, fetch manager approval from workflow system, update IAM permissions, and confirm via email.",
+  "expected_specialists": ["multitool_plan"],
+  "gold_plan": [
+    {"tool": "iam.user.get", "arguments": {"user_name": "jane.smith"}},
+    {"tool": "workflow.approvals.check", "arguments": {"request_id": "REQ-2024-001"}},
+    {"tool": "iam.roles.attach", "arguments": {"user_name": "jane.smith", "role": "finance-analyst"}},
+    {"tool": "email.send", "arguments": {"to": "jane.smith@company.com", "subject": "Access Granted", "body": "Your access to finance-reports has been provisioned."}}
+  ],
+  "evaluator": {"type": "plan_structure", "checks": ["required_tools_set_membership", "dependency_ordering_partial_order"]},
+  "bug_patterns": ["permission_flow", "approval_gating"]
+}

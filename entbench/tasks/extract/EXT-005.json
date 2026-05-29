@@ -1,0 +1,26 @@
+{
+  "task_id": "EXT-005",
+  "task_class": "extract",
+  "difficulty": "medium",
+  "query": "Extract line items, total taxes, and payment terms from this invoice document.",
+  "expected_specialists": ["extract"],
+  "input_document": "INVOICE #INV-2024-0815\n\nIssued: August 15, 2024\nDue Date: September 15, 2024\n\nLine Items:\n1. Software License - Annual: $15,000.00\n2. Professional Services (40 hours @ $150/hr): $6,000.00\n3. Technical Support (12 months): $2,400.00\n\nSubtotal: $23,400.00\nSales Tax (8.875%): $2,078.63\nService Fee: $500.00\nTotal Tax and Fees: $2,578.63\nTOTAL DUE: $25,978.63\n\nPayment Terms: Net 30 days. 2% early payment discount if paid within 10 days. Wire transfer to Wells Fargo Bank, Account #987654321.",
+  "gold_extraction": {
+    "line_items": [
+      {"description": "Software License - Annual", "amount": 15000.00},
+      {"description": "Professional Services (40 hours @ $150/hr)", "amount": 6000.00},
+      {"description": "Technical Support (12 months)", "amount": 2400.00}
+    ],
+    "subtotal": 23400.00,
+    "taxes": 2578.63,
+    "total_due": 25978.63,
+    "payment_terms": "Net 30 days",
+    "early_payment_discount": "2% within 10 days"
+  },
+  "evaluator": {
+    "type": "field_level_f1",
+    "threshold": 0.85,
+    "tolerance_numeric": 0.01
+  },
+  "bug_patterns": ["nested_list", "currency_normalization", "date_extraction"]
+}

@@ -1,0 +1,16 @@
+{
+  "task_id": "SQL-004",
+  "task_class": "sql_gen",
+  "difficulty": "easy",
+  "query": "What are the top 3 publishers by total spend in fiscal year 2024?",
+  "expected_specialists": ["sql_gen"],
+  "substrate": "postgres",
+  "gold_sql": "SELECT publisher, SUM(amount_usd) AS total_spend FROM consumption_facts WHERE fiscal_year = 2024 GROUP BY publisher ORDER BY total_spend DESC LIMIT 3",
+  "evaluator": {
+    "type": "execution_bag_equivalence",
+    "tolerance_numeric": 0.01,
+    "result_columns": ["publisher", "total_spend"]
+  },
+  "linter_check": true,
+  "bug_patterns": ["aggregation", "explicit_limit"]
+}

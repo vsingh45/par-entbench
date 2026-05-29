@@ -1,0 +1,19 @@
+{
+  "task_id": "MGO-005",
+  "task_class": "mongo_gen",
+  "difficulty": "easy",
+  "query": "List the top 5 licenses by contract value in sam_licenses collection.",
+  "expected_specialists": ["mongo_query"],
+  "substrate": "mongodb",
+  "collection": "sam_licenses",
+  "gold_pipeline": [
+    {"$sort": {"contract_value_usd": -1}},
+    {"$limit": 5},
+    {"$project": {"license_id": 1, "publisher": 1, "product": 1, "contract_value_usd": 1}}
+  ],
+  "evaluator": {
+    "type": "execution_bag_equivalence",
+    "result_fields": ["license_id", "publisher", "product", "contract_value_usd"]
+  },
+  "bug_patterns": ["sorting", "limit"]
+}

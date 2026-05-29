@@ -1,0 +1,26 @@
+{
+  "task_id": "PAC-006",
+  "task_class": "policy_action",
+  "difficulty": "hard",
+  "query": "An infrastructure engineer proposes rolling out Docker image changes to all microservices in production without prior staging validation.",
+  "expected_specialists": ["policy_action"],
+  "policy_registry": {
+    "POL-601": "All container image changes must be tested in staging for minimum 48 hours before production rollout",
+    "POL-602": "Infrastructure changes require change board approval and post-deployment monitoring setup",
+    "POL-603": "Rollout strategy must include automated rollback capability and traffic monitoring"
+  },
+  "context": {
+    "user": "ops-charlie",
+    "role": "infrastructure-engineer",
+    "resource": "k8s-prod-cluster",
+    "action": "image_rollout"
+  },
+  "candidate_actions": ["allow", "deny_with_reason", "require_additional_steps"],
+  "gold_output": {
+    "selected_action": "require_additional_steps",
+    "policy_compliance": {"POL-601": "fail", "POL-602": "fail", "POL-603": "pass"},
+    "reason": "Image changes require 48h staging soak (POL-601). Change board approval missing (POL-602). Rollback configured (POL-603). Request change board ticket and staging deployment first."
+  },
+  "evaluator": {"type": "exact_match", "fields": ["selected_action", "policy_compliance"]},
+  "bug_patterns": ["deployment_governance", "change_management"]
+}

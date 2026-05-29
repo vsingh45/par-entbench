@@ -1,0 +1,18 @@
+{
+  "task_id": "MGO-007",
+  "task_class": "mongo_gen",
+  "difficulty": "medium",
+  "query": "Find licenses renewing in the next 90 days. Filter by term_end date within 90 days from today.",
+  "expected_specialists": ["mongo_query"],
+  "substrate": "mongodb",
+  "collection": "sam_licenses",
+  "gold_pipeline": [
+    {"$match": {"status": "active", "term_end": {"$gte": {"$date": "2024-12-31T00:00:00Z"}, "$lte": {"$date": "2025-03-30T00:00:00Z"}}}},
+    {"$project": {"license_id": 1, "publisher": 1, "term_end": 1}}
+  ],
+  "evaluator": {
+    "type": "execution_bag_equivalence",
+    "result_fields": ["license_id", "publisher", "term_end"]
+  },
+  "bug_patterns": ["date_arithmetic", "range_filter"]
+}

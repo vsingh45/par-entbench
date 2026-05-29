@@ -1,0 +1,16 @@
+{
+  "task_id": "SQL-006",
+  "task_class": "sql_gen",
+  "difficulty": "easy",
+  "query": "Count the distinct number of users per publisher in Q3 2024.",
+  "expected_specialists": ["sql_gen"],
+  "substrate": "postgres",
+  "gold_sql": "SELECT publisher, COUNT(DISTINCT user_id) AS unique_users FROM consumption_facts WHERE fiscal_year = 2024 AND fiscal_quarter = 3 GROUP BY publisher",
+  "evaluator": {
+    "type": "execution_bag_equivalence",
+    "tolerance_numeric": 0.01,
+    "result_columns": ["publisher", "unique_users"]
+  },
+  "linter_check": true,
+  "bug_patterns": ["distinct_count", "group_by"]
+}

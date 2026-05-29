@@ -1,0 +1,23 @@
+{
+  "task_id": "EXT-006",
+  "task_class": "extract",
+  "difficulty": "easy",
+  "query": "Extract timestamp, user ID, resource accessed, action performed, and result from this access log entry.",
+  "expected_specialists": ["extract"],
+  "input_document": "Access Log Entry:\n[2024-08-15T14:32:47Z] User: john.doe@company.com | Resource: s3://finance-reports/Q3-2024.pdf | Action: read | Status: success | IP: 192.168.1.105",
+  "gold_extraction": {
+    "timestamp": "2024-08-15T14:32:47Z",
+    "user_id": "john.doe@company.com",
+    "resource": "s3://finance-reports/Q3-2024.pdf",
+    "action": "read",
+    "status": "success",
+    "ip_address": "192.168.1.105"
+  },
+  "evaluator": {
+    "type": "field_level_f1",
+    "threshold": 0.85,
+    "tolerance_numeric": 0.01,
+    "date_normalize": "ISO8601"
+  },
+  "bug_patterns": ["timestamp_format", "structured_log"]
+}

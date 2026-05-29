@@ -1,0 +1,26 @@
+{
+  "task_id": "PAC-005",
+  "task_class": "policy_action",
+  "difficulty": "medium",
+  "query": "An analyst requests bulk export of customer PII (names, emails, phone numbers) from the customer database for analysis.",
+  "expected_specialists": ["policy_action"],
+  "policy_registry": {
+    "POL-501": "PII export requires explicit privacy approval from Legal and CISO sign-off",
+    "POL-502": "Data minimization: export only non-sensitive attributes unless business-critical",
+    "POL-503": "PII exports must have audit logging and 30-day retention limit"
+  },
+  "context": {
+    "user": "ana-bob",
+    "role": "data-analyst",
+    "resource": "customer_db.pii_fields",
+    "action": "bulk_export"
+  },
+  "candidate_actions": ["allow", "deny_with_reason", "conditional_allow"],
+  "gold_output": {
+    "selected_action": "conditional_allow",
+    "policy_compliance": {"POL-501": "pending", "POL-502": "pending", "POL-503": "pass"},
+    "reason": "Data analyst role can export, but requires Legal approval (POL-501). Recommend de-identification to hashed emails only (POL-502). Audit logging configured (POL-503)."
+  },
+  "evaluator": {"type": "exact_match", "fields": ["selected_action"]},
+  "bug_patterns": ["pii_handling", "multi_policy_coordination"]
+}

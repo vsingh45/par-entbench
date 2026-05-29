@@ -1,0 +1,16 @@
+{
+  "task_id": "SQL-005",
+  "task_class": "sql_gen",
+  "difficulty": "medium",
+  "query": "Calculate the average cost per active seat by product for Q4 2024, sorted in descending order.",
+  "expected_specialists": ["sql_gen"],
+  "substrate": "postgres",
+  "gold_sql": "SELECT product, SUM(amount_usd) / SUM(daily_active_seats) AS avg_cost_per_seat FROM consumption_facts WHERE fiscal_year = 2024 AND fiscal_quarter = 4 GROUP BY product ORDER BY avg_cost_per_seat DESC",
+  "evaluator": {
+    "type": "execution_bag_equivalence",
+    "tolerance_numeric": 0.01,
+    "result_columns": ["product", "avg_cost_per_seat"]
+  },
+  "linter_check": true,
+  "bug_patterns": ["division", "aggregation_order"]
+}

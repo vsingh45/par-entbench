@@ -1,0 +1,15 @@
+{
+  "task_id": "MTP-008",
+  "task_class": "multitool_plan",
+  "difficulty": "hard",
+  "query": "Orchestrate cross-team collaboration: retrieve project requirements from Jira, check team availability from calendar API, schedule standup meeting, and share agenda via Slack.",
+  "expected_specialists": ["multitool_plan"],
+  "gold_plan": [
+    {"tool": "jira.issue.get", "arguments": {"issue_key": "PROJ-123"}},
+    {"tool": "calendar.availability.check", "arguments": {"team": "platform-eng", "duration": 60, "window": "next_7_days"}},
+    {"tool": "calendar.events.create", "arguments": {"title": "Project Standup", "attendees": "$2.available_members", "duration": 60}},
+    {"tool": "slack.messages.post", "arguments": {"channel": "platform-eng", "thread": "project-planning", "text": "Standup scheduled: $3.meeting_time. Agenda: $1.description"}}
+  ],
+  "evaluator": {"type": "plan_structure", "checks": ["required_tools_set_membership", "dependency_chain", "communication_routing"]},
+  "bug_patterns": ["calendar_integration", "team_coordination"]
+}

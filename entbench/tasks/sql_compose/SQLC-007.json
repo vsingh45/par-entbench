@@ -1,0 +1,25 @@
+{
+  "task_id": "SQLC-007",
+  "task_class": "sql_compose",
+  "difficulty": "medium",
+  "query": "Get top spending publishers and their product mix, then assess negotiation leverage for each.",
+  "expected_specialists": ["sql_gen", "policy_action"],
+  "substrate": "postgres+llm",
+  "gold_workflow": {
+    "step_1_sql": {
+      "query": "SELECT publisher, SUM(amount_usd) AS total_spend, COUNT(DISTINCT product) AS product_count FROM consumption_facts WHERE fiscal_year = 2024 GROUP BY publisher ORDER BY total_spend DESC LIMIT 10"
+    },
+    "step_2_consumer": {
+      "task": "Assess each publisher's negotiation leverage: high if product_count > 3 and spend > $100k, medium if product_count 2-3, low otherwise",
+      "expected_output_schema": {"negotiations": [{"publisher": "string", "leverage": "enum"}]}
+    }
+  },
+  "evaluator": {
+    "type": "multi_stage",
+    "stages": [
+      {"name": "sql_correct", "type": "bag_equivalence"},
+      {"name": "consumer_correct", "type": "classification_per_entity"}
+    ]
+  },
+  "bug_patterns": ["multi_condition_classification", "sql_to_llm_handoff"]
+}

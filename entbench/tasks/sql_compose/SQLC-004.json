@@ -1,0 +1,25 @@
+{
+  "task_id": "SQLC-004",
+  "task_class": "sql_compose",
+  "difficulty": "medium",
+  "query": "Get vendor risk scores by querying vendor reliability data, then classify each vendor as low_risk, medium_risk, or high_risk based on incident history.",
+  "expected_specialists": ["sql_gen", "policy_action"],
+  "substrate": "postgres+llm",
+  "gold_workflow": {
+    "step_1_sql": {
+      "query": "SELECT publisher, COUNT(*) AS transaction_count, SUM(amount_usd) AS total_spend FROM consumption_facts GROUP BY publisher ORDER BY transaction_count DESC LIMIT 10"
+    },
+    "step_2_consumer": {
+      "task": "Classify each publisher by risk tier: transaction_count >= 20 = high_risk, 5-19 = medium_risk, <5 = low_risk",
+      "expected_output_schema": {"vendor_assessments": [{"publisher": "string", "transaction_count": "number", "risk_classification": "enum"}]}
+    }
+  },
+  "evaluator": {
+    "type": "multi_stage",
+    "stages": [
+      {"name": "sql_correct", "type": "bag_equivalence"},
+      {"name": "consumer_correct", "type": "classification_per_entity"}
+    ]
+  },
+  "bug_patterns": ["sql_to_llm_handoff", "risk_classification"]
+}

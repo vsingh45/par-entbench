@@ -1,0 +1,26 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "difficulty": "medium",
+  "query": "A contractor with temporary access attempts to download the full customer database backup for local analysis.",
+  "expected_specialists": ["policy_action"],
+  "policy_registry": {
+    "POL-701": "Database backups only accessible to full-time employees with DBA role",
+    "POL-702": "Contractors limited to de-identified query results, no raw data exports",
+    "POL-703": "Any data access by contractors requires explicit project manager approval and 7-day notice"
+  },
+  "context": {
+    "user": "contractor-dave",
+    "role": "contractor",
+    "resource": "production_backup.tar.gz",
+    "action": "download"
+  },
+  "candidate_actions": ["deny", "redirect_to_query", "escalate_for_approval"],
+  "gold_output": {
+    "selected_action": "deny",
+    "policy_compliance": {"POL-701": "fail", "POL-702": "fail", "POL-703": "fail"},
+    "reason": "Contractor role violates all backup access policies (POL-701, POL-702, POL-703). Redirect to anonymized query interface for analysis."
+  },
+  "evaluator": {"type": "exact_match", "fields": ["selected_action", "policy_compliance"]},
+  "bug_patterns": ["contractor_restrictions", "data_minimization"]
+}

@@ -1,0 +1,18 @@
+{
+  "task_id": "MGO-004",
+  "task_class": "mongo_gen",
+  "difficulty": "easy",
+  "query": "Find all licenses with cost per seat exceeding $500, grouped by publisher.",
+  "expected_specialists": ["mongo_query"],
+  "substrate": "mongodb",
+  "collection": "sam_licenses",
+  "gold_pipeline": [
+    {"$match": {"cost_per_seat_usd": {"$gt": 500}}},
+    {"$group": {"_id": "$publisher", "licenses": {"$push": "$license_id"}}}
+  ],
+  "evaluator": {
+    "type": "execution_bag_equivalence",
+    "result_fields": ["_id", "licenses"]
+  },
+  "bug_patterns": ["numeric_threshold", "grouping"]
+}

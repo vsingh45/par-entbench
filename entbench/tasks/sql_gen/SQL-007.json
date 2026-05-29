@@ -1,0 +1,16 @@
+{
+  "task_id": "SQL-007",
+  "task_class": "sql_gen",
+  "difficulty": "medium",
+  "query": "Identify publishers with declining spend from Q3 to Q4 2024. Show publishers where Q4 spend is less than Q3 spend.",
+  "expected_specialists": ["sql_gen"],
+  "substrate": "postgres",
+  "gold_sql": "WITH quarterly_spend AS (SELECT publisher, fiscal_quarter, SUM(amount_usd) AS q_spend FROM consumption_facts WHERE fiscal_year = 2024 AND fiscal_quarter IN (3, 4) GROUP BY publisher, fiscal_quarter) SELECT DISTINCT q3.publisher FROM quarterly_spend q3 JOIN quarterly_spend q4 ON q3.publisher = q4.publisher WHERE q3.fiscal_quarter = 3 AND q4.fiscal_quarter = 4 AND q4.q_spend < q3.q_spend",
+  "evaluator": {
+    "type": "execution_bag_equivalence",
+    "tolerance_numeric": 0.01,
+    "result_columns": ["publisher"]
+  },
+  "linter_check": true,
+  "bug_patterns": ["self_join", "quarter_comparison"]
+}

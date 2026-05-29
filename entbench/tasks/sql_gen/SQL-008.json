@@ -1,0 +1,16 @@
+{
+  "task_id": "SQL-008",
+  "task_class": "sql_gen",
+  "difficulty": "hard",
+  "query": "Show the daily active seats trend for Adobe across November 2024. Return date and daily active seat count ordered by date.",
+  "expected_specialists": ["sql_gen"],
+  "substrate": "postgres",
+  "gold_sql": "SELECT DATE(event_date) AS date, SUM(daily_active_seats) AS active_seats FROM consumption_facts WHERE publisher = 'Adobe' AND event_date >= '2024-11-01' AND event_date < '2024-12-01' GROUP BY DATE(event_date) ORDER BY date ASC",
+  "evaluator": {
+    "type": "execution_bag_equivalence",
+    "tolerance_numeric": 0.01,
+    "result_columns": ["date", "active_seats"]
+  },
+  "linter_check": true,
+  "bug_patterns": ["date_truncation", "time_range"]
+}

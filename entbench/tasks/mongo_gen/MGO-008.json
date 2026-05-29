@@ -1,0 +1,18 @@
+{
+  "task_id": "MGO-008",
+  "task_class": "mongo_gen",
+  "difficulty": "medium",
+  "query": "Calculate average contract value USD by criticality tier.",
+  "expected_specialists": ["mongo_query"],
+  "substrate": "mongodb",
+  "collection": "sam_licenses",
+  "gold_pipeline": [
+    {"$group": {"_id": "$criticality_tier", "avg_contract_value": {"$avg": "$contract_value_usd"}}},
+    {"$sort": {"avg_contract_value": -1}}
+  ],
+  "evaluator": {
+    "type": "execution_bag_equivalence",
+    "result_fields": ["_id", "avg_contract_value"]
+  },
+  "bug_patterns": ["aggregation", "grouping"]
+}

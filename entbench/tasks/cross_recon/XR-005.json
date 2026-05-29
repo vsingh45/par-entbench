@@ -1,0 +1,43 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "difficulty": "hard",
+  "domain": "sam",
+  "query": "Analyze Salesforce seat utilization by comparing licensed seats vs actual seat assignments, identify unutilized licenses.",
+  "expected_specialists": ["mongo_query", "sql_gen", "cross_recon"],
+  "substrate": "mongodb+postgres",
+  "gold_workflow": {
+    "step_1_mongo": {
+      "collection": "sam_licenses",
+      "pipeline": [
+        {"$match": {"publisher": "Salesforce", "status": "active"}},
+        {"$lookup": {"from": "sam_seat_assignments", "localField": "license_id", "foreignField": "license_id", "as": "assignments"}},
+        {"$project": {"license_id": 1, "product": 1, "seat_count": 1, "assigned_seats": {"$size": "$assignments"}}}
+      ]
+    },
+    "step_2_sql": {
+      "query": "SELECT product, COUNT(DISTINCT license_id) AS license_count, AVG(seat_count) AS avg_seats_per_license FROM consumption_facts WHERE publisher = 'Salesforce' GROUP BY product"
+    },
+    "step_3_recon": {
+      "method": "compare_utilization",
+      "join_key": "product",
+      "output_schema": {
+        "product": "string",
+        "licensed_seats": "number",
+        "assigned_seats": "number",
+        "utilization_percent": "number",
+        "action": "enum: retain | downsize | expand"
+      }
+    }
+  },
+  "evaluator": {
+    "type": "multi_stage",
+    "stages": [
+      {"name": "mongo_correct", "type": "bag_equivalence"},
+      {"name": "sql_correct", "type": "bag_equivalence"},
+      {"name": "recon_correct", "type": "field_match_with_tolerance", "tolerance_numeric": 0.01}
+    ],
+    "all_stages_must_pass": true
+  },
+  "bug_patterns": ["seat_utilization", "lookup_join"]
+}

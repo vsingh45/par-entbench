@@ -1,0 +1,25 @@
+{
+  "task_id": "SQLC-005",
+  "task_class": "sql_compose",
+  "difficulty": "medium",
+  "query": "Retrieve licenses expiring in the next 6 months from Postgres, then generate renewal recommendations for each.",
+  "expected_specialists": ["sql_gen", "extract"],
+  "substrate": "postgres+llm",
+  "gold_workflow": {
+    "step_1_sql": {
+      "query": "SELECT license_id, publisher, product, SUM(amount_usd) AS total_spend FROM consumption_facts WHERE fiscal_year = 2024 GROUP BY license_id, publisher, product ORDER BY total_spend DESC LIMIT 10"
+    },
+    "step_2_consumer": {
+      "task": "For each license, recommend renewal action: renew_as_is, renew_with_discount_negotiation, or do_not_renew based on spend level (>$5k=renew, $1-5k=negotiate, <$1k=do_not)",
+      "expected_output_schema": {"renewal_recommendations": [{"license_id": "string", "publisher": "string", "recommendation": "enum"}]}
+    }
+  },
+  "evaluator": {
+    "type": "multi_stage",
+    "stages": [
+      {"name": "sql_correct", "type": "bag_equivalence"},
+      {"name": "consumer_correct", "type": "classification_per_entity"}
+    ]
+  },
+  "bug_patterns": ["date_range_filter", "structured_consumer_output"]
+}

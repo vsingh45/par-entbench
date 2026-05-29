@@ -1,0 +1,37 @@
+{
+  "task_id": "EXT-007",
+  "task_class": "extract",
+  "difficulty": "medium",
+  "query": "Extract company details, primary contact information, and banking details from this vendor onboarding form.",
+  "expected_specialists": ["extract"],
+  "input_document": "VENDOR ONBOARDING FORM\n\nCompany Name: TechVendor Solutions Inc.\nRegistration Number: NV-987654\nBusiness Type: Software Development Services\nCountry of Operation: United States\nHeadquarters: 999 Tech Lane, Austin, TX 78701\n\nPrimary Contact:\nName: Sarah Johnson\nTitle: VP of Sales\nEmail: sarah.johnson@techvendor.com\nPhone: (512) 555-0123\n\nBanking Details:\nBank Name: Chase Bank\nAccount Holder: TechVendor Solutions Inc.\nAccount Number: 4567890123\nRouting Number: 021000021\nAccount Type: Business Checking\nCurrency: USD",
+  "gold_extraction": {
+    "company": {
+      "name": "TechVendor Solutions Inc.",
+      "registration_number": "NV-987654",
+      "business_type": "Software Development Services",
+      "country": "United States",
+      "headquarters": "999 Tech Lane, Austin, TX 78701"
+    },
+    "primary_contact": {
+      "name": "Sarah Johnson",
+      "title": "VP of Sales",
+      "email": "sarah.johnson@techvendor.com",
+      "phone": "(512) 555-0123"
+    },
+    "banking": {
+      "bank_name": "Chase Bank",
+      "account_holder": "TechVendor Solutions Inc.",
+      "account_number": "4567890123",
+      "routing_number": "021000021",
+      "account_type": "Business Checking",
+      "currency": "USD"
+    }
+  },
+  "evaluator": {
+    "type": "field_level_f1",
+    "threshold": 0.85,
+    "tolerance_numeric": 0.01
+  },
+  "bug_patterns": ["nested_extraction", "phone_normalization", "banking_number_formats"]
+}

@@ -1,0 +1,15 @@
+{
+  "task_id": "MTP-007",
+  "task_class": "multitool_plan",
+  "difficulty": "hard",
+  "query": "Execute a security audit workflow: scan IAM policies, audit CloudTrail logs, check for policy violations, and generate compliance report.",
+  "expected_specialists": ["multitool_plan"],
+  "gold_plan": [
+    {"tool": "iam.policies.list", "arguments": {"scope": "organization"}},
+    {"tool": "cloudtrail.logs.query", "arguments": {"event_source": "iam.amazonaws.com", "days": 30}},
+    {"tool": "compliance.scan", "arguments": {"policies": "$1", "logs": "$2", "framework": "SOC2"}},
+    {"tool": "report.generate", "arguments": {"scan_results": "$3", "format": "pdf", "recipient": "security-team@company.com"}}
+  ],
+  "evaluator": {"type": "plan_structure", "checks": ["required_tools_set_membership", "dependency_ordering_partial_order", "compliance_checks"]},
+  "bug_patterns": ["cross_tool_dependencies", "compliance_reporting"]
+}

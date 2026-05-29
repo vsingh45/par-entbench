@@ -1,0 +1,40 @@
+{
+  "task_id": "XR-006",
+  "task_class": "cross_recon",
+  "difficulty": "hard",
+  "domain": "sam",
+  "query": "Track Slack license renewal trajectory by comparing contract renewals in SAM to usage trends in consumption data.",
+  "expected_specialists": ["mongo_query", "sql_gen", "cross_recon"],
+  "substrate": "mongodb+postgres",
+  "gold_workflow": {
+    "step_1_mongo": {
+      "collection": "sam_licenses",
+      "pipeline": [
+        {"$match": {"publisher": "Slack", "status": "active"}},
+        {"$project": {"license_id": 1, "product": 1, "term_end": 1, "contract_value_usd": 1, "criticality_tier": 1}}
+      ]
+    },
+    "step_2_sql": {
+      "query": "SELECT DATE_TRUNC('month', event_date) AS month, SUM(daily_active_seats) AS active_seats, SUM(amount_usd) AS monthly_spend FROM consumption_facts WHERE publisher = 'Slack' AND fiscal_year = 2024 GROUP BY DATE_TRUNC('month', event_date) ORDER BY month DESC LIMIT 6"
+    },
+    "step_3_recon": {
+      "method": "temporal_join",
+      "output_schema": {
+        "license_id": "string",
+        "term_end": "date",
+        "recent_usage_trend": "enum: increasing | stable | decreasing",
+        "renewal_recommendation": "enum: renew | renegotiate | not_renew"
+      }
+    }
+  },
+  "evaluator": {
+    "type": "multi_stage",
+    "stages": [
+      {"name": "mongo_correct", "type": "bag_equivalence"},
+      {"name": "sql_correct", "type": "bag_equivalence"},
+      {"name": "recon_correct", "type": "field_match_with_tolerance", "tolerance_numeric": 0.01}
+    ],
+    "all_stages_must_pass": true
+  },
+  "bug_patterns": ["trend_analysis", "temporal_join"]
+}

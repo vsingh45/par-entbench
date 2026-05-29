@@ -1,0 +1,42 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "difficulty": "hard",
+  "domain": "saas",
+  "query": "Compare AWS contracted commit levels vs actual spend to identify overcommitment or underutilization.",
+  "expected_specialists": ["mongo_query", "sql_gen", "cross_recon"],
+  "substrate": "mongodb+postgres",
+  "gold_workflow": {
+    "step_1_mongo": {
+      "collection": "sam_licenses",
+      "pipeline": [
+        {"$match": {"publisher": "AWS", "status": "active", "contract_type": "commitment"}},
+        {"$group": {"_id": "$service", "committed_amount": {"$sum": "$contract_value_usd"}}}
+      ]
+    },
+    "step_2_sql": {
+      "query": "SELECT service, SUM(amount_usd) AS actual_spend FROM consumption_facts WHERE publisher = 'AWS' AND fiscal_year = 2024 AND fiscal_quarter IN (3, 4) GROUP BY service"
+    },
+    "step_3_recon": {
+      "method": "commitment_analysis",
+      "join_key": "service",
+      "output_schema": {
+        "service": "string",
+        "committed_amount": "number",
+        "actual_spend": "number",
+        "utilization_percent": "number",
+        "status": "enum: overcommitted | well_utilized | underutilized"
+      }
+    }
+  },
+  "evaluator": {
+    "type": "multi_stage",
+    "stages": [
+      {"name": "mongo_correct", "type": "bag_equivalence"},
+      {"name": "sql_correct", "type": "bag_equivalence"},
+      {"name": "recon_correct", "type": "field_match_with_tolerance", "tolerance_numeric": 0.01}
+    ],
+    "all_stages_must_pass": true
+  },
+  "bug_patterns": ["commitment_tracking", "service_grouping"]
+}

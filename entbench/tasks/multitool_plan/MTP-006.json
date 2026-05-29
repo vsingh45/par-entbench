@@ -1,0 +1,15 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "difficulty": "medium",
+  "query": "Create license renewal alert workflow: check contract renewal dates from SAM system, query consumption trends, assess risk, and notify procurement team.",
+  "expected_specialists": ["multitool_plan"],
+  "gold_plan": [
+    {"tool": "mongo.find", "arguments": {"collection": "sam_licenses", "filter": {"term_end": {"$lte": 90}}}},
+    {"tool": "sql.query", "arguments": {"query": "SELECT publisher, SUM(amount_usd) FROM consumption_facts WHERE fiscal_year = 2024 GROUP BY publisher"}},
+    {"tool": "risk.assessment", "arguments": {"licenses": "$1"}},
+    {"tool": "email.send", "arguments": {"to": "procurement@company.com", "subject": "License Renewal Alert", "body": "High-risk renewals: $3.high_risk_count"}}
+  ],
+  "evaluator": {"type": "plan_structure", "checks": ["required_tools_set_membership", "data_flow_references"]},
+  "bug_patterns": ["data_dependency_references", "risk_assessment"]
+}

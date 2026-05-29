@@ -1,0 +1,42 @@
+{
+  "task_id": "XR-004",
+  "task_class": "cross_recon",
+  "difficulty": "hard",
+  "domain": "sam",
+  "query": "Reconcile Microsoft licensing vs actual spend. Compare licensed users from SAM to active users from consumption facts and identify under/over-provisioning.",
+  "expected_specialists": ["mongo_query", "sql_gen", "cross_recon"],
+  "substrate": "mongodb+postgres",
+  "gold_workflow": {
+    "step_1_mongo": {
+      "collection": "sam_licenses",
+      "pipeline": [
+        {"$match": {"publisher": "Microsoft", "status": "active"}},
+        {"$group": {"_id": "$product", "licensed_count": {"$sum": "$seat_count"}}}
+      ]
+    },
+    "step_2_sql": {
+      "query": "SELECT product, COUNT(DISTINCT user_id) AS active_users, SUM(amount_usd) AS total_spend FROM consumption_facts WHERE publisher = 'Microsoft' AND fiscal_year = 2024 GROUP BY product"
+    },
+    "step_3_recon": {
+      "method": "outer_join",
+      "join_key": "product",
+      "output_schema": {
+        "product": "string",
+        "licensed_count": "number",
+        "active_users": "number",
+        "total_spend": "number",
+        "status": "enum: under_provisioned | optimized | over_provisioned"
+      }
+    }
+  },
+  "evaluator": {
+    "type": "multi_stage",
+    "stages": [
+      {"name": "mongo_correct", "type": "bag_equivalence"},
+      {"name": "sql_correct", "type": "bag_equivalence"},
+      {"name": "recon_correct", "type": "field_match_with_tolerance", "tolerance_numeric": 0.01}
+    ],
+    "all_stages_must_pass": true
+  },
+  "bug_patterns": ["licensing_reconciliation", "multi_source_join"]
+}
