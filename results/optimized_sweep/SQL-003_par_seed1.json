@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-003",
+  "task_class": "sql_gen",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_analysis",
+        "description": "Generate a single SQL query to compute quarter-over-quarter spend change in 2024 for each publisher (Adobe, Microsoft) and rank products within each publisher by Q4 spend. Query should calculate QoQ deltas (Q1\u2192Q2, Q2\u2192Q3, Q3\u2192Q4) and row-number products by Q4 spend within each publisher.",
+        "specialist": "sql_gen",
+        "tier": "frontier",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single sql_gen subtask (frontier tier) because this requires a complex multi-CTE SQL query with window functions. The query must: (1) pivot spend by quarter for 2024, (2) compute QoQ deltas for each publisher, (3) rank products by Q4 spend within publisher groups using ROW_NUMBER or DENSE_RANK. This is a single SQL problem with multiple CTEs and window functions, not multiple queries. Frontier tier is necessary for the window function complexity and multi-CTE structure. No dependencies on external sources\u2014all data comes from a single spend table with publisher and product dimensions."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 812,
+      "output_tokens": 528,
+      "cached_tokens": 0,
+      "latency_ms": 5531,
+      "output": {
+        "sql": "WITH quarterly AS (SELECT publisher, product, fiscal_quarter, SUM(amount_usd) AS spend FROM consumption_facts WHERE publisher IN ('Adobe','Microsoft') AND event_date >= '2024-01-01' AND event_date < '2025-01-01' GROUP BY publisher, product, fiscal_quarter), pivoted AS (SELECT publisher, product, SUM(CASE WHEN fiscal_quarter = 1 THEN spend ELSE 0 END) AS q1_spend, SUM(CASE WHEN fiscal_quarter = 2 THEN spend ELSE 0 END) AS q2_spend, SUM(CASE WHEN fiscal_quarter = 3 THEN spend ELSE 0 END) AS q3_spend, SUM(CASE WHEN fiscal_quarter = 4 THEN spend ELSE 0 END) AS q4_spend FROM quarterly GROUP BY publisher, product) SELECT publisher, product, q1_spend, q2_spend, q3_spend, q4_spend, (q2_spend - q1_spend) AS qoq_q1_q2, (q3_spend - q2_spend) AS qoq_q2_q3, (q4_spend - q3_spend) AS qoq_q3_q4, ROW_NUMBER() OVER (PARTITION BY publisher ORDER BY q4_spend DESC) AS q4_rank FROM pivoted ORDER BY publisher, q4_rank"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01726,
+  "total_latency_ms": 5531,
+  "cumulative_spend_usd": 0.021895,
+  "evaluator_reason": "result_bag_mismatch"
+}

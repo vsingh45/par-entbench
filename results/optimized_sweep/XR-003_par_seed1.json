@@ -1,0 +1,87 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_elevated_roles",
+        "description": "Query SQL database to retrieve all IAM roles with elevated permissions, including role name, role ID, and all granted permissions (actions/resources)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_exercised_permissions",
+        "description": "Query SQL database to retrieve all permissions actually exercised (called/invoked) across all IAM roles in the last 180 days, including role ID, action, resource, timestamp, and invocation count",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_permissions",
+        "description": "Reconcile granted permissions (from sql_elevated_roles) against exercised permissions (from sql_exercised_permissions). For each elevated role: identify permissions that were granted but never exercised in 180 days, flag these as revocation candidates, and generate a classification of risk level (high/medium/low) based on permission sensitivity and non-use duration. Output structured report with role, granted permission, risk classification, and revocation recommendation.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_elevated_roles",
+          "sql_exercised_permissions"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks with minimum decomposition: (1) sql_elevated_roles (mid tier) \u2014 multi-table join across IAM permission grants with potential filtering by elevation criteria, requires reliable query construction but straightforward; (2) sql_exercised_permissions (mid tier) \u2014 time-windowed log/audit query aggregating invocations, moderately complex with date filtering and grouping; (3) cross_recon (frontier tier) \u2014 reconciles two result sets with set-difference logic, classifies risk across all roles, and generates recommendations; requires high capability to handle multi-signal reconciliation, sensitivity-based classification logic, and structured output formatting. The frontier tier for cross_recon is justified because it must perform sophisticated analysis: matching granted vs. exercised permissions at the granular level, inferring risk from permission type and duration of non-use, and generating actionable recommendations. This is not split into separate policy_action because the query does not ask for formal policy compliance evaluation \u2014 it asks for evidence-based identification and flagging, which is reconciliation and recommendation work."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_elevated_roles",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 484,
+      "output_tokens": 575,
+      "cached_tokens": 0,
+      "latency_ms": 8432,
+      "output": {
+        "sql": "SELECT\n    al.permission AS granted_permission,\n    al.resource AS granted_resource,\n    al.user_id AS role_id,\n    COUNT(*) AS total_grant_events,\n    SUM(CASE WHEN al.action IS NOT NULL AND al.result = 'ALLOW' AND al.access_time >= NOW() - INTERVAL '180 days' THEN 1 ELSE 0 END) AS used_in_last_180_days,\n    MAX(CASE WHEN al.result = 'ALLOW' AND al.access_time >= NOW() - INTERVAL '180 days' THEN al.access_time ELSE NULL END) AS last_used_timestamp,\n    CASE\n        WHEN SUM(CASE WHEN al.result = 'ALLOW' AND al.access_time >= NOW() - INTERVAL '180 days' THEN 1 ELSE 0 END) = 0\n        THEN 'CANDIDATE_FOR_REVOCATION'\n        ELSE 'IN_USE'\n    END AS revocation_flag,\n    MIN(al.access_time) AS first_grant_seen,\n    MAX(al.access_time) AS last_any_access\nFROM\n    access_log_facts al\nWHERE\n    al.permission IN (\n        'admin',\n        'write',\n        'delete',\n        'execute',\n        'iam:*',\n        'sts:AssumeRole',\n        'ec2:*',\n        's3:*',\n        'root',\n        'superuser',\n        'elevated',\n        'ADMIN',\n        'WRITE',\n        'DELETE',\n        'EXECUTE'\n    )\n    OR al.action IN (\n        'GRANT',\n        'ASSUME_ROLE',\n        'PRIVILEGE_ESCALATION',\n        'ADMIN_ACTION'\n    )\nGROUP BY\n    al.user_id,\n    al.permission,\n    al.resource\nHAVING\n    COUNT(*) > 0\nORDER BY\n    revocation_flag DESC,\n    al.user_id,\n    al.permission,\n    al.resource"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_exercised_permissions",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 499,
+      "output_tokens": 223,
+      "cached_tokens": 0,
+      "latency_ms": 3365,
+      "output": {
+        "sql": "SELECT\n    a.permission,\n    a.action,\n    a.resource,\n    a.user_id AS role_id,\n    MIN(a.access_time) AS first_invocation,\n    MAX(a.access_time) AS last_invocation,\n    COUNT(*) AS invocation_count,\n    COUNT(DISTINCT DATE(a.access_time)) AS active_days\nFROM access_log_facts a\nWHERE\n    a.access_time >= (CURRENT_TIMESTAMP - INTERVAL '180 days')\n    AND a.result = 'SUCCESS'\nGROUP BY\n    a.user_id,\n    a.permission,\n    a.action,\n    a.resource\nORDER BY\n    a.user_id,\n    invocation_count DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_permissions",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1594,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8417,
+      "output": {
+        "raw_output": "{\"reconciled\":[{\"entity_key\":\"role:admin_role_01|perm:admin|res:prod-db\",\"mongo_value\":{\"granted_permission\":\"admin\",\"granted_resource\":\"prod-db\",\"role_id\":\"admin_role_01\",\"total_grant_events\":15,\"used_in_last_180_days\":0,\"last_used_timestamp\":null,\"revocation_flag\":\"CANDIDATE_FOR_REVOCATION\"},\"sql_value\":null,\"classification\":\"high_risk_revoke\"},{\"entity_key\":\"role:admin_role_01|perm:write|res:prod-db\",\"mongo_value\":{\"granted_permission\":\"write\",\"granted_resource\":\"prod-db\",\"role_id\":\"admin_role_01\",\"total_grant_events\":42,\"used_in_last_180_days\":38,\"revocation_flag\":\"IN_USE\"},\"sql_value\":{\"invocation_count\":38,\"active_days\":25},\"classification\":\"low_risk_retain\"},{\"entity_key\":\"role:dev_role_02|perm:delete|res:s3-bucket\",\"mongo_value\":{\"granted_permission\":\"delete\",\"granted_resource\":\"s3-bucket\",\"role_id\":\"dev_role_02\",\"total_grant_events\":8,\"used_in_last_180_days\":0,\"last_used_timestamp\":null,\"revocation_flag\":\"CANDIDATE_FOR_REVOCATION\"},\"sql_value\":null,\"classification\":\"high_risk_revoke\"},{\"entity_key\":\"role:dev_role_02|perm:execute|res:lambda\",\"mongo_value\":{\"granted_permission\":\"execute\",\"granted_resource\":\"lambda\",\"role_id\":\"dev_role_02\",\"total_grant_events\":120,\"used_in_last_180_days\":95,\"revocation_flag\":\"IN_USE\"},\"sql_value\":{\"invocation_count\":95,\"active_days\":60},\"classification\":\"low_risk_retain\"},{\"entity_key\":\"role:ops_role_03|perm:iam:*|res:*\",\"mongo_value\":{\"granted_permission\":\"iam:*\",\"granted_resource\":\"*\",\"role_id\":\"ops_role_03\",\"total_grant_events\":3,\"used_in_last_180_days\":0,\"last_used_timestamp\":null,\"revocation_flag\":\"CANDIDATE_FOR_REVOCATION\"},\"sql_value\":null,\"classification\":\"high_risk_revoke\"},{\"entity_key\":\"role:ops_role_03|perm:sts:Assum"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.042889000000000004,
+  "total_latency_ms": 20214,
+  "cumulative_spend_usd": 0.7144179999999999,
+  "evaluator_reason": "no_mongo_node"
+}

@@ -1,0 +1,91 @@
+{
+  "task_id": "XR-004",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_sam_licenses",
+        "description": "Extract Microsoft licensed user counts and SKU details from SAM (Software Asset Management) system",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_consumption_spend",
+        "description": "Query consumption facts database to retrieve active user counts, actual spend, and usage metrics by SKU and date",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_classify",
+        "description": "Reconcile licensed users (SAM) against active users (consumption), calculate variance, identify under-provisioning vs over-provisioning by SKU, and generate recommendations",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "extract_sam_licenses",
+          "query_consumption_spend"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks with dependencies. Extraction from SAM and consumption query can run in parallel (both simple sources). The reconciliation requires frontier tier because it involves multi-signal analysis (SAM license counts vs consumption facts), cross-source variance calculation, posture classification (over/under-provisioning), and actionable recommendations\u2014all inherent to the cross_recon specialist with complex decision logic. The extract and sql_gen are straightforward single-source pulls: small for SAM extraction, mid for consumption SQL with aggregation by SKU and time."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_sam_licenses",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 242,
+      "output_tokens": 122,
+      "cached_tokens": 0,
+      "latency_ms": 1278,
+      "output": {
+        "task": "Extract Microsoft licensed user counts and SKU details from SAM (Software Asset Management) system",
+        "query": "Reconcile Microsoft licensing vs actual spend. Compare licensed users from SAM to active users from consumption facts and identify under/over-provisioning.",
+        "extraction_result": null,
+        "note": "No document was provided to extract from. Please provide the SAM system report, export file, or document containing Microsoft licensed user counts and SKU details to proceed with extraction."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_consumption_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 466,
+      "output_tokens": 159,
+      "cached_tokens": 0,
+      "latency_ms": 2974,
+      "output": {
+        "sql": "SELECT cf.product, cf.event_date, SUM(cf.daily_active_seats) AS active_users, SUM(cf.amount_usd) AS actual_spend, COUNT(DISTINCT cf.user_id) AS distinct_users, AVG(cf.daily_active_seats) AS avg_daily_active_seats, SUM(cf.amount_usd) / NULLIF(SUM(cf.daily_active_seats), 0) AS cost_per_active_seat FROM consumption_facts cf WHERE cf.publisher = 'Microsoft' GROUP BY cf.product, cf.event_date ORDER BY cf.event_date DESC, cf.product"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_classify",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 862,
+      "output_tokens": 49,
+      "cached_tokens": 0,
+      "latency_ms": 1427,
+      "output": {
+        "reconciled": [],
+        "note": "SAM extraction returned no data; unable to reconcile licensed users against consumption without primary source."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01017,
+  "total_latency_ms": 5679,
+  "cumulative_spend_usd": 0.7886999999999998,
+  "evaluator_reason": "no_mongo_node"
+}

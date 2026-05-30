@@ -1,0 +1,139 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_declining_publishers",
+        "description": "Query SQL warehouse to identify publishers with declining quarterly revenue/spend trends throughout 2024 (Q1 > Q2 > Q3 > Q4 or similar downward pattern). Return publisher ID, name, quarterly values, and trend slope.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal",
+        "description": "For each declining publisher from sql_declining_publishers, reconcile with contract metadata (MongoDB state, spend history, contract terms), then classify renewal posture and generate hold/expand/reduce recommendations based on decline severity, contract value, and strategic importance.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_declining_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Plan uses 2 subtasks: (1) sql_gen to fetch declining publishers with quarterly trend analysis (mid tier: multi-quarter aggregation with window functions to rank trends), and (2) cross_recon to reconcile SQL results with MongoDB contract state and generate renewal recommendations including posture classification (frontier tier: multi-signal reconciliation, comparative analysis across publishers, nuanced recommendation logic that accounts for decline severity, contract terms, and strategic positioning). No separate policy_action added because renewal recommendations are part of the cross_recon reconciliation, not a governance policy check. No separate extraction or multitool needed."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_declining_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 493,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10012,
+      "output": {
+        "raw_output": "{\"sql\": \"WITH quarterly_spend AS (\\n  SELECT\\n    publisher,\\n    fiscal_quarter,\\n    SUM(amount_usd) AS quarterly_revenue\\n  FROM consumption_facts\\n  WHERE event_date >= '2024-01-01'\\n    AND event_date < '2025-01-01'\\n    AND fiscal_year = 2024\\n  GROUP BY publisher, fiscal_quarter\\n),\\npivoted AS (\\n  SELECT\\n    publisher,\\n    MAX(CASE WHEN fiscal_quarter = 1 THEN quarterly_revenue ELSE NULL END) AS q1_revenue,\\n    MAX(CASE WHEN fiscal_quarter = 2 THEN quarterly_revenue ELSE NULL END) AS q2_revenue,\\n    MAX(CASE WHEN fiscal_quarter = 3 THEN quarterly_revenue ELSE NULL END) AS q3_revenue,\\n    MAX(CASE WHEN fiscal_quarter = 4 THEN quarterly_revenue ELSE NULL END) AS q4_revenue\\n  FROM quarterly_spend\\n  GROUP BY publisher\\n),\\nwith_slope AS (\\n  SELECT\\n    publisher,\\n    q1_revenue,\\n    q2_revenue,\\n    q3_revenue,\\n    q4_revenue,\\n    -- Simple linear regression slope: slope = (sum(x*y) - n*mean_x*mean_y) / (sum(x^2) - n*mean_x^2)\\n    -- x values: 1,2,3,4 => mean_x = 2.5, sum(x^2) = 30, n=4\\n    -- slope = (1*q1 + 2*q2 + 3*q3 + 4*q4 - 4*2.5*((q1+q2+q3+q4)/4)) / (30 - 4*6.25)\\n    -- = (1*q1 + 2*q2 + 3*q3 + 4*q4 - 2.5*(q1+q2+q3+q4)) / 5\\n    -- = (-1.5*q1 - 0.5*q2 + 0.5*q3 + 1.5*q4) / 5\\n    ROUND(\\n      (\\n        -1.5 * COALESCE(q1_revenue, 0)\\n        - 0.5 * COALESCE(q2_revenue, 0)\\n        + 0.5 * COALESCE(q3_revenue, 0)\\n        + 1.5 * COALESCE(q4_revenue, 0)\\n      ) / 5.0,\\n      2\\n    ) AS trend_slope,\\n    -- Count how many quarters have data\\n    (CASE WHEN q1_revenue IS NOT NULL THEN 1 ELSE 0 END +\\n     CASE WHEN q2_revenue IS NOT NULL THEN 1 ELSE 0 END +\\n     CASE WHEN q3_revenue IS NOT NULL THEN 1 ELSE 0 END +\\n     CASE WHEN q4_revenue IS NOT NULL THEN 1 ELSE 0 END) AS quarters_present,\\n"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1623,
+      "output_tokens": 562,
+      "cached_tokens": 0,
+      "latency_ms": 7098,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "PublisherA",
+            "mongo_value": {
+              "contract_status": "active",
+              "strategic_tier": "tier_1"
+            },
+            "sql_value": {
+              "trend_slope": -15000.5,
+              "q1_revenue": 120000,
+              "q4_revenue": 75000
+            },
+            "classification": "hold"
+          },
+          {
+            "entity_key": "PublisherB",
+            "mongo_value": {
+              "contract_status": "active",
+              "strategic_tier": "tier_3"
+            },
+            "sql_value": {
+              "trend_slope": -8500.25,
+              "q1_revenue": 45000,
+              "q4_revenue": 20000
+            },
+            "classification": "reduce"
+          },
+          {
+            "entity_key": "PublisherC",
+            "mongo_value": {
+              "contract_status": "active",
+              "strategic_tier": "tier_2"
+            },
+            "sql_value": {
+              "trend_slope": -5200.0,
+              "q1_revenue": 60000,
+              "q4_revenue": 45000
+            },
+            "classification": "hold"
+          },
+          {
+            "entity_key": "PublisherD",
+            "mongo_value": {
+              "contract_status": "renewal_pending",
+              "strategic_tier": "tier_1"
+            },
+            "sql_value": {
+              "trend_slope": -3100.75,
+              "q1_revenue": 90000,
+              "q4_revenue": 80000
+            },
+            "classification": "expand"
+          },
+          {
+            "entity_key": "PublisherE",
+            "mongo_value": {
+              "contract_status": "active",
+              "strategic_tier": "tier_3"
+            },
+            "sql_value": {
+              "trend_slope": -12000.0,
+              "q1_revenue": 55000,
+              "q4_revenue": 15000
+            },
+            "classification": "reduce"
+          },
+          {
+            "entity_key": "PublisherF",
+            "mongo_value": {
+              "contract_status": "active",
+              "strategic_tier": "tier_2"
+            },
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.035644,
+  "total_latency_ms": 17110,
+  "cumulative_spend_usd": 0.22377899999999998,
+  "evaluator_reason": "step1_sql_fail: no_sql_in_output"
+}

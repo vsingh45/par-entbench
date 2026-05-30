@@ -1,0 +1,40 @@
+{
+  "task_id": "MTP-008",
+  "task_class": "multitool_plan",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "tool_orchestration",
+        "description": "Generate a multi-step tool invocation plan to: (1) retrieve project requirements from Jira API, (2) fetch team availability from calendar API, (3) schedule standup meeting via calendar system, and (4) post agenda to Slack channel. Coordinate the execution sequence and handle dependencies between tool calls.",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This query explicitly requests multi-tool orchestration across 4 distinct enterprise systems (Jira, Calendar, Meeting Scheduler, Slack). The multitool_plan specialist is the appropriate choice to generate a coordinated execution plan from the enterprise tool registry. Mid tier is sufficient because while there are multiple tools involved, the orchestration logic is straightforward sequential/dependency-based coordination without complex branching logic or data transformation. No separate extract, sql_gen, or cross_recon subtasks are needed\u2014the tool plan itself will specify the exact API calls and parameter passing required."
+  },
+  "node_results": [
+    {
+      "subtask_id": "tool_orchestration",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 495,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 12047,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"step\": 1,\n      \"tool\": \"jira.list_tickets\",\n      \"arguments\": {\n        \"project\": \"CROSS-TEAM\",\n        \"filters\": {\n          \"status\": [\"Open\", \"In Progress\", \"To Do\"],\n          \"issue_type\": [\"Story\", \"Task\", \"Epic\"],\n          \"max_results\": 50\n        },\n        \"fields\": [\"summary\", \"description\", \"priority\", \"assignee\", \"status\", \"labels\", \"acceptance_criteria\"]\n      },\n      \"depends_on\": [],\n      \"description\": \"Step 1: Retrieve all active project requirements and tickets from Jira to build meeting agenda context.\"\n    },\n    {\n      \"step\": 2,\n      \"tool\": \"calendar.list_events\",\n      \"arguments\": {\n        \"calendar_id\": \"team-availability@company.com\",\n        \"time_min\": \"2025-01-28T08:00:00Z\",\n        \"time_max\": \"2025-01-31T18:00:00Z\",\n        \"attendees\": [\"team-alpha@company.com\", \"team-beta@company.com\", \"team-gamma@company.com\"],\n        \"show_deleted\": false,\n        \"single_events\": true,\n        \"order_by\": \"startTime\"\n      },\n      \"depends_on\": [],\n      \"description\": \"Step 2: Fetch team availability windows across the scheduling horizon. Runs in parallel with Step 1.\"\n    },\n    {\n      \"step\": 3,\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"principal\": \"orchestrator-service-account\",\n        \"resource\": \"calendar:events:write\",\n        \"action\": \"create\",\n        \"context\": {\n          \"calendar_id\": \"team-standup@company.com\",\n          \"attendees_count\": 3\n        }\n      },\n      \"depends_on\": [1, 2],\n      \"description\": \"Step 3: Verify calendar write permissions before scheduling the standup. Governance gate \u2014 must pass before mutation.\"\n    },\n    {\n      \"step\": 4,\n      \"tool\": \"calendar.create_event\",\n      \"arguments\": {\n        \"calendar_id\": \"team-standup@company.com\",\n        \"title\": \"Cross-Team Standup: Project Requirements Review\",\n        \"description\": \"Agenda derived from active Jira tickets: $1.results. Blocked slots excluded based on team availability: $2.events.\",\n        \"start_time\": \"2025-01-29T09:00:00Z\",\n        \"end_time\": \"2025-01-29T09:30:00Z\",\n        \"attendees\": [\"team-alpha@company.com\", \"team-beta@company.com\", \"team-gamma@company.com\"],\n        \"recurrence\": \"NONE\",\n        \"conference\": {\n          \"solution_type\": \"hangoutsMeet\",\n          \"create_request\": true\n        },\n        \"reminders\": [\n          {\"method\": \"email\", \"minutes_before\": 30},\n          {\"method\": \"popup\", \"minutes_before\": 10}\n        ],\n        \"metadata\": {\n          \"jira_ticket_count\": \"$1.total\",\n          \"availability_conflicts_"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.013485,
+  "total_latency_ms": 12047,
+  "cumulative_spend_usd": 1.753019000000001,
+  "evaluator_reason": "no_plan_in_output"
+}

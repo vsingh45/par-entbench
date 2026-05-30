@@ -1,0 +1,55 @@
+{
+  "task_id": "MGO-006",
+  "task_class": "mongo_gen",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "Count the number of seat assignments per license_id with active status.",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1204,
+      "output_tokens": 90,
+      "cached_tokens": 0,
+      "latency_ms": 1691,
+      "output": {
+        "collection": "sam_seat_assignments",
+        "pipeline": [
+          {
+            "$match": {
+              "status": "active"
+            }
+          },
+          {
+            "$group": {
+              "_id": "$license_id",
+              "count": {
+                "$sum": 1
+              }
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001654,
+  "total_latency_ms": 1691,
+  "cumulative_spend_usd": 0.5155650000000003,
+  "evaluator_reason": "doc_bag_mismatch"
+}

@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-001",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top5_publishers",
+        "description": "Generate SQL query to fetch top 5 publishers by spend in Q4 2024 (October-December 2024), including total spend, transaction count, and any available vendor health/performance indicators",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_risk_assessment",
+        "description": "Reconcile top 5 publishers spend data with vendor performance/health metrics and historical trends; classify each publisher's at-risk status based on spend patterns, contract status, and performance signals; generate summary and recommendations for SAM team",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_top5_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "2 subtasks: (1) sql_gen (mid-tier) for a multi-table Q4 spend query with aggregation and filtering\u2014moderately complex but single concern; (2) cross_recon (mid-tier) to combine the SQL results with vendor health signals and produce at-risk classification and SAM summary\u2014requires multi-signal reasoning but not extreme complexity. Avoided adding a separate policy_action because at-risk assessment is a classification/posture decision, not a policy compliance check. No extraction needed\u2014the query is purely analytical. Minimal decomposition keeps cost down while fully addressing the user's two-part request (SQL generation + at-risk summary)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top5_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 497,
+      "output_tokens": 444,
+      "cached_tokens": 0,
+      "latency_ms": 5932,
+      "output": {
+        "sql": "SELECT cf.publisher, SUM(cf.amount_usd) AS total_spend, COUNT(cf.event_id) AS transaction_count, AVG(cf.amount_usd) AS avg_transaction_value, AVG(cf.daily_active_seats) AS avg_daily_active_seats, MIN(cf.event_date) AS first_event_date, MAX(cf.event_date) AS last_event_date, COUNT(DISTINCT cf.license_id) AS distinct_licenses, COUNT(DISTINCT cf.user_id) AS distinct_users, SUM(CASE WHEN cf.event_type = 'refund' THEN 1 ELSE 0 END) AS refund_count, SUM(CASE WHEN cf.event_type = 'refund' THEN cf.amount_usd ELSE 0 END) AS total_refund_amount, AVG(CASE WHEN inv.amount_usd IS NOT NULL THEN EXTRACT(EPOCH FROM (inv.paid_date - inv.due_date))/86400 ELSE NULL END) AS avg_days_late_payment, COUNT(CASE WHEN inv.status = 'overdue' THEN 1 END) AS overdue_invoice_count, COUNT(CASE WHEN inv.status = 'paid' THEN 1 END) AS paid_invoice_count FROM consumption_facts cf LEFT JOIN invoice_facts inv ON cf.publisher = inv.vendor_name AND inv.invoice_date >= '2024-10-01' AND inv.invoice_date <= '2024-12-31' WHERE cf.event_date >= '2024-10-01' AND cf.event_date <= '2024-12-31' AND cf.fiscal_quarter = 4 AND cf.fiscal_year = 2024 GROUP BY cf.publisher ORDER BY total_spend DESC LIMIT 5"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_risk_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 749,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10997,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"publisher_rank_1\",\n      \"mongo_value\": {\n        \"source\": \"sql_top5_publishers\",\n        \"rank\": 1,\n        \"publisher\": \"Publisher_A\",\n        \"contract_status\": null,\n        \"health_score\": null,\n        \"engagement_trend\": null,\n        \"support_tickets_open\": null,\n        \"renewal_date\": null,\n        \"mongo_operational_signal\": \"no_mongo_record_found\"\n      },\n      \"sql_value\": {\n        \"publisher\": \"Publisher_A\",\n        \"total_spend\": null,\n        \"transaction_count\": null,\n        \"avg_transaction_value\": null,\n        \"avg_daily_active_seats\": null,\n        \"first_event_date\": null,\n        \"last_event_date\": null,\n        \"distinct_licenses\": null,\n        \"distinct_users\": null,\n        \"refund_count\": null,\n        \"total_refund_amount\": null,\n        \"avg_days_late_payment\": null,\n        \"overdue_invoice_count\": null,\n        \"paid_invoice_count\": null,\n        \"data_status\": \"sql_query_not_yet_executed_placeholder\"\n      },\n      \"classification\": \"pending_execution\",\n      \"risk_flag\": \"unknown\",\n      \"sam_recommendation\": \"SQL query has been generated but not yet executed against the data warehouse. Execute query to populate actuals.\",\n      \"reconciliation_note\": \"MongoDB operational store returned no vendor health records. SQL consumption facts query is staged but unexecuted. All publisher slots are placeholders pending runtime data.\"\n    },\n    {\n      \"entity_key\": \"publisher_rank_2\",\n      \"mongo_value\": {\n        \"source\": \"sql_top5_publishers\",\n        \"rank\": 2,\n        \"publisher\": \"Publisher_B\",\n        \"contract_status\": null,\n        \"health_score\": null,\n        \"engagement_trend\": null,\n        \"support_tickets_open\": null,\n        \"renewal_date\": null,\n        \"mongo_operational_signal\": \"no_mongo_record_found\"\n      },\n      \"sql_value\": {\n        \"publisher\": \"Publisher_B\",\n        \"total_spend\": null,\n        \"transaction_count\": null,\n        \"avg_transaction_value\": null,\n        \"avg_daily_active_seats\": null,\n        \"first_event_date\": null,\n        \"last_event_date\": null,\n        \"distinct_licenses\": null,\n        \"distinct_users\": null,\n        \"refund_count\": null,\n        \"total_refund_amount\": null,\n        \"avg_days_late_payment\": null,\n        \"overdue_invoice_count\": null,\n        \"paid_invoice_count\": null,\n        \"data_status\": \"sql_query_not_yet_executed_placeholder\"\n      },\n      \"classification\": \"pending_execution\",\n      \"risk_flag\": \"unknown\",\n      \"sam_recommendation\": \"Execute SQL query and cross-reference MongoDB vendor health collection to assess risk posture.\",\n      \"reconciliation_note\": \"No MongoDB source data ingested for this publisher. Spend rank is positional placeholder only.\"\n    },\n    {\n      \"entity_key\": \""
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.022398,
+  "total_latency_ms": 16929,
+  "cumulative_spend_usd": 0.11518100000000002,
+  "evaluator_reason": "step1_sql_fail: generated_sql_execution_error"
+}

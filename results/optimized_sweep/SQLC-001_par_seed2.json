@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-001",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_top_publishers",
+        "description": "Generate SQL query to fetch top 5 publishers by spend in Q4 2024 (Oct-Dec), ordered by total spend descending",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "analyze_risk_posture",
+        "description": "Analyze the top 5 publishers data to identify at-risk publishers (e.g., spend volatility, contract status, renewal dates, compliance flags) and generate a summary report for the SAM team with risk classifications and recommendations",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "fetch_top_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen at small tier \u2014 straightforward time-boxed query for Q4 spend aggregation with simple ordering, no complex joins or window functions required; (2) cross_recon at mid tier \u2014 reconciles the SQL spend data with publisher state (contract status, renewal dates, compliance data) to classify risk and generate SAM-focused recommendations. Cross_recon naturally includes the risk analysis and summarization as part of its reconciliation output, avoiding a separate analyst step. The mid tier is appropriate because the risk assessment may involve multi-signal evaluation across spend trends, contract lifecycle, and compliance flags."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_top_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 484,
+      "output_tokens": 71,
+      "cached_tokens": 0,
+      "latency_ms": 1366,
+      "output": {
+        "sql": "SELECT publisher, SUM(amount_usd) as total_spend FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date <= '2024-12-31' GROUP BY publisher ORDER BY total_spend DESC LIMIT 5"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "analyze_risk_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 370,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9587,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"publisher_rank_1\",\n      \"mongo_value\": {\n        \"contract_status\": null,\n        \"renewal_date\": null,\n        \"compliance_flags\": null,\n        \"spend_volatility_score\": null,\n        \"operational_notes\": \"No MongoDB operational record found for publisher rank 1\"\n      },\n      \"sql_value\": {\n        \"publisher\": null,\n        \"total_spend\": 0,\n        \"query_executed\": \"SELECT publisher, SUM(amount_usd) as total_spend FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date <= '2024-12-31' GROUP BY publisher ORDER BY total_spend DESC LIMIT 5\",\n        \"data_status\": \"SQL query defined but no result rows returned to reconciler\"\n      },\n      \"classification\": \"no_recent_activity\",\n      \"risk_level\": \"unknown\",\n      \"recommendation\": \"Unable to classify \u2014 SQL query was provided but no result data was passed to the reconciliation layer. Execute the query and resubmit actual publisher rows with spend values.\"\n    },\n    {\n      \"entity_key\": \"publisher_rank_2\",\n      \"mongo_value\": {\n        \"contract_status\": null,\n        \"renewal_date\": null,\n        \"compliance_flags\": null,\n        \"spend_volatility_score\": null,\n        \"operational_notes\": \"No MongoDB operational record found for publisher rank 2\"\n      },\n      \"sql_value\": {\n        \"publisher\": null,\n        \"total_spend\": 0,\n        \"data_status\": \"SQL query defined but no result rows returned to reconciler\"\n      },\n      \"classification\": \"no_recent_activity\",\n      \"risk_level\": \"unknown\",\n      \"recommendation\": \"Unable to classify \u2014 actual query results required.\"\n    },\n    {\n      \"entity_key\": \"publisher_rank_3\",\n      \"mongo_value\": {\n        \"contract_status\": null,\n        \"renewal_date\": null,\n        \"compliance_flags\": null,\n        \"spend_volatility_score\": null,\n        \"operational_notes\": \"No MongoDB operational record found for publisher rank 3\"\n      },\n      \"sql_value\": {\n        \"publisher\": null,\n        \"total_spend\": 0,\n        \"data_status\": \"SQL query defined but no result rows returned to reconciler\"\n      },\n      \"classification\": \"no_recent_activity\",\n      \"risk_level\": \"unknown\",\n      \"recommendation\": \"Unable to classify \u2014 actual query results required.\"\n    },\n    {\n      \"entity_key\": \"publisher_rank_4\",\n      \"mongo_value\": {\n        \"contract_status\": null,\n        \"renewal_date\": null,\n        \"compliance_flags\": null,\n        \"spend_volatility_score\": null,\n        \"operational_notes\": \"No MongoDB operational record found for publisher rank 4\"\n      },\n      \"sql_value\": {\n        \"publisher\": null,\n        \"total_spend\": 0,\n        \"data_status\": \"SQL query defined but no result rows returned to reconciler\"\n      },\n      \"classification\": \"no_recent_activity\",\n      \"risk_level\": \"unknown\",\n      \"recommendation\": \"Unable to classify \u2014 actual query results required.\"\n    },"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.013949,
+  "total_latency_ms": 10953,
+  "cumulative_spend_usd": 0.09278300000000002,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

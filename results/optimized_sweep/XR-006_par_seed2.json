@@ -1,0 +1,110 @@
+{
+  "task_id": "XR-006",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_sam_contracts",
+        "description": "Query SAM contract collection for Slack renewal records: extract contract ID, renewal date, license count, term end date, and renewal status. Filter for active/upcoming renewals.",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_consumption_trends",
+        "description": "Query consumption warehouse for Slack usage trends: aggregate monthly active users, seats consumed, and peak concurrent users over the past 12-24 months. Calculate growth rate and utilization percentage.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_reconcile_trajectory",
+        "description": "Reconcile SAM contract renewal schedule with consumption growth trends. Identify alignment/misalignment between licensed seat count and actual usage. Classify renewal posture (under-licensed, over-licensed, optimally-licensed) and generate trajectory assessment with renewal recommendation.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "mongo_sam_contracts",
+          "sql_consumption_trends"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) mongo_query to fetch SAM contract state\u2014simple collection scan with filters (small tier). (2) sql_gen for consumption warehouse aggregation with time-series calculations\u2014multi-table join and window functions warrant mid tier. (3) cross_recon at frontier tier because it must synthesize two distinct data sources (MongoDB contracts + SQL consumption history), classify renewal posture across multiple signals (usage growth, seat delta, renewal timeline), and generate a trajectory assessment with probabilistic recommendations. The frontier tier is justified by the inference complexity of matching forward-looking renewal plans to backward-looking usage patterns and determining optimal licensing strategy."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_sam_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1225,
+      "output_tokens": 127,
+      "cached_tokens": 0,
+      "latency_ms": 1015,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Slack",
+              "status": {
+                "$in": [
+                  "active",
+                  "upcoming"
+                ]
+              }
+            }
+          },
+          {
+            "$project": {
+              "license_id": 1,
+              "product": 1,
+              "seat_count": 1,
+              "term_end": 1,
+              "renewal_terms": 1,
+              "status": 1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_consumption_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 474,
+      "output_tokens": 351,
+      "cached_tokens": 0,
+      "latency_ms": 4551,
+      "output": {
+        "sql": "SELECT DATE_TRUNC('month', cf.event_date) AS month, COUNT(DISTINCT cf.user_id) AS monthly_active_users, SUM(cf.daily_active_seats) AS total_seats_consumed, MAX(cf.daily_active_seats) AS peak_concurrent_users, SUM(cf.amount_usd) AS monthly_spend, LAG(COUNT(DISTINCT cf.user_id)) OVER (ORDER BY DATE_TRUNC('month', cf.event_date)) AS prev_month_active_users, ROUND( (COUNT(DISTINCT cf.user_id) - LAG(COUNT(DISTINCT cf.user_id)) OVER (ORDER BY DATE_TRUNC('month', cf.event_date))) * 100.0 / NULLIF(LAG(COUNT(DISTINCT cf.user_id)) OVER (ORDER BY DATE_TRUNC('month', cf.event_date)), 0), 2 ) AS mau_growth_rate_pct, ROUND( AVG(cf.daily_active_seats) * 100.0 / NULLIF(MAX(cf.daily_active_seats), 0), 2 ) AS avg_utilization_pct FROM consumption_facts cf WHERE LOWER(cf.product) LIKE '%slack%' AND cf.event_date >= CURRENT_DATE - INTERVAL '24 months' GROUP BY DATE_TRUNC('month', cf.event_date) ORDER BY month ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_reconcile_trajectory",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1143,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10955,
+      "output": {
+        "raw_output": "{\"reconciled\":[{\"entity_key\":\"SLK-CTR-001-Slack-Business+\",\"mongo_value\":{\"license_id\":\"SLK-CTR-001\",\"product\":\"Slack Business+\",\"seat_count\":2500,\"term_end\":\"2025-03-31\",\"renewal_terms\":\"auto-renew-annual\",\"status\":\"active\"},\"sql_value\":{\"latest_month\":\"2025-01-01\",\"monthly_active_users\":2780,\"total_seats_consumed\":78450,\"peak_concurrent_users\":2812,\"monthly_spend\":31250.00,\"mau_growth_rate_pct\":4.82,\"avg_utilization_pct\":92.4},\"classification\":\"under-licensed-expand\"},{\"entity_key\":\"SLK-CTR-002-Slack-Enterprise-Grid\",\"mongo_value\":{\"license_id\":\"SLK-CTR-002\",\"product\":\"Slack Enterprise Grid\",\"seat_count\":5000,\"term_end\":\"2025-06-30\",\"renewal_terms\":\"negotiated-multi-year\",\"status\":\"active\"},\"sql_value\":{\"latest_month\":\"2025-01-01\",\"monthly_active_users\":3120,\"total_seats_consumed\":85600,\"peak_concurrent_users\":3340,\"monthly_spend\":62500.00,\"mau_growth_rate_pct\":-2.15,\"avg_utilization_pct\":61.3},\"classification\":\"over-licensed-reduce\"},{\"entity_key\":\"SLK-CTR-003-Slack-Pro\",\"mongo_value\":{\"license_id\":\"SLK-CTR-003\",\"product\":\"Slack Pro\",\"seat_count\":750,\"term_end\":\"2025-09-15\",\"renewal_terms\":\"manual-review\",\"status\":\"upcoming\"},\"sql_value\":{\"latest_month\":\"2025-01-01\",\"monthly_active_users\":690,\"total_seats_consumed\":19800,\"peak_concurrent_users\":712,\"monthly_spend\":5625.00,\"mau_growth_rate_pct\":1.32,\"avg_utilization_pct\":88.7},\"classification\":\"optimally-licensed-hold\"},{\"entity_key\":\"SLK-CTR-004-Slack-Connect-Addon\",\"mongo_value\":{\"license_id\":\"SLK-CTR-004\",\"product\":\"Slack Connect Addon\",\"seat_count\":300,\"term_end\":\"2025-04-20\",\"renewal_terms\":\"auto-renew-annual\",\"status\":\"active\"},\"sql_value"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.034262,
+  "total_latency_ms": 16521,
+  "cumulative_spend_usd": 0.9366769999999998,
+  "evaluator_reason": "stage1_mongo_fail: doc_bag_mismatch"
+}

@@ -1,0 +1,71 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_budget_analysis",
+        "description": "Query budget allocation by product category and historical cost trends (e.g., YoY growth rates, cost per unit, spend variance by category). Generate SQL with window functions to compute period-over-period changes and category contribution percentages.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_reallocation",
+        "description": "Reconcile budget data with actual spend patterns across categories, identify underutilized and overstressed categories, classify spending posture (efficient/at-risk/growth-opportunity), and generate reallocation recommendations with rationale.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_budget_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen to extract and analyze budget/cost data with trend calculations\u2014assigned mid tier because multi-table joins and window functions are needed to compute YoY variance and category contribution metrics; (2) cross_recon to synthesize the budget data into a strategic reallocation recommendation with classification and justification\u2014assigned frontier tier because this requires inference across multiple cost signals, posture assessment, and recommendation logic that balances competing priorities. The decomposition is minimal because reallocation strategy is part of cross_recon's reconciliation logic (not a separate policy step unless governance approval is needed)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_budget_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 481,
+      "output_tokens": 584,
+      "cached_tokens": 0,
+      "latency_ms": 8099,
+      "output": {
+        "sql": "SELECT product, fiscal_year, fiscal_quarter, total_spend, daily_active_seats_avg, cost_per_seat, SUM(total_spend) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumulative_spend, LAG(total_spend) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter) AS prev_period_spend, ROUND(CASE WHEN LAG(total_spend) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter) IS NULL OR LAG(total_spend) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter) = 0 THEN NULL ELSE (total_spend - LAG(total_spend) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter)) / LAG(total_spend) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter) * 100 END, 2) AS pct_change_vs_prev_period, SUM(total_spend) OVER (PARTITION BY fiscal_year, fiscal_quarter) AS period_total_spend, ROUND(total_spend / NULLIF(SUM(total_spend) OVER (PARTITION BY fiscal_year, fiscal_quarter), 0) * 100, 2) AS category_contribution_pct, AVG(total_spend) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter ROWS BETWEEN 3 PRECEDING AND CURRENT ROW) AS rolling_4q_avg_spend, total_spend - AVG(total_spend) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter ROWS BETWEEN 3 PRECEDING AND CURRENT ROW) AS spend_variance_vs_rolling_avg FROM (SELECT product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS total_spend, AVG(daily_active_seats) AS daily_active_seats_avg, ROUND(CASE WHEN AVG(daily_active_seats) = 0 OR AVG(daily_active_seats) IS NULL THEN NULL ELSE SUM(amount_usd) / AVG(daily_active_seats) END, 4) AS cost_per_seat FROM consumption_facts WHERE event_date >= '2022-01-01' GROUP BY product, fiscal_year, fiscal_quarter) AS base ORDER BY product, fiscal_year, fiscal_quarter"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_reallocation",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1416,
+      "output_tokens": 67,
+      "cached_tokens": 0,
+      "latency_ms": 2242,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sql_budget_analysis",
+            "mongo_value": null,
+            "sql_value": "query_definition_only",
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.018958000000000003,
+  "total_latency_ms": 10341,
+  "cumulative_spend_usd": 0.4859520000000001,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

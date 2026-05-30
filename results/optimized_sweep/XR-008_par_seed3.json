@@ -1,0 +1,100 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "datadog_allocation_metrics",
+        "description": "Fetch Datadog license allocation data (licensed seats, tiers, categories) and actual consumption metrics (active users, organizations, service metrics) from the primary data warehouse",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "datadog_growth_patterns",
+        "description": "Calculate Datadog usage growth trends over time, including month-over-month and year-over-year growth rates, utilization rates by category (APM, infrastructure, logs), and trend direction indicators",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "usage_vs_allocation_reconciliation",
+        "description": "Reconcile allocated licenses against actual usage metrics, identify over-provisioned and under-utilized segments, classify variance patterns (steady-state, growth, decline), and generate actionable optimization recommendations",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "datadog_allocation_metrics",
+          "datadog_growth_patterns"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks are required: (1) Extract allocation and current usage data from SQL warehouse (mid-tier for multi-table joins on licensing and usage tables); (2) Calculate historical growth metrics and trends (mid-tier for time-series aggregations with window functions); (3) Reconcile the two datasets to classify utilization patterns and generate recommendations (frontier-tier for multi-signal analysis, variance classification, and strategic recommendations). This is minimal decomposition\u2014each subtask represents a distinct logical step (data acquisition, trend calculation, reconciliation+analysis) and cannot be meaningfully combined without losing clarity."
+  },
+  "node_results": [
+    {
+      "subtask_id": "datadog_allocation_metrics",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 470,
+      "output_tokens": 449,
+      "cached_tokens": 0,
+      "latency_ms": 5804,
+      "output": {
+        "sql": "SELECT cf.license_id, cf.publisher, cf.product, cf.event_date, cf.event_type, cf.amount_usd, cf.daily_active_seats, cf.user_id, cf.fiscal_year, cf.fiscal_quarter, COUNT(*) OVER (PARTITION BY cf.license_id, cf.fiscal_year, cf.fiscal_quarter) AS events_per_license_per_quarter, SUM(cf.amount_usd) OVER (PARTITION BY cf.license_id, cf.fiscal_year, cf.fiscal_quarter) AS total_spend_per_license_per_quarter, AVG(cf.daily_active_seats) OVER (PARTITION BY cf.license_id, cf.fiscal_year, cf.fiscal_quarter) AS avg_active_seats_per_quarter, MAX(cf.daily_active_seats) OVER (PARTITION BY cf.license_id, cf.fiscal_year) AS max_active_seats_per_year, SUM(cf.amount_usd) OVER (PARTITION BY cf.license_id, cf.fiscal_year) AS total_spend_per_license_per_year, LAG(cf.daily_active_seats) OVER (PARTITION BY cf.license_id ORDER BY cf.event_date) AS prev_day_active_seats, cf.daily_active_seats - LAG(cf.daily_active_seats) OVER (PARTITION BY cf.license_id ORDER BY cf.event_date) AS seat_growth_day_over_day, SUM(cf.amount_usd) OVER (PARTITION BY cf.license_id ORDER BY cf.event_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumulative_spend_per_license FROM consumption_facts cf WHERE cf.publisher ILIKE '%datadog%' ORDER BY cf.license_id, cf.event_date"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "datadog_growth_patterns",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 477,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8726,
+      "output": {
+        "raw_output": "{\"sql\": \"SELECT\\n  DATE_TRUNC('month', event_date) AS month,\\n  product,\\n  SUM(amount_usd) AS total_amount_usd,\\n  SUM(daily_active_seats) AS total_active_seats,\\n  COUNT(DISTINCT user_id) AS distinct_users,\\n  COUNT(event_id) AS event_count,\\n  LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY DATE_TRUNC('month', event_date)) AS prev_month_amount,\\n  LAG(SUM(daily_active_seats)) OVER (PARTITION BY product ORDER BY DATE_TRUNC('month', event_date)) AS prev_month_seats,\\n  LAG(SUM(amount_usd), 12) OVER (PARTITION BY product ORDER BY DATE_TRUNC('month', event_date)) AS prev_year_amount,\\n  LAG(SUM(daily_active_seats), 12) OVER (PARTITION BY product ORDER BY DATE_TRUNC('month', event_date)) AS prev_year_seats,\\n  ROUND(\\n    CASE\\n      WHEN LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY DATE_TRUNC('month', event_date)) IS NULL\\n        OR LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY DATE_TRUNC('month', event_date)) = 0 THEN NULL\\n      ELSE (\\n        (SUM(amount_usd) - LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY DATE_TRUNC('month', event_date)))\\n        / LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY DATE_TRUNC('month', event_date))\\n      ) * 100\\n    END, 2\\n  ) AS mom_amount_growth_pct,\\n  ROUND(\\n    CASE\\n      WHEN LAG(SUM(daily_active_seats)) OVER (PARTITION BY product ORDER BY DATE_TRUNC('month', event_date)) IS NULL\\n        OR LAG(SUM(daily_active_seats)) OVER (PARTITION BY product ORDER BY DATE_TRUNC('month', event_date)) = 0 THEN NULL\\n      ELSE (\\n        (SUM(daily_active_seats) - LAG(SUM(daily_active_seats)) OVER (PARTITION BY product ORDER BY DATE_TRUNC('month', event_date)))\\n        / LAG(SUM(daily_active_seats)) OVER (PARTITION BY product ORDER BY DATE_TRUNC('month', event_date))::NUMERIC\\n      ) * 100\\n    END, 2\\n  ) AS mom_seats_growth_pct,\\n  ROUND(\\n    CASE\\n      WHEN LAG(SUM(amount_usd), 12) OVER (PARTITION BY product ORDER BY DATE_TRUNC('month', event_date)) IS NULL\\n        OR LAG(SUM(amount_usd), 12) OVER (PARTITION BY product ORDER BY DATE_TRUNC('month', event_date)) = 0 THEN NULL\\n      ELSE (\\n"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "usage_vs_allocation_reconciliation",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 2352,
+      "output_tokens": 141,
+      "cached_tokens": 0,
+      "latency_ms": 3314,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "datadog_allocation_metrics",
+            "mongo_value": "license allocation and consumption facts query defined",
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "datadog_growth_patterns",
+            "mongo_value": "growth pattern query defined (MoM and YoY)",
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.036861000000000005,
+  "total_latency_ms": 17844,
+  "cumulative_spend_usd": 1.135136,
+  "evaluator_reason": "no_mongo_node"
+}

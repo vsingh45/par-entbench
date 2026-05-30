@@ -1,0 +1,52 @@
+{
+  "task_id": "PAC-002",
+  "task_class": "policy_action",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_1",
+        "description": "Evaluate the hotfix deployment request against change management and maintenance window policies. Determine if engineer u_7732 has authorization for out-of-window production deployments to prod-us-east-1, and assess compliance with maintenance windows and emergency deployment procedures.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask at mid tier. This requires evaluation of multiple policy dimensions: (1) engineer authorization level, (2) maintenance window compliance rules, (3) production environment restrictions, and (4) emergency deployment exception criteria. Mid tier can handle multi-signal policy reasoning. No additional subtasks needed\u2014the query does not ask for historical audit trails, cross-source reconciliation, or tool orchestration; it is a governance decision gate.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_1",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 549,
+      "output_tokens": 393,
+      "cached_tokens": 0,
+      "latency_ms": 8721,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-401": "fail",
+          "POL-402": "fail",
+          "POL-403": "fail"
+        },
+        "reason": "Deployment denied on multiple grounds: (1) POL-401: User u_7732 holds role 'engineer', which does not meet the minimum required role of 'senior-engineer' for production deployments. (2) POL-402: The current time (Tuesday 02:15 UTC) is outside the approved maintenance window, and no CAB approval has been provided or referenced in this request. (3) POL-403: The approved maintenance window is Saturday 10 PM \u2013 Sunday 6 AM UTC; Tuesday 02:15 UTC falls entirely outside this window. All three applicable policies are violated. The hotfix deployment cannot proceed without (a) escalation to a senior-engineer or higher to sponsor/execute the deployment, and (b) obtaining emergency CAB approval for an out-of-window production change.",
+        "applied_constraints": [
+          "User role 'engineer' is insufficient; minimum required role is 'senior-engineer' per POL-401.",
+          "Current time Tuesday 02:15 UTC is outside the approved maintenance window (Saturday 22:00 \u2013 Sunday 06:00 UTC) per POL-403.",
+          "CAB approval is mandatory for any out-of-window production deployment per POL-402; no approval on record.",
+          "Engineer u_7732 must escalate to a senior-engineer or engage the CAB emergency change process before this deployment can be authorized."
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007542,
+  "total_latency_ms": 8721,
+  "cumulative_spend_usd": 1.7757760000000007,
+  "evaluator_reason": "selected_action_mismatch"
+}

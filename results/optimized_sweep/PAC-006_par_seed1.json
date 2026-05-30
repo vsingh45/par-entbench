@@ -1,0 +1,51 @@
+{
+  "task_id": "PAC-006",
+  "task_class": "policy_action",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_eval_docker_deploy",
+        "description": "Evaluate the proposed Docker image rollout to production without staging validation against governance policies covering change management, production deployment controls, testing requirements, and risk mitigation standards.",
+        "specialist": "policy_action",
+        "tier": "frontier",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This query explicitly asks for policy evaluation of a production deployment decision. The policy_action specialist is required to assess governance compliance. Frontier tier is assigned because this involves evaluating multiple governance dimensions (change management, production controls, testing requirements, risk standards) with potential exceptions and cross-policy interactions. The task requires complex reasoning about enterprise risk and compliance frameworks to determine if the proposed approach violates any policies or requires approval gates. A single subtask is sufficient because the policy evaluation encompasses all necessary compliance assessment."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_eval_docker_deploy",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 772,
+      "output_tokens": 224,
+      "cached_tokens": 0,
+      "latency_ms": 3059,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-601": "fail",
+          "POL-602": "fail",
+          "POL-603": "pending_review"
+        },
+        "reason": "Proposed rollout bypasses mandatory 48-hour staging validation (POL-601) and lacks change board approval (POL-602). Rollback and traffic monitoring strategy (POL-603) not specified and requires review.",
+        "applied_constraints": [
+          "Must complete minimum 48-hour staging validation per POL-601",
+          "Obtain change board approval and configure post-deployment monitoring per POL-602",
+          "Submit rollout plan including automated rollback and traffic monitoring per POL-603"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.00946,
+  "total_latency_ms": 3059,
+  "cumulative_spend_usd": 1.8523290000000008,
+  "evaluator_reason": "selected_action_mismatch"
+}

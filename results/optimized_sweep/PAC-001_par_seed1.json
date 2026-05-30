@@ -1,0 +1,45 @@
+{
+  "task_id": "PAC-001",
+  "task_class": "policy_action",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "Service account 'svc-reporting' attempts to read the quarterly financial report from S3 bucket 'finance-reports'.",
+        "specialist": "policy_action",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 470,
+      "output_tokens": 114,
+      "cached_tokens": 0,
+      "latency_ms": 981,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-301": "fail"
+        },
+        "reason": "Service account 'svc-reporting' has role 'service' which does not meet the minimum required role of 'finance-analyst' for read access to the 'finance-reports' S3 bucket as specified in POL-301.",
+        "applied_constraints": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.0010400000000000001,
+  "total_latency_ms": 981,
+  "cumulative_spend_usd": 1.766124000000001,
+  "evaluator_reason": "ok"
+}

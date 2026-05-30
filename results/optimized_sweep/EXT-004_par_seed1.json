@@ -1,0 +1,56 @@
+{
+  "task_id": "EXT-004",
+  "task_class": "extract",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_1",
+        "description": "Extract all party names, their roles, and contact addresses from the multi-party contract",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single extraction task with straightforward field requirements (party name, role, address). No document inference, no multi-document analysis, no reconciliation needed. Small tier sufficient for explicit field extraction from structured contract data."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_1",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 381,
+      "output_tokens": 162,
+      "cached_tokens": 0,
+      "latency_ms": 1049,
+      "output": {
+        "parties": [
+          {
+            "name": "Acme Corporation",
+            "role": "Service Provider",
+            "contact_address": "123 Business Ave, San Francisco, CA 94105"
+          },
+          {
+            "name": "TechCorp Inc.",
+            "role": "Primary Client",
+            "contact_address": "456 Innovation Drive, San Jose, CA 95110"
+          },
+          {
+            "name": "Global Partners LLC",
+            "role": "Secondary Partner",
+            "contact_address": "789 Enterprise Boulevard, Las Vegas, NV 89101"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001191,
+  "total_latency_ms": 1049,
+  "cumulative_spend_usd": 1.1485550000000004,
+  "evaluator_reason": "f1=0.667_below_0.85"
+}

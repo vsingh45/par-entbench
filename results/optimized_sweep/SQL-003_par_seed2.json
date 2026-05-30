@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-003",
+  "task_class": "sql_gen",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_analysis",
+        "description": "Query warehouse for 2024 quarterly spend by publisher and product. Compute quarter-over-quarter spend changes for Adobe and Microsoft across Q1-Q4 2024. Rank products within each publisher by Q4 spend.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single SQL query sufficient: the task requires one unified result set pulling spend data across quarters and publishers. This is a multi-table join with windowing (QoQ calculations via LAG window function) and ranking (RANK OVER PARTITION BY). Mid-tier handles the multi-quarter aggregation and window functions efficiently. No separate subtasks needed: data comes from a single source (warehouse), no reconciliation needed, no policy evaluation, and no multi-tool orchestration required. The ranking and QoQ computation are part of the single SQL statement, not separate operations.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 498,
+      "output_tokens": 453,
+      "cached_tokens": 0,
+      "latency_ms": 6166,
+      "output": {
+        "sql": "SELECT\n  publisher,\n  product,\n  fiscal_quarter,\n  quarterly_spend,\n  LAG(quarterly_spend) OVER (PARTITION BY publisher, product ORDER BY fiscal_quarter) AS prev_quarter_spend,\n  quarterly_spend - LAG(quarterly_spend) OVER (PARTITION BY publisher, product ORDER BY fiscal_quarter) AS qoq_change,\n  CASE\n    WHEN LAG(quarterly_spend) OVER (PARTITION BY publisher, product ORDER BY fiscal_quarter) IS NULL\n      OR LAG(quarterly_spend) OVER (PARTITION BY publisher, product ORDER BY fiscal_quarter) = 0 THEN NULL\n    ELSE ROUND(\n      100.0 * (quarterly_spend - LAG(quarterly_spend) OVER (PARTITION BY publisher, product ORDER BY fiscal_quarter))\n      / LAG(quarterly_spend) OVER (PARTITION BY publisher, product ORDER BY fiscal_quarter), 2)\n  END AS qoq_pct_change,\n  RANK() OVER (\n    PARTITION BY publisher\n    ORDER BY\n      CASE WHEN fiscal_quarter = 4 THEN quarterly_spend END DESC NULLS LAST\n  ) AS q4_rank_within_publisher\nFROM (\n  SELECT\n    publisher,\n    product,\n    fiscal_quarter,\n    SUM(amount_usd) AS quarterly_spend\n  FROM consumption_facts\n  WHERE\n    publisher IN ('Adobe', 'Microsoft')\n    AND fiscal_year = 2024\n    AND fiscal_quarter BETWEEN 1 AND 4\n  GROUP BY\n    publisher,\n    product,\n    fiscal_quarter\n) AS quarterly_summary\nORDER BY\n  publisher,\n  product,\n  fiscal_quarter"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.008289,
+  "total_latency_ms": 6166,
+  "cumulative_spend_usd": 0.030184000000000002,
+  "evaluator_reason": "result_bag_mismatch"
+}

@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-004",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "query_vendor_reliability",
+        "description": "Query vendor reliability data from SQL warehouse to retrieve vendor IDs, reliability metrics, incident counts, uptime percentages, and other risk indicators.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "classify_vendor_risk",
+        "description": "Reconcile and classify vendors into risk tiers (low_risk, medium_risk, high_risk) based on incident history, reliability metrics, and calculated risk scores. Generate risk classification for each vendor.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "query_vendor_reliability"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks with minimal decomposition: (1) sql_gen (small tier) to retrieve vendor reliability metrics in a single query\u2014straightforward multi-table join with aggregations over incident and reliability tables. (2) cross_recon (mid tier) to apply classification logic to the vendor data, assigning risk tiers based on incident thresholds and reliability patterns. Cross_recon is appropriate here because it performs the classification and decision logic as part of reconciliation, avoiding a separate policy_action subtask. Frontier tier not needed because the SQL query is standard aggregation (not multi-CTE with window functions) and the classification logic uses deterministic thresholds, not complex multi-signal inference."
+  },
+  "node_results": [
+    {
+      "subtask_id": "query_vendor_reliability",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 475,
+      "output_tokens": 458,
+      "cached_tokens": 0,
+      "latency_ms": 2872,
+      "output": {
+        "sql": "SELECT vendor_name, COUNT(DISTINCT invoice_id) as total_invoices, SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as paid_invoices, ROUND(100.0 * SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) / COUNT(DISTINCT invoice_id), 2) as payment_reliability_pct, COUNT(DISTINCT CASE WHEN paid_date > due_date THEN invoice_id END) as late_payments, ROUND(100.0 * COUNT(DISTINCT CASE WHEN paid_date > due_date THEN invoice_id END) / NULLIF(COUNT(DISTINCT invoice_id), 0), 2) as late_payment_rate_pct, SUM(amount_usd) as total_amount_usd, CASE WHEN ROUND(100.0 * SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) / COUNT(DISTINCT invoice_id), 2) >= 95 AND COUNT(DISTINCT CASE WHEN paid_date > due_date THEN invoice_id END) <= COUNT(DISTINCT invoice_id) * 0.05 THEN 'low_risk' WHEN ROUND(100.0 * SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) / COUNT(DISTINCT invoice_id), 2) >= 85 AND COUNT(DISTINCT CASE WHEN paid_date > due_date THEN invoice_id END) <= COUNT(DISTINCT invoice_id) * 0.15 THEN 'medium_risk' ELSE 'high_risk' END as vendor_risk_classification FROM invoice_facts GROUP BY vendor_name ORDER BY vendor_risk_classification, payment_reliability_pct DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "classify_vendor_risk",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 739,
+      "output_tokens": 462,
+      "cached_tokens": 0,
+      "latency_ms": 9517,
+      "output": {
+        "raw_output": "I need to reconcile MongoDB vendor data with SQL reliability metrics. However, I notice that only SQL results are described (via query definition) but no actual MongoDB operational data or SQL result rows were provided \u2014 only the query string itself.\n\nI'll construct the reconciliation output based on the SQL query structure, treating the SQL query as the sole source and applying LEFT JOIN semantics with null MongoDB values (since no MongoDB result set was provided), and classify based on the SQL risk classification logic described in the query.\n\nSince no actual row data was returned from either source, I'll produce a structurally valid reconciliation reflecting the absence of runtime data:\n\n{\"reconciled\": [{\"entity_key\": \"NO_DATA_RETURNED\", \"mongo_value\": null, \"sql_value\": null, \"classification\": \"unclassified\", \"notes\": {\"reason\": \"No runtime result rows were provided from either MongoDB or SQL sources \u2014 only query definitions were supplied. Cannot reconcile or classify without actual data rows.\", \"mongo_source\": \"missing \u2014 no MongoDB query output or document array provided\", \"sql_source\": \"missing \u2014 SQL query string provided but no result set rows returned\", \"expected_classifications\": [\"low_risk\", \"medium_risk\", \"high_risk\"], \"sql_risk_logic\": {\"low_risk\": \"payment_reliability_pct >= 95 AND late_payments <= 5% of total_invoices\", \"medium_risk\": \"payment_reliability_pct >= 85 AND late_payments <= 15% of total_invoices\", \"high_risk\": \"payment_reliability_pct < 85 OR late_payments > 15% of total_invoices\"}, \"action_required\": \"Resubmit task with actual MongoDB document results (e.g., vendor incident records, reliability scores) and SQL query result rows (e.g., vendor_name, total_invoices, paid_invoices, payment_reliability_pct, late_payment_rate_pct, total_amount_usd, vendor_risk_classification) so reconciliation and risk tier classification can be performed.\"}}]}"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.011912,
+  "total_latency_ms": 12389,
+  "cumulative_spend_usd": 0.27281000000000005,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

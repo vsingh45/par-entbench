@@ -1,0 +1,153 @@
+{
+  "task_id": "MTP-007",
+  "task_class": "multitool_plan",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "scan_iam_policies",
+        "description": "Extract and analyze IAM policy documents to identify permissions, principal grants, and policy structure across all roles and users.",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "audit_cloudtrail_logs",
+        "description": "Query CloudTrail logs to extract and aggregate API calls, access patterns, failed authentication attempts, and privilege escalation events over the audit period.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "policy_violation_check",
+        "description": "Reconcile extracted IAM policies with CloudTrail audit events to identify deviations, unauthorized actions, overprivileged access, unused permissions, and policy violations. Generate violation classifications and severity ratings.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "scan_iam_policies",
+          "audit_cloudtrail_logs"
+        ]
+      },
+      {
+        "id": "compliance_report_generation",
+        "description": "Evaluate identified policy violations and audit findings against compliance policy registry (SOC2, ISO27001, CIS AWS Foundations). Generate compliance report with risk ratings, remediation recommendations, and governance sign-off requirements.",
+        "specialist": "policy_action",
+        "tier": "frontier",
+        "depends_on": [
+          "policy_violation_check"
+        ]
+      }
+    ],
+    "cost_rationale": "This security audit requires 4 minimal subtasks: (1) IAM policy extraction (mid\u2014multiple policy documents with complex permission structures), (2) CloudTrail log querying (mid\u2014SQL aggregation of API events), (3) cross-source reconciliation (frontier\u2014requires inference to match policies with observed actions, classify violations, and assign severity), and (4) compliance evaluation (frontier\u2014must apply multi-policy reasoning against regulatory frameworks and generate governance-grade recommendations). The policy_action subtask is justified because the query explicitly asks for compliance checking and governance evaluation. Cross-recon is upstream of policy_action because compliance decisions depend on the violation findings. No multitool_plan is needed; the workflow steps are logical sequence, not tool registry orchestration."
+  },
+  "node_results": [
+    {
+      "subtask_id": "scan_iam_policies",
+      "specialist": "extract",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 244,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 11953,
+      "output": {
+        "raw_output": "{\n  \"security_audit_workflow\": {\n    \"status\": \"ANALYSIS_COMPLETE\",\n    \"note\": \"No upstream IAM policy documents or CloudTrail logs were provided in the task inputs. The following represents a structured audit framework based on the query. All fields are null where actual document data is absent.\"\n  },\n  \"iam_policy_scan\": {\n    \"policies_discovered\": null,\n    \"total_roles\": null,\n    \"total_users\": null,\n    \"total_groups\": null,\n    \"managed_policies\": null,\n    \"inline_policies\": null,\n    \"permissions_identified\": null,\n    \"wildcard_actions_detected\": null,\n    \"wildcard_resources_detected\": null,\n    \"overly_permissive_policies\": null,\n    \"least_privilege_violations\": null,\n    \"cross_account_trust_relationships\": null,\n    \"principal_grants\": null\n  },\n  \"principal_analysis\": {\n    \"iam_users_with_console_access\": null,\n    \"iam_users_with_programmatic_access\": null,\n    \"roles_with_admin_access\": null,\n    \"users_with_admin_access\": null,\n    \"mfa_not_enabled_users\": null,\n    \"unused_credentials_90_days\": null,\n    \"service_roles\": null,\n    \"federated_principals\": null,\n    \"aws_service_principals\": null\n  },\n  \"cloudtrail_audit\": {\n    \"log_files_scanned\": null,\n    \"audit_period_start\": null,\n    \"audit_period_end\": null,\n    \"total_events_reviewed\": null,\n    \"root_account_usage_events\": null,\n    \"unauthorized_api_calls\": null,\n    \"console_sign_in_failures\": null,\n    \"policy_changes_detected\": null,\n    \"iam_changes_detected\": null,\n    \"s3_bucket_policy_changes\": null,\n    \"cloudtrail_disabled_events\": null,\n    \"multi_region_logging_enabled\": null,\n    \"log_file_validation_enabled\": null,\n    \"suspicious_activity_flags\": null\n  },\n  \"policy_violations\": {\n    \"total_violations_found\": null,\n    \"critical_severity\": null,\n    \"high_severity\": null,\n    \"medium_severity\": null,\n    \"low_severity\": null,\n    \"violation_categories\": {\n      \"privilege_escalation_risk\": null,\n      \"public_resource_exposure\": null,\n      \"missing_condition_keys\": null,\n      \"unrestricted_s3_access\": null,\n      \"unrestricted_ec2_access\": null,\n      \"unrestricted_iam_pass_role\": null,\n      \"assume_role_without_mfa\": null,\n      \"cross_service_confused_deputy\": null\n    },\n    \"non_compliant_resources\": null\n  },\n  \"compliance_report\": {\n    \"report_generated_date\": null,\n    \"report_id\": null,\n    \"frameworks_evaluated\": null,\n    \"cis_aws_benchmark_score\": null,\n    \"soc2_compliance_status\": null,\n    \"pci_dss_compliance_status\": null,\n    \"nist_800"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "audit_cloudtrail_logs",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 470,
+      "output_tokens": 243,
+      "cached_tokens": 0,
+      "latency_ms": 5413,
+      "output": {
+        "sql": "SELECT user_id, permission, resource, action, result, COUNT(*) AS event_count, SUM(CASE WHEN result = 'DENY' THEN 1 ELSE 0 END) AS failed_attempts, SUM(CASE WHEN action = 'ESCALATE' OR permission ILIKE '%admin%' OR permission ILIKE '%root%' OR permission ILIKE '%sudo%' THEN 1 ELSE 0 END) AS privilege_escalation_events, SUM(CASE WHEN result = 'ALLOW' THEN 1 ELSE 0 END) AS successful_access, MIN(access_time) AS first_seen, MAX(access_time) AS last_seen, DATE_TRUNC('day', access_time) AS audit_day FROM access_log_facts GROUP BY user_id, permission, resource, action, result, DATE_TRUNC('day', access_time) ORDER BY failed_attempts DESC, privilege_escalation_events DESC, audit_day ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "policy_violation_check",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 2021,
+      "output_tokens": 242,
+      "cached_tokens": 0,
+      "latency_ms": 3302,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "iam_policy_scan",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "principal_analysis",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "cloudtrail_audit",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "policy_violations",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "compliance_report",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "compliance_report_generation",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 861,
+      "output_tokens": 259,
+      "cached_tokens": 0,
+      "latency_ms": 4577,
+      "output": {
+        "selected_action": "allow",
+        "policy_compliance": {
+          "SOC2": "not_applicable",
+          "ISO27001": "not_applicable",
+          "CIS_AWS_Foundations": "not_applicable"
+        },
+        "reason": "Upstream reconciliation returned no recent activity across all entities (iam_policy_scan, principal_analysis, cloudtrail_audit, policy_violations, compliance_report). With no findings to evaluate, no policy violations can be assessed; report generation proceeds with a null-findings baseline.",
+        "applied_constraints": [
+          "Report must explicitly state no data was available for evaluation",
+          "Flag absence of CloudTrail/IAM scan data as a data-completeness gap for governance review",
+          "No risk ratings issued due to lack of evidence"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.044722,
+  "total_latency_ms": 25245,
+  "cumulative_spend_usd": 1.683594000000001,
+  "evaluator_reason": "no_plan_in_output"
+}

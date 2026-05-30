@@ -1,0 +1,120 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sam_renewal_extract",
+        "description": "Extract contract renewal dates, license counts, and vendor details from SAM system documents",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "consumption_trends_sql",
+        "description": "Query SQL warehouse for license consumption trends (usage over last 90 days, peak utilization, variance patterns)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "risk_assessment_recon",
+        "description": "Reconcile SAM renewal data with consumption trends, classify renewal risk (high/medium/low based on upcoming expiry + usage patterns), and generate alert recommendations for procurement",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sam_renewal_extract",
+          "consumption_trends_sql"
+        ]
+      },
+      {
+        "id": "notify_procurement",
+        "description": "Generate renewal alert notifications with risk classification, consumption insights, and recommended actions for procurement team",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "risk_assessment_recon"
+        ]
+      }
+    ],
+    "cost_rationale": "Minimum 4 subtasks required for end-to-end workflow: (1) Extract renewal dates from SAM (extract, small \u2014 straightforward document field retrieval). (2) Query consumption trends from SQL (sql_gen, mid \u2014 multi-table joins across usage logs with aggregation). (3) Cross-reconcile renewal + consumption data, assess risk signals, and classify renewal posture (cross_recon, frontier \u2014 multi-signal reconciliation with classification logic requires highest capability). (4) Invoke notification tools from registry to alert procurement (multitool_plan, mid \u2014 orchestrates email/Slack/ticketing tools). Tiers justified: small for SAM extraction (no inference), mid for SQL (standard aggregation complexity), frontier for risk assessment (reconciles two sources with rule-based classification), mid for notifications (straightforward tool orchestration from known registry)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sam_renewal_extract",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 237,
+      "output_tokens": 113,
+      "cached_tokens": 0,
+      "latency_ms": 1024,
+      "output": {
+        "contract_renewal_dates": null,
+        "license_counts": null,
+        "vendor_details": null,
+        "vendor_name": null,
+        "vendor_id": null,
+        "current_license_count": null,
+        "contract_effective_date": null,
+        "contract_expiration_date": null,
+        "sam_contract_id": null,
+        "renewal_alert_status": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "consumption_trends_sql",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 464,
+      "output_tokens": 489,
+      "cached_tokens": 0,
+      "latency_ms": 6931,
+      "output": {
+        "sql": "SELECT license_id, publisher, product, SUM(amount_usd) AS total_spend_usd, AVG(daily_active_seats) AS avg_daily_active_seats, MAX(daily_active_seats) AS peak_daily_active_seats, MIN(daily_active_seats) AS min_daily_active_seats, MAX(daily_active_seats) - MIN(daily_active_seats) AS seat_variance, COUNT(DISTINCT event_date) AS active_days, ROUND(100.0 * AVG(daily_active_seats) / NULLIF(MAX(daily_active_seats), 0), 2) AS avg_utilization_pct, STDDEV(daily_active_seats) AS seat_stddev, CASE WHEN MAX(daily_active_seats) > 0 AND ROUND(100.0 * AVG(daily_active_seats) / NULLIF(MAX(daily_active_seats), 0), 2) < 50 THEN 'LOW_UTILIZATION_RISK' WHEN MAX(daily_active_seats) > 0 AND ROUND(100.0 * AVG(daily_active_seats) / NULLIF(MAX(daily_active_seats), 0), 2) BETWEEN 50 AND 79 THEN 'MODERATE_UTILIZATION' WHEN MAX(daily_active_seats) > 0 AND ROUND(100.0 * AVG(daily_active_seats) / NULLIF(MAX(daily_active_seats), 0), 2) >= 80 THEN 'HIGH_UTILIZATION_RENEWAL_CANDIDATE' ELSE 'INSUFFICIENT_DATA' END AS renewal_risk_flag, MIN(event_date) AS period_start, MAX(event_date) AS period_end FROM consumption_facts WHERE event_date >= CURRENT_DATE - INTERVAL '90 days' AND event_date < CURRENT_DATE GROUP BY license_id, publisher, product ORDER BY avg_utilization_pct ASC, total_spend_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "risk_assessment_recon",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1284,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 1200,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "notify_procurement",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 451,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 11699,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"resource\": \"sam_system\",\n        \"action\": \"read\",\n        \"context\": \"license_renewal_alert_workflow\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT contract_id, vendor_name, product_name, license_count, renewal_date, annual_contract_value, contract_owner, cost_center, auto_renewal_flag, cancellation_notice_days, DATEDIFF('day', CURRENT_DATE(), renewal_date) AS days_to_renewal FROM sam.contracts WHERE renewal_date BETWEEN CURRENT_DATE() AND DATEADD('day', 180, CURRENT_DATE()) ORDER BY renewal_date ASC\"\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT contract_id, vendor_name, product_name, SUM(active_users) AS active_users, SUM(total_licenses) AS total_licenses, ROUND((SUM(active_users) / NULLIF(SUM(total_licenses), 0)) * 100, 2) AS utilization_pct, AVG(monthly_usage_last_90d) AS avg_monthly_usage, MAX(last_login_date) AS last_active_date, COUNT(DISTINCT department) AS dept_count FROM sam.license_consumption WHERE contract_id IN (SELECT contract_id FROM sam.contracts WHERE renewal_date BETWEEN CURRENT_DATE() AND DATEADD('day', 180, CURRENT_DATE())) GROUP BY contract_id, vendor_name, product_name\"\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"mongo.aggregate\",\n      \"arguments\": {\n        \"collection\": \"license_usage_events\",\n        \"pipeline\": [\n          {\n            \"$match\": {\n              \"event_date\": { \"$gte\": { \"$dateSubtract\": { \"startDate\": \"$$NOW\", \"unit\": \"month\", \"amount\": 6 } } }\n            }\n          },\n          {\n            \"$group\": {\n              \"_id\": { \"contract_id\": \"$contract_id\", \"month\": { \"$month\": \"$event_date\" } },\n              \"monthly_active_users\": { \"$sum\": \"$active_users\" },\n              \"peak_concurrent\": { \"$max\": \"$concurrent_users\" },\n              \"feature_adoption_score\": { \"$avg\": \"$features_used_pct\" }\n            }\n          },\n          {\n            \"$sort\": { \"_id.contract_id\": 1, \"_id.month\": 1 }\n          }\n        ]\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"vendor_risk_profiles\",\n        \"filter\": {},\n        \"projection\": {\n          \"vendor_name\": 1,\n          \"financial_stability_score\": 1,\n          \"support_quality_score\": 1,\n          \"compliance_flags\": 1,\n          \"open_incidents"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.029652,
+  "total_latency_ms": 20854,
+  "cumulative_spend_usd": 1.537804000000001,
+  "evaluator_reason": "no_plan_in_output"
+}

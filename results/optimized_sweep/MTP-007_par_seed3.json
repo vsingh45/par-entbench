@@ -1,0 +1,243 @@
+{
+  "task_id": "MTP-007",
+  "task_class": "multitool_plan",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "iam_scan",
+        "description": "Scan IAM policies from AWS account for permissions, principal assignments, and policy attachment status",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cloudtrail_audit",
+        "description": "Query CloudTrail logs to extract API calls, actors, timestamps, resources, and success/failure status for audit trail analysis",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "violation_check",
+        "description": "Reconcile IAM policy scan results with CloudTrail audit logs to detect unauthorized actions, policy violations, anomalous patterns, and classify violation severity",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "iam_scan",
+          "cloudtrail_audit"
+        ]
+      },
+      {
+        "id": "compliance_report",
+        "description": "Generate structured compliance report including violation findings, risk assessment, remediation recommendations, and executive summary",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "violation_check"
+        ]
+      }
+    ],
+    "cost_rationale": "Four-subtask plan: (1) IAM policy scan via SQL (multi-table join of policy documents, principals, attachments) requires mid-tier complexity; (2) CloudTrail audit via MongoDB (aggregation across event logs with multiple filter stages) requires mid-tier; (3) Violation detection via cross_recon reconciles two distinct sources (IAM state + CloudTrail history) with pattern analysis and severity classification, requires frontier-tier reasoning to identify subtle violations and correlate evidence; (4) Compliance report generation via cross_recon synthesizes violation findings into structured output with recommendations, mid-tier sufficient as it consumes upstream frontier analysis. Four subtasks are minimal: cannot reduce further without losing critical security audit coverage (policy scan, log audit, violation detection, reporting are distinct phases with different source systems)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "iam_scan",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 460,
+      "output_tokens": 58,
+      "cached_tokens": 0,
+      "latency_ms": 2104,
+      "output": {
+        "sql": "SELECT permission, resource, action, result, COUNT(*) AS occurrence_count, COUNT(DISTINCT user_id) AS distinct_users FROM access_log_facts GROUP BY permission, resource, action, result ORDER BY occurrence_count DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cloudtrail_audit",
+      "specialist": "mongo_query",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1221,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9566,
+      "output": {
+        "collection": "iam_roles",
+        "pipeline": [
+          {
+            "$match": {
+              "is_elevated": true
+            }
+          },
+          {
+            "$addFields": {
+              "permission_count": {
+                "$size": "$permissions"
+              },
+              "risk_flag": {
+                "$cond": {
+                  "if": {
+                    "$gt": [
+                      {
+                        "$size": "$permissions"
+                      },
+                      5
+                    ]
+                  },
+                  "then": "HIGH_PERMISSION_COUNT",
+                  "else": "NORMAL"
+                }
+              }
+            }
+          },
+          {
+            "$sort": {
+              "permission_count": -1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "violation_check",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 711,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 1694,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "compliance_report",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 268,
+      "output_tokens": 731,
+      "cached_tokens": 0,
+      "latency_ms": 13593,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "compliance_report_generation",
+            "mongo_value": {
+              "task": "Generate structured compliance report including violation findings, risk assessment, remediation recommendations, and executive summary",
+              "workflow": "security_audit",
+              "steps": [
+                "scan_iam_policies",
+                "audit_cloudtrail_logs",
+                "check_policy_violations",
+                "generate_compliance_report"
+              ],
+              "status": "executed",
+              "upstream_dependency": "violation_check"
+            },
+            "sql_value": {
+              "violation_count": 0,
+              "findings_logged": 0,
+              "risk_events_recorded": 0,
+              "remediation_tickets_created": 0,
+              "audit_records_found": 0
+            },
+            "classification": "no_recent_activity",
+            "report": {
+              "executive_summary": {
+                "overall_risk_level": "undetermined",
+                "violations_detected": 0,
+                "audit_coverage": "incomplete",
+                "recommendation": "Upstream violation_check returned empty reconciled set; re-run full audit pipeline with verified data sources before drawing compliance conclusions",
+                "report_status": "inconclusive"
+              },
+              "violation_findings": {
+                "total_violations": 0,
+                "critical": 0,
+                "high": 0,
+                "medium": 0,
+                "low": 0,
+                "details": [],
+                "note": "No violation data returned from upstream violation_check reconciliation"
+              },
+              "risk_assessment": {
+                "iam_policy_scan": {
+                  "status": "no_data",
+                  "risk_score": null,
+                  "findings": []
+                },
+                "cloudtrail_audit": {
+                  "status": "no_data",
+                  "risk_score": null,
+                  "findings": []
+                },
+                "policy_violations": {
+                  "status": "no_data",
+                  "risk_score": null,
+                  "findings": []
+                },
+                "aggregate_risk_score": null,
+                "risk_tier": "unclassified"
+              },
+              "remediation_recommendations": [
+                {
+                  "priority": "immediate",
+                  "action": "Verify IAM policy scanner connectivity and re-execute scan",
+                  "rationale": "Empty upstream output suggests scanner may not have run or returned no results"
+                },
+                {
+                  "priority": "immediate",
+                  "action": "Confirm CloudTrail log ingestion pipeline is active and logs are being forwarded",
+                  "rationale": "No historical SQL records indicate possible logging gap or ingestion failure"
+                },
+                {
+                  "priority": "high",
+                  "action": "Re-run violation_check with explicit scope boundaries and time window",
+                  "rationale": "Empty reconciled set from violation_check invalidates downstream compliance report accuracy"
+                },
+                {
+                  "priority": "high",
+                  "action": "Establish baseline compliance snapshot before next audit cycle",
+                  "rationale": "Without baseline, deviation analysis and trend reporting are not possible"
+                },
+                {
+                  "priority": "medium",
+                  "action": "Implement automated alerting for empty or null upstream audit outputs",
+                  "rationale": "Silent failures in audit pipelines produce false compliance assurance"
+                }
+              ],
+              "metadata": {
+                "report_generated_at": "reconciliation_runtime",
+                "data_sources": {
+                  "primary": "mongodb_operational_state",
+                  "secondary": "sql_historical_data"
+                },
+                "join_semantics": "LEFT JOIN on mongodb primary",
+                "upstream_reconciled_count": 0,
+                "sql_records_matched": 0,
+                "classification_basis": "empty_upstream_with_zero_sql_metrics"
+              }
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.033587,
+  "total_latency_ms": 26957,
+  "cumulative_spend_usd": 1.717181000000001,
+  "evaluator_reason": "no_plan_in_output"
+}

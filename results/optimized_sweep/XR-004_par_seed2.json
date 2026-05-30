@@ -1,0 +1,101 @@
+{
+  "task_id": "XR-004",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_sam_licenses",
+        "description": "Extract licensed user counts and SKU details from Software Asset Management (SAM) records",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_consumption_spend",
+        "description": "Query consumption facts to retrieve active user counts and spend metrics by license SKU and time period",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_classify",
+        "description": "Reconcile SAM licensed users against active users from consumption facts, calculate variance ratios, classify as under/over-provisioned, and generate optimization recommendations",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "extract_sam_licenses",
+          "query_consumption_spend"
+        ]
+      }
+    ],
+    "cost_rationale": "This is a two-source reconciliation requiring SAM extraction + SQL consumption query + cross-source analysis. The extract is simple field retrieval (small). The SQL query requires joins across consumption fact tables and aggregation by SKU (mid). The reconciliation is frontier-tier because it must: (1) match heterogeneous license identifiers between SAM and consumption systems, (2) compute variance metrics and under/over-provisioning ratios, (3) classify business posture (e.g., \"over-licensed in Cloud SKU but under-licensed in Server\"), and (4) generate contextual optimization recommendations. This requires multi-signal inference and is not a simple comparison. Total 3 subtasks: minimum decomposition for a two-source reconciliation with classification."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_sam_licenses",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 241,
+      "output_tokens": 96,
+      "cached_tokens": 0,
+      "latency_ms": 1419,
+      "output": {
+        "licensed_user_counts": null,
+        "sku_details": null,
+        "microsoft_licensing_data": null,
+        "actual_spend": null,
+        "active_users_consumption": null,
+        "under_provisioning_identified": null,
+        "over_provisioning_identified": null,
+        "reconciliation_status": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_consumption_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 463,
+      "output_tokens": 191,
+      "cached_tokens": 0,
+      "latency_ms": 3430,
+      "output": {
+        "sql": "SELECT publisher, product, fiscal_year, fiscal_quarter, COUNT(DISTINCT user_id) AS active_users, SUM(daily_active_seats) AS total_daily_active_seats, AVG(daily_active_seats) AS avg_daily_active_seats, SUM(amount_usd) AS total_spend_usd, AVG(amount_usd) AS avg_spend_per_event, COUNT(event_id) AS event_count, SUM(amount_usd) / NULLIF(COUNT(DISTINCT user_id), 0) AS spend_per_active_user FROM consumption_facts WHERE publisher ILIKE '%Microsoft%' GROUP BY publisher, product, fiscal_year, fiscal_quarter ORDER BY fiscal_year DESC, fiscal_quarter DESC, total_spend_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_classify",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 853,
+      "output_tokens": 67,
+      "cached_tokens": 0,
+      "latency_ms": 1325,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "microsoft_licensing_reconciliation",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.010915000000000001,
+  "total_latency_ms": 6174,
+  "cumulative_spend_usd": 0.7996149999999997,
+  "evaluator_reason": "no_mongo_node"
+}

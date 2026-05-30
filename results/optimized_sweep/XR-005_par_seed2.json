@@ -1,0 +1,64 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "salesforce_seats_query",
+        "description": "Query Salesforce or enterprise data warehouse to extract licensed seat count, assigned user count, active user count (last 30/60/90 days), and user type breakdown. Include organization-wide licensing data and per-user assignment status.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "utilization_analysis",
+        "description": "Analyze seat utilization data to identify unutilized licenses, calculate utilization rates, segment inactive users, and recommend license reallocation. Classify licenses as active, underutilized, or unused based on activity thresholds.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "salesforce_seats_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid) to pull licensed seat counts and assignment/activity data from the enterprise source system\u2014requires multi-table joins across user, license, and activity logs; (2) cross_recon (mid) to reconcile licensed vs. assigned vs. active data, compute utilization metrics, segment inactive users, and generate reallocation recommendations. Both mid tier: licensing queries involve multiple tables and conditions (not simple single-table); utilization analysis requires comparative logic and classification across two data signals (licensed vs. actual usage) but no frontier-level inference."
+  },
+  "node_results": [
+    {
+      "subtask_id": "salesforce_seats_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 487,
+      "output_tokens": 517,
+      "cached_tokens": 0,
+      "latency_ms": 6846,
+      "output": {
+        "sql": "SELECT publisher, product, license_id, SUM(daily_active_seats) AS total_licensed_seats, COUNT(DISTINCT user_id) AS assigned_user_count, COUNT(DISTINCT CASE WHEN event_date >= CURRENT_DATE - INTERVAL '30 days' THEN user_id END) AS active_users_last_30_days, COUNT(DISTINCT CASE WHEN event_date >= CURRENT_DATE - INTERVAL '60 days' THEN user_id END) AS active_users_last_60_days, COUNT(DISTINCT CASE WHEN event_date >= CURRENT_DATE - INTERVAL '90 days' THEN user_id END) AS active_users_last_90_days, SUM(daily_active_seats) - COUNT(DISTINCT user_id) AS unassigned_seats, COUNT(DISTINCT CASE WHEN event_date < CURRENT_DATE - INTERVAL '90 days' OR user_id IS NULL THEN user_id END) AS inactive_or_unassigned_users, ROUND(100.0 * COUNT(DISTINCT CASE WHEN event_date >= CURRENT_DATE - INTERVAL '30 days' THEN user_id END) / NULLIF(SUM(daily_active_seats), 0), 2) AS utilization_rate_30d_pct, ROUND(100.0 * COUNT(DISTINCT CASE WHEN event_date >= CURRENT_DATE - INTERVAL '90 days' THEN user_id END) / NULLIF(SUM(daily_active_seats), 0), 2) AS utilization_rate_90d_pct, MIN(event_date) AS earliest_event_date, MAX(event_date) AS latest_event_date, SUM(amount_usd) AS total_spend_usd, ROUND(SUM(amount_usd) / NULLIF(COUNT(DISTINCT user_id), 0), 2) AS cost_per_assigned_user FROM consumption_facts WHERE publisher ILIKE '%salesforce%' OR product ILIKE '%salesforce%' GROUP BY publisher, product, license_id ORDER BY unassigned_seats DESC, total_licensed_seats DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "utilization_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 805,
+      "output_tokens": 545,
+      "cached_tokens": 0,
+      "latency_ms": 9926,
+      "output": {
+        "raw_output": "I need to reconcile the data, but I notice there's only a SQL query definition provided without actual result data, and no MongoDB operational state data. I'll apply LEFT JOIN semantics with MongoDB as primary source. Since no MongoDB results or SQL result rows were provided, I'll treat the SQL query structure as the schema reference and return a reconciled output reflecting the absence of operational state data with null/0 for missing metrics.\n\n{\"reconciled\": [{\"entity_key\": \"salesforce|unknown_product|unknown_license\", \"mongo_value\": null, \"sql_value\": {\"publisher\": null, \"product\": null, \"license_id\": null, \"total_licensed_seats\": 0, \"assigned_user_count\": 0, \"active_users_last_30_days\": 0, \"active_users_last_60_days\": 0, \"active_users_last_90_days\": 0, \"unassigned_seats\": 0, \"inactive_or_unassigned_users\": 0, \"utilization_rate_30d_pct\": 0.0, \"utilization_rate_90d_pct\": 0.0, \"earliest_event_date\": null, \"latest_event_date\": null, \"total_spend_usd\": 0, \"cost_per_assigned_user\": 0.0}, \"classification\": \"no_recent_activity\", \"reconciliation_notes\": {\"status\": \"no_mongo_primary_source\", \"reason\": \"MongoDB operational state returned no documents; SQL historical data has no matching rows to join against\", \"thresholds_applied\": {\"active\": \"utilization_rate_30d_pct >= 70\", \"underutilized\": \"utilization_rate_30d_pct >= 1 AND utilization_rate_30d_pct < 70\", \"unused\": \"utilization_rate_30d_pct = 0 OR active_users_last_90_days = 0\"}, \"recommended_action\": \"Await MongoDB cursor results and SQL execution output before classifying licenses; resubmit with populated upstream_outputs\", \"data_quality_flags\": [\"mongo_result_absent\", \"sql_result_rows_absent\", \"cannot_compute_utilization_rate\", \"cannot_identify_unutilized_licenses\", \"cannot_segment_inactive_users\", \"reallocation_recommendation_deferred\"]}}]}"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.019806,
+  "total_latency_ms": 16772,
+  "cumulative_spend_usd": 0.8481449999999996,
+  "evaluator_reason": "no_mongo_node"
+}

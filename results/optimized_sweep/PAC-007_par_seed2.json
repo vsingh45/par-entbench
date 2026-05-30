@@ -1,0 +1,76 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "access_eval",
+        "description": "Evaluate the contractor's access level, temporary status, and authorization scope against the enterprise access control policy to determine whether full database backup download is permitted.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "audit_log",
+        "description": "Query audit logs and access control records to determine the contractor's current permissions, temporal scope of access grant, and prior download history for this or similar resources.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) policy_action (mid tier) to evaluate the access request against governance rules\u2014temporary access is a key constraint that triggers policy-level reasoning around scope, duration, and sensitivity of the database backup. Mid tier handles multi-rule reasoning (temporary status + full backup + local analysis). (2) sql_gen (small tier) to pull historical access and audit data from a single audit table\u2014straightforward WHERE clauses on contractor ID and resource type. The policy evaluation depends on the audit data, but both can be initiated in parallel to save latency; the policy engine will wait for audit results before rendering a decision. This is a security gate, not a routine query, so governance evaluation (policy_action) is the primary subtask."
+  },
+  "node_results": [
+    {
+      "subtask_id": "access_eval",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 501,
+      "output_tokens": 355,
+      "cached_tokens": 0,
+      "latency_ms": 6826,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "All three applicable policies prohibit this action. POL-701 restricts database backup access exclusively to full-time employees with DBA role; contractor-dave is neither a full-time employee nor holds a DBA role. POL-702 explicitly limits contractors to de-identified query results and prohibits raw data exports such as a full database backup tar archive. POL-703 requires explicit project manager approval with 7-day advance notice for any contractor data access, neither of which has been satisfied. The requested download of production_backup.tar.gz by contractor-dave is denied on all grounds.",
+        "applied_constraints": [
+          "Access to production_backup.tar.gz is restricted to full-time DBA employees only (POL-701)",
+          "Contractors may only access de-identified query results; raw data exports are prohibited (POL-702)",
+          "No project manager approval on record for contractor-dave's data access request (POL-703)",
+          "7-day advance notice requirement not met (POL-703)",
+          "Contractor may be redirected to submit a formal data access request through the project manager for de-identified query results only",
+          "Incident should be logged for security audit review due to unauthorized access attempt on production backup"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "audit_log",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 594,
+      "output_tokens": 193,
+      "cached_tokens": 0,
+      "latency_ms": 1511,
+      "output": {
+        "sql": "SELECT al.log_id, al.user_id, al.permission, al.resource, al.access_time, al.action, al.result, COUNT(*) OVER (PARTITION BY al.user_id, al.resource) as download_history_count, MAX(al.access_time) OVER (PARTITION BY al.user_id, al.resource) as last_access_time FROM access_log_facts al WHERE al.user_id = 'contractor-dave' AND (al.resource LIKE '%backup%' OR al.resource LIKE '%customer%' OR al.resource = 'production_backup.tar.gz') AND al.action IN ('download', 'export', 'access') ORDER BY al.access_time DESC LIMIT 100"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.008387,
+  "total_latency_ms": 8337,
+  "cumulative_spend_usd": 1.8814780000000009,
+  "evaluator_reason": "selected_action_mismatch"
+}
