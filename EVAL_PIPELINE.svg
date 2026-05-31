@@ -1,116 +1,82 @@
-<svg viewBox="0 0 1200 500" xmlns="http://www.w3.org/2000/svg">
+<svg viewBox="0 0 1100 400" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .box { fill: #e3f2fd; stroke: #1976d2; stroke-width: 2; }
+    .live { fill: #fff9c4; stroke: #f57f17; stroke-width: 2; }
+    .eval { fill: #c8e6c9; stroke: #388e3c; stroke-width: 2; }
+    .label { font-family: Arial, sans-serif; font-size: 13px; font-weight: bold; text-anchor: middle; }
+    .detail { font-family: Arial, sans-serif; font-size: 11px; text-anchor: middle; }
+    .arrow { stroke: #333; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+    .title { font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; text-anchor: middle; }
+  </style>
+
   <defs>
-    <style>
-      .step { fill: #d4edff; stroke: #0066cc; stroke-width: 2; }
-      .live { fill: #fff3cd; stroke: #856404; stroke-width: 2; }
-      .eval { fill: #d4edda; stroke: #155724; stroke-width: 2; }
-      .label { fill: #2c3e50; font-size: 14px; font-family: monospace; font-weight: bold; }
-      .detail { fill: #555; font-size: 12px; }
-      .arrow { stroke: #34495e; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
-      .title { fill: #2c3e50; font-size: 18px; font-weight: bold; }
-    </style>
     <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-      <polygon points="0 0, 10 3, 0 6" fill="#34495e" />
+      <polygon points="0 0, 10 3, 0 6" fill="#333"/>
     </marker>
   </defs>
 
-  <text x="600" y="30" text-anchor="middle" class="title">Execution-Based Evaluation Pipeline</text>
+  <text x="550" y="25" class="title">Execution-Based Evaluation Pipeline</text>
 
-  <!-- Step 1: Task Definition -->
-  <rect x="20" y="80" width="140" height="100" class="step" rx="5"/>
-  <text x="90" y="105" text-anchor="middle" class="label">1. Task</text>
-  <text x="90" y="125" text-anchor="middle" class="detail">JSON definition</text>
-  <text x="90" y="145" text-anchor="middle" class="detail">from EntBench</text>
-  <text x="90" y="165" text-anchor="middle" class="detail">(54 tasks)</text>
-
-  <!-- Arrow -->
-  <path d="M 160 130 L 200 130" class="arrow"/>
-  <text x="180" y="125" text-anchor="middle" font-size="11" fill="#666">task_id</text>
-
-  <!-- Step 2: Planner + Router -->
-  <rect x="200" y="80" width="140" height="100" class="step" rx="5"/>
-  <text x="270" y="105" text-anchor="middle" class="label">2. Plan &</text>
-  <text x="270" y="120" text-anchor="middle" class="label">Route</text>
-  <text x="270" y="145" text-anchor="middle" class="detail">Decompose into</text>
-  <text x="270" y="160" text-anchor="middle" class="detail">subtasks, assign</text>
-  <text x="270" y="175" text-anchor="middle" class="detail">tier per router</text>
+  <!-- Step 1 -->
+  <rect x="10" y="60" width="110" height="80" rx="5" class="box"/>
+  <text x="65" y="85" class="label">1. Task</text>
+  <text x="65" y="105" class="detail">JSON def</text>
+  <text x="65" y="120" class="detail">EntBench</text>
 
   <!-- Arrow -->
-  <path d="M 340 130 L 380 130" class="arrow"/>
-  <text x="360" y="125" text-anchor="middle" font-size="11" fill="#666">plan</text>
+  <path d="M 120 100 L 150 100" class="arrow"/>
 
-  <!-- Step 3: Execute -->
-  <rect x="380" y="80" width="140" height="100" class="step" rx="5"/>
-  <text x="450" y="105" text-anchor="middle" class="label">3. Execute</text>
-  <text x="450" y="125" text-anchor="middle" class="detail">Specialist runs</text>
-  <text x="450" y="145" text-anchor="middle" class="detail">with tier-specific</text>
-  <text x="450" y="160" text-anchor="middle" class="detail">model (Haiku,</text>
-  <text x="450" y="175" text-anchor="middle" class="detail">Sonnet, Opus)</text>
+  <!-- Step 2 -->
+  <rect x="150" y="60" width="110" height="80" rx="5" class="box"/>
+  <text x="205" y="80" class="label">2. Plan</text>
+  <text x="205" y="95" class="label">&amp; Route</text>
+  <text x="205" y="120" class="detail">decompose,</text>
+  <text x="205" y="133" class="detail">assign tier</text>
 
   <!-- Arrow -->
-  <path d="M 520 130 L 560 130" class="arrow"/>
-  <text x="540" y="125" text-anchor="middle" font-size="11" fill="#666">output</text>
+  <path d="M 260 100 L 290 100" class="arrow"/>
 
-  <!-- Step 4: Live DB Hit -->
-  <rect x="560" y="80" width="140" height="100" class="live" rx="5"/>
-  <text x="630" y="105" text-anchor="middle" class="label">4. Hit DB</text>
-  <text x="630" y="125" text-anchor="middle" class="detail">Execute query/</text>
-  <text x="630" y="145" text-anchor="middle" class="detail">pipeline on live</text>
-  <text x="630" y="160" text-anchor="middle" class="detail">Postgres or</text>
-  <text x="630" y="175" text-anchor="middle" class="detail">MongoDB</text>
+  <!-- Step 3 -->
+  <rect x="290" y="60" width="110" height="80" rx="5" class="box"/>
+  <text x="345" y="85" class="label">3. Execute</text>
+  <text x="345" y="105" class="detail">specialist</text>
+  <text x="345" y="120" class="detail">(Haiku,Sonnet,Opus)</text>
 
   <!-- Arrow -->
-  <path d="M 700 130 L 740 130" class="arrow"/>
-  <text x="720" y="125" text-anchor="middle" font-size="11" fill="#666">result</text>
+  <path d="M 400 100 L 430 100" class="arrow"/>
 
-  <!-- Step 5: Evaluate -->
-  <rect x="740" y="80" width="140" height="100" class="eval" rx="5"/>
-  <text x="810" y="105" text-anchor="middle" class="label">5. Evaluate</text>
-  <text x="810" y="125" text-anchor="middle" class="detail">Task-specific</text>
-  <text x="810" y="145" text-anchor="middle" class="detail">scorer: F1,</text>
-  <text x="810" y="160" text-anchor="middle" class="detail">accuracy,</text>
-  <text x="810" y="175" text-anchor="middle" class="detail">exact match</text>
+  <!-- Step 4 -->
+  <rect x="430" y="60" width="110" height="80" rx="5" class="live"/>
+  <text x="485" y="85" class="label">4. Hit DB</text>
+  <text x="485" y="105" class="detail">execute on live</text>
+  <text x="485" y="120" class="detail">Postgres/MongoDB</text>
 
   <!-- Arrow -->
-  <path d="M 880 130 L 920 130" class="arrow"/>
-  <text x="900" y="125" text-anchor="middle" font-size="11" fill="#666">verdict</text>
+  <path d="M 540 100 L 570 100" class="arrow"/>
 
-  <!-- Step 6: Log Result -->
-  <rect x="920" y="80" width="140" height="100" class="step" rx="5"/>
-  <text x="990" y="105" text-anchor="middle" class="label">6. Result</text>
-  <text x="990" y="125" text-anchor="middle" class="detail">JSON with</text>
-  <text x="990" y="145" text-anchor="middle" class="detail">accuracy,</text>
-  <text x="990" y="160" text-anchor="middle" class="detail">cost, latency,</text>
-  <text x="990" y="175" text-anchor="middle" class="detail">tokens</text>
+  <!-- Step 5 -->
+  <rect x="570" y="60" width="110" height="80" rx="5" class="eval"/>
+  <text x="625" y="85" class="label">5. Evaluate</text>
+  <text x="625" y="105" class="detail">task-specific</text>
+  <text x="625" y="120" class="detail">scorer</text>
 
-  <!-- Annotation boxes -->
-  <rect x="20" y="260" width="280" height="120" fill="none" stroke="#999" stroke-width="1" stroke-dasharray="4" rx="5"/>
-  <text x="160" y="280" text-anchor="middle" font-weight="bold" font-size="12">What Makes EntBench Different:</text>
-  <text x="30" y="305" font-size="11">• Live infrastructure: queries execute</text>
-  <text x="30" y="323" font-size="11">  against real Postgres/MongoDB</text>
-  <text x="30" y="341" font-size="11">• Execution-based evaluation: verdict</text>
-  <text x="30" y="359" font-size="11">  depends on DB result, not just output</text>
-  <text x="30" y="377" font-size="11">• Fair cost accounting: judge scorer</text>
-  <text x="30" y="395" font-size="11">  cost (for FrugalGPT) included</text>
+  <!-- Arrow -->
+  <path d="M 680 100 L 710 100" class="arrow"/>
 
-  <!-- Router variation -->
-  <rect x="320" y="260" width="280" height="120" fill="none" stroke="#999" stroke-width="1" stroke-dasharray="4" rx="5"/>
-  <text x="460" y="280" text-anchor="middle" font-weight="bold" font-size="12">Routers Tested (Step 2):</text>
-  <text x="330" y="305" font-size="11">PaR (proposed): planner assigns tier</text>
-  <text x="330" y="323" font-size="11">AllFrontier: every node → Opus</text>
-  <text x="330" y="341" font-size="11">AllSmall: every node → Haiku</text>
-  <text x="330" y="359" font-size="11">SinkFrontier: Opus on terminal nodes</text>
-  <text x="330" y="377" font-size="11">SourceFrontier: Opus on root nodes</text>
-  <text x="330" y="395" font-size="11">FrugalGPT: cascade + LLM judge scorer</text>
+  <!-- Step 6 -->
+  <rect x="710" y="60" width="110" height="80" rx="5" class="box"/>
+  <text x="765" y="80" class="label">6. Result</text>
+  <text x="765" y="100" class="detail">accuracy,</text>
+  <text x="765" y="115" class="detail">cost, latency</text>
 
-  <!-- Measured outcomes -->
-  <rect x="620" y="260" width="280" height="120" fill="none" stroke="#999" stroke-width="1" stroke-dasharray="4" rx="5"/>
-  <text x="760" y="280" text-anchor="middle" font-weight="bold" font-size="12">Measured Per Task (Step 6):</text>
-  <text x="630" y="305" font-size="11">accuracy: task_correct (bool)</text>
-  <text x="630" y="323" font-size="11">cost: tokens × model pricing</text>
-  <text x="630" y="341" font-size="11">latency: end-to-end milliseconds</text>
-  <text x="630" y="359" font-size="11">per-node tiers assigned</text>
-  <text x="630" y="377" font-size="11">ρ (rho): composition penalty</text>
-  <text x="630" y="395" font-size="11">  = planner vs oracle cost ratio</text>
+  <!-- Key insight box -->
+  <rect x="10" y="200" width="810" height="140" fill="none" stroke="#999" stroke-width="1" stroke-dasharray="3,3" rx="3"/>
+
+  <text x="20" y="220" class="label" text-anchor="start">What Makes EntBench Different:</text>
+
+  <text x="30" y="245" class="detail" text-anchor="start">✓ Live infrastructure: queries execute against real Postgres/MongoDB, not mocked data</text>
+  <text x="30" y="265" class="detail" text-anchor="start">✓ Execution-based evaluation: verdict depends on actual DB result, not just LLM output</text>
+  <text x="30" y="285" class="detail" text-anchor="start">✓ Fair cost accounting: for FrugalGPT, LLM-judge scorer cost is included in reported cost</text>
+  <text x="30" y="305" class="detail" text-anchor="start">✓ Compounding error visible: ρ (rho) composition penalty measures planning errors across multi-step workflows</text>
 
 </svg>
