@@ -50,9 +50,7 @@ Click the badge above to open the interactive architecture diagram in draw.io vi
 
 ![Evaluation Pipeline](./EVAL_PIPELINE.svg)
 
-**Edit in draw.io:** [Click here](https://app.diagrams.net/?url=https://raw.githubusercontent.com/vsingh45/par-entbench/main/EVAL_PIPELINE.drawio) · **Files:** [SVG](./EVAL_PIPELINE.svg) | [draw.io](./EVAL_PIPELINE.drawio)
-
-*The 6-step pipeline that makes EntBench execution-based rather than reference-based: task definition → planner + router → specialist execution → live database hit → task-specific evaluator → logged result. Each task's verdict depends on real Postgres/MongoDB execution, not just model output comparison.*
+*The six-stage pipeline that makes EntBench execution-based rather than reference-based: task definition → planner + router → specialist execution → live database execution → task-specific evaluator → logged result. Each task's verdict depends on real Postgres/MongoDB execution, not just model output comparison. The reported evaluation uses a 54-task subset (×3 seeds = 162 runs) of the full 300-task benchmark.*
 
 **Key Results (Haiku Planner, 21 tasks × 8 routers × 3 seeds):**
 - Best accuracy: PaR & frugal_cascade at 33.3%

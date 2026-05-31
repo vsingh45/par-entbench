@@ -1,82 +1,245 @@
-<svg viewBox="0 0 1100 400" xmlns="http://www.w3.org/2000/svg">
-  <style>
-    .box { fill: #e3f2fd; stroke: #1976d2; stroke-width: 2; }
-    .live { fill: #fff9c4; stroke: #f57f17; stroke-width: 2; }
-    .eval { fill: #c8e6c9; stroke: #388e3c; stroke-width: 2; }
-    .label { font-family: Arial, sans-serif; font-size: 13px; font-weight: bold; text-anchor: middle; }
-    .detail { font-family: Arial, sans-serif; font-size: 11px; text-anchor: middle; }
-    .arrow { stroke: #333; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
-    .title { font-family: Arial, sans-serif; font-size: 16px; font-weight: bold; text-anchor: middle; }
-  </style>
-
+<svg viewBox="0 0 1360 620" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica, Arial, sans-serif">
   <defs>
-    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-      <polygon points="0 0, 10 3, 0 6" fill="#333"/>
+    <style>
+      .title       { font-size: 22px; font-weight: 700; fill: #1a1a1a; }
+      .subtitle    { font-size: 13px; fill: #5a6570; }
+      .stage-num   { font-size: 13px; font-weight: 700; fill: #ffffff; }
+      .stage-name  { font-size: 13px; font-weight: 700; fill: #1a2733; }
+      .card-head   { font-size: 11.5px; font-weight: 700; fill: #1a2733; }
+      .item        { font-size: 10.5px; fill: #36424d; }
+      .item-b      { font-size: 10.5px; font-weight: 700; fill: #1a2733; }
+      .mono        { font-size: 10px; fill: #2c3e50; font-family: "SFMono-Regular", Consolas, monospace; }
+      .token       { font-size: 9.5px; font-weight: 700; fill: #8e44ad; font-family: "SFMono-Regular", Consolas, monospace; }
+      .legend      { font-size: 10.5px; fill: #36424d; }
+      .arrow       { stroke: #34495e; stroke-width: 2.5; fill: none; marker-end: url(#ah); }
+    </style>
+    <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#34495e"/>
     </marker>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#000" flood-opacity="0.12"/>
+    </filter>
   </defs>
 
-  <text x="550" y="25" class="title">Execution-Based Evaluation Pipeline</text>
+  <!-- Title -->
+  <text x="40" y="38" class="title">EntBench Execution-Based Evaluation Pipeline</text>
+  <text x="40" y="58" class="subtitle">A task flows through six stages: definition, plan/route, execute, <tspan font-weight="700" fill="#b9770e">live Postgres/MongoDB execution</tspan>, execution-based evaluation, and logged verdict.</text>
+  <text x="40" y="74" class="subtitle">The planner (Haiku 4.5) and specialists are held fixed across all eight routers — only the router's per-subtask tier-assignment strategy varies.</text>
 
-  <!-- Step 1 -->
-  <rect x="10" y="60" width="110" height="80" rx="5" class="box"/>
-  <text x="65" y="85" class="label">1. Task</text>
-  <text x="65" y="105" class="detail">JSON def</text>
-  <text x="65" y="120" class="detail">EntBench</text>
+  <!-- ============ STAGE NODES (top band) ============ -->
+  <!-- columns: x = 40, 260, 480, 700, 920, 1140 ; width 180 -->
 
-  <!-- Arrow -->
-  <path d="M 120 100 L 150 100" class="arrow"/>
+  <!-- arrows between stages -->
+  <path d="M 220 118 L 262 118" class="arrow"/>
+  <path d="M 440 118 L 482 118" class="arrow"/>
+  <path d="M 660 118 L 702 118" class="arrow"/>
+  <path d="M 880 118 L 922 118" class="arrow"/>
+  <path d="M 1100 118 L 1142 118" class="arrow"/>
 
-  <!-- Step 2 -->
-  <rect x="150" y="60" width="110" height="80" rx="5" class="box"/>
-  <text x="205" y="80" class="label">2. Plan</text>
-  <text x="205" y="95" class="label">&amp; Route</text>
-  <text x="205" y="120" class="detail">decompose,</text>
-  <text x="205" y="133" class="detail">assign tier</text>
+  <!-- data tokens on arrows -->
+  <text x="241" y="106" text-anchor="middle" class="token">task.json</text>
+  <text x="461" y="106" text-anchor="middle" class="token">Plan{}</text>
+  <text x="681" y="106" text-anchor="middle" class="token">query/plan</text>
+  <text x="901" y="106" text-anchor="middle" class="token">rows[]</text>
+  <text x="1121" y="106" text-anchor="middle" class="token">verdict</text>
 
-  <!-- Arrow -->
-  <path d="M 260 100 L 290 100" class="arrow"/>
+  <!-- Stage 1 -->
+  <rect x="40" y="92" width="180" height="52" rx="7" fill="#e8f8f5" stroke="#16a085" stroke-width="2" filter="url(#shadow)"/>
+  <circle cx="62" cy="118" r="11" fill="#16a085"/>
+  <text x="62" y="122" text-anchor="middle" class="stage-num">1</text>
+  <text x="80" y="114" class="stage-name">Task Definition</text>
+  <text x="80" y="131" class="item">7 classes · 54 tasks</text>
 
-  <!-- Step 3 -->
-  <rect x="290" y="60" width="110" height="80" rx="5" class="box"/>
-  <text x="345" y="85" class="label">3. Execute</text>
-  <text x="345" y="105" class="detail">specialist</text>
-  <text x="345" y="120" class="detail">(Haiku,Sonnet,Opus)</text>
+  <!-- Stage 2 -->
+  <rect x="260" y="92" width="180" height="52" rx="7" fill="#fef5e7" stroke="#e67e22" stroke-width="2" filter="url(#shadow)"/>
+  <circle cx="282" cy="118" r="11" fill="#e67e22"/>
+  <text x="282" y="122" text-anchor="middle" class="stage-num">2</text>
+  <text x="300" y="114" class="stage-name">Plan &amp; Route</text>
+  <text x="300" y="131" class="item">decompose + tier</text>
 
-  <!-- Arrow -->
-  <path d="M 400 100 L 430 100" class="arrow"/>
+  <!-- Stage 3 -->
+  <rect x="480" y="92" width="180" height="52" rx="7" fill="#eafaf1" stroke="#27ae60" stroke-width="2" filter="url(#shadow)"/>
+  <circle cx="502" cy="118" r="11" fill="#27ae60"/>
+  <text x="502" y="122" text-anchor="middle" class="stage-num">3</text>
+  <text x="520" y="114" class="stage-name">Execute</text>
+  <text x="520" y="131" class="item">specialist @ tier</text>
 
-  <!-- Step 4 -->
-  <rect x="430" y="60" width="110" height="80" rx="5" class="live"/>
-  <text x="485" y="85" class="label">4. Hit DB</text>
-  <text x="485" y="105" class="detail">execute on live</text>
-  <text x="485" y="120" class="detail">Postgres/MongoDB</text>
+  <!-- Stage 4 (highlight) -->
+  <rect x="700" y="88" width="180" height="60" rx="7" fill="#fff9c4" stroke="#f39c12" stroke-width="3" filter="url(#shadow)"/>
+  <circle cx="722" cy="118" r="11" fill="#f39c12"/>
+  <text x="722" y="122" text-anchor="middle" class="stage-num">4</text>
+  <text x="740" y="112" class="stage-name">Live DB Execution</text>
+  <text x="740" y="129" class="item-b" fill="#b9770e">★ key contribution</text>
 
-  <!-- Arrow -->
-  <path d="M 540 100 L 570 100" class="arrow"/>
+  <!-- Stage 5 -->
+  <rect x="920" y="92" width="180" height="52" rx="7" fill="#fdecef" stroke="#c0392b" stroke-width="2" filter="url(#shadow)"/>
+  <circle cx="942" cy="118" r="11" fill="#c0392b"/>
+  <text x="942" y="122" text-anchor="middle" class="stage-num">5</text>
+  <text x="960" y="114" class="stage-name">Evaluate</text>
+  <text x="960" y="131" class="item">execution-based</text>
 
-  <!-- Step 5 -->
-  <rect x="570" y="60" width="110" height="80" rx="5" class="eval"/>
-  <text x="625" y="85" class="label">5. Evaluate</text>
-  <text x="625" y="105" class="detail">task-specific</text>
-  <text x="625" y="120" class="detail">scorer</text>
+  <!-- Stage 6 -->
+  <rect x="1140" y="92" width="180" height="52" rx="7" fill="#eaf2f8" stroke="#2980b9" stroke-width="2" filter="url(#shadow)"/>
+  <circle cx="1162" cy="118" r="11" fill="#2980b9"/>
+  <text x="1162" y="122" text-anchor="middle" class="stage-num">6</text>
+  <text x="1180" y="114" class="stage-name">Log Result</text>
+  <text x="1180" y="131" class="item">trace JSON</text>
 
-  <!-- Arrow -->
-  <path d="M 680 100 L 710 100" class="arrow"/>
+  <!-- connectors stage->card -->
+  <path d="M 130 144 L 130 168" stroke="#16a085" stroke-width="1.5" stroke-dasharray="3,3"/>
+  <path d="M 350 144 L 350 168" stroke="#e67e22" stroke-width="1.5" stroke-dasharray="3,3"/>
+  <path d="M 570 144 L 570 168" stroke="#27ae60" stroke-width="1.5" stroke-dasharray="3,3"/>
+  <path d="M 790 148 L 790 168" stroke="#f39c12" stroke-width="1.5" stroke-dasharray="3,3"/>
+  <path d="M 1010 144 L 1010 168" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="3,3"/>
+  <path d="M 1230 144 L 1230 168" stroke="#2980b9" stroke-width="1.5" stroke-dasharray="3,3"/>
 
-  <!-- Step 6 -->
-  <rect x="710" y="60" width="110" height="80" rx="5" class="box"/>
-  <text x="765" y="80" class="label">6. Result</text>
-  <text x="765" y="100" class="detail">accuracy,</text>
-  <text x="765" y="115" class="detail">cost, latency</text>
+  <!-- ============ DETAIL CARDS ============ -->
 
-  <!-- Key insight box -->
-  <rect x="10" y="200" width="810" height="140" fill="none" stroke="#999" stroke-width="1" stroke-dasharray="3,3" rx="3"/>
+  <!-- Card 1: Task classes -->
+  <rect x="40" y="168" width="180" height="248" rx="7" fill="#ffffff" stroke="#16a085" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="40" y="168" width="180" height="22" rx="7" fill="#16a085"/>
+  <rect x="40" y="180" width="180" height="10" fill="#16a085"/>
+  <text x="130" y="183" text-anchor="middle" class="card-head" fill="#fff">TASK CLASSES</text>
+  <text x="52" y="208" class="item-b">SQL-Gen<tspan class="item" dx="4">8 · calib</tspan></text>
+  <text x="52" y="227" class="item-b">SQL-Compose<tspan class="item" dx="4">8 · comp</tspan></text>
+  <text x="52" y="246" class="item-b">Mongo-Gen<tspan class="item" dx="4">8 · calib</tspan></text>
+  <text x="52" y="265" class="item-b">Cross-Recon<tspan class="item" dx="4">8 · comp</tspan></text>
+  <text x="52" y="284" class="item-b">Extract<tspan class="item" dx="4">7 · calib</tspan></text>
+  <text x="52" y="303" class="item-b">MultiTool-Plan<tspan class="item" dx="4">8 · comp</tspan></text>
+  <text x="52" y="322" class="item-b">Policy-Action<tspan class="item" dx="4">7 · comp</tspan></text>
+  <line x1="52" y1="334" x2="208" y2="334" stroke="#dfe6e9"/>
+  <text x="52" y="352" class="item">23 calibration · 31 comp.</text>
+  <text x="52" y="368" class="item-b">54 tasks × 3 seeds = 162 runs</text>
+  <line x1="52" y1="378" x2="208" y2="378" stroke="#dfe6e9"/>
+  <text x="52" y="396" class="card-head">each task = JSON</text>
+  <text x="52" y="410" class="mono">{id, prompt, gold, ...}</text>
 
-  <text x="20" y="220" class="label" text-anchor="start">What Makes EntBench Different:</text>
+  <!-- Card 2: Plan & Route -->
+  <rect x="260" y="168" width="180" height="248" rx="7" fill="#ffffff" stroke="#e67e22" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="260" y="168" width="180" height="22" rx="7" fill="#e67e22"/>
+  <rect x="260" y="180" width="180" height="10" fill="#e67e22"/>
+  <text x="350" y="183" text-anchor="middle" class="card-head" fill="#fff">PLANNER + ROUTER</text>
+  <text x="272" y="208" class="card-head">Planner — Haiku 4.5</text>
+  <text x="272" y="223" class="item">complexity classifier</text>
+  <text x="272" y="237" class="item">+ structured planner</text>
+  <text x="272" y="258" class="card-head">Plan schema</text>
+  <text x="272" y="273" class="mono">subtasks[]:</text>
+  <text x="280" y="287" class="mono">id, specialist,</text>
+  <text x="280" y="300" class="mono">tier, depends_on</text>
+  <text x="272" y="316" class="mono">cost_rationale</text>
+  <line x1="272" y1="326" x2="428" y2="326" stroke="#dfe6e9"/>
+  <text x="272" y="344" class="card-head">8 routers vary tier:</text>
+  <text x="272" y="360" class="item">PaR · PaR-Lite</text>
+  <text x="272" y="375" class="item">AllSmall · AllFrontier</text>
+  <text x="272" y="390" class="item">Sink/Source-Frontier</text>
+  <text x="272" y="405" class="item">FrugalGPT · no-rationale</text>
 
-  <text x="30" y="245" class="detail" text-anchor="start">✓ Live infrastructure: queries execute against real Postgres/MongoDB, not mocked data</text>
-  <text x="30" y="265" class="detail" text-anchor="start">✓ Execution-based evaluation: verdict depends on actual DB result, not just LLM output</text>
-  <text x="30" y="285" class="detail" text-anchor="start">✓ Fair cost accounting: for FrugalGPT, LLM-judge scorer cost is included in reported cost</text>
-  <text x="30" y="305" class="detail" text-anchor="start">✓ Compounding error visible: ρ (rho) composition penalty measures planning errors across multi-step workflows</text>
+  <!-- Card 3: Execute / tiers -->
+  <rect x="480" y="168" width="180" height="248" rx="7" fill="#ffffff" stroke="#27ae60" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="480" y="168" width="180" height="22" rx="7" fill="#27ae60"/>
+  <rect x="480" y="180" width="180" height="10" fill="#27ae60"/>
+  <text x="570" y="183" text-anchor="middle" class="card-head" fill="#fff">EXECUTE @ TIER</text>
+  <text x="492" y="208" class="card-head">6 specialists</text>
+  <text x="492" y="223" class="item">SQL · Mongo · Extract</text>
+  <text x="492" y="237" class="item">CrossRecon · MultiTool</text>
+  <text x="492" y="251" class="item">Policy · (bounded retry)</text>
+  <line x1="492" y1="261" x2="648" y2="261" stroke="#dfe6e9"/>
+  <text x="492" y="279" class="card-head">3 tiers ($/Mtok in/out)</text>
+  <!-- tier rows -->
+  <rect x="492" y="287" width="14" height="14" rx="2" fill="#aed6f1"/>
+  <text x="512" y="298" class="item"><tspan class="item-b">small</tspan> Haiku  1 / 5</text>
+  <rect x="492" y="307" width="14" height="14" rx="2" fill="#f9e79f"/>
+  <text x="512" y="318" class="item"><tspan class="item-b">mid</tspan> Sonnet  3 / 15</text>
+  <rect x="492" y="327" width="14" height="14" rx="2" fill="#f5b7b1"/>
+  <text x="512" y="338" class="item"><tspan class="item-b">frontier</tspan> Opus 5 / 25</text>
+  <line x1="492" y1="350" x2="648" y2="350" stroke="#dfe6e9"/>
+  <text x="492" y="368" class="item">produces structured</text>
+  <text x="492" y="383" class="mono">output{} per node</text>
+  <text x="492" y="403" class="item">tokens + latency logged</text>
 
+  <!-- Card 4: Live DB (highlight) -->
+  <rect x="700" y="168" width="180" height="248" rx="7" fill="#fffdf3" stroke="#f39c12" stroke-width="2.5" filter="url(#shadow)"/>
+  <rect x="700" y="168" width="180" height="22" rx="7" fill="#f39c12"/>
+  <rect x="700" y="180" width="180" height="10" fill="#f39c12"/>
+  <text x="790" y="183" text-anchor="middle" class="card-head" fill="#fff">LIVE DATA BACKENDS</text>
+  <text x="712" y="208" class="card-head" fill="#b9770e">PostgreSQL 15</text>
+  <text x="712" y="223" class="item">TPC-H: customer,</text>
+  <text x="712" y="237" class="item">orders, lineitem</text>
+  <text x="712" y="251" class="item">+ operational tables</text>
+  <text x="712" y="271" class="card-head" fill="#b9770e">MongoDB 8.0</text>
+  <text x="712" y="286" class="item">sam_licenses (30),</text>
+  <text x="712" y="300" class="item">seat_assignments (705)</text>
+  <text x="712" y="314" class="item">billing_contracts (15)</text>
+  <text x="712" y="328" class="item">iam_roles (5)</text>
+  <line x1="712" y1="340" x2="868" y2="340" stroke="#f7dc6f"/>
+  <text x="712" y="358" class="item-b" fill="#b9770e">SQL / pipeline runs</text>
+  <text x="712" y="373" class="item-b" fill="#b9770e">for real, returns rows[]</text>
+  <text x="712" y="393" class="item">no mocked answers;</text>
+  <text x="712" y="407" class="item">verdict needs execution</text>
+
+  <!-- Card 5: Evaluate per-class -->
+  <rect x="920" y="168" width="180" height="248" rx="7" fill="#ffffff" stroke="#c0392b" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="920" y="168" width="180" height="22" rx="7" fill="#c0392b"/>
+  <rect x="920" y="180" width="180" height="10" fill="#c0392b"/>
+  <text x="1010" y="183" text-anchor="middle" class="card-head" fill="#fff">EXEC-BASED SCORERS</text>
+  <text x="932" y="208" class="item-b">SQL / Compose</text>
+  <text x="940" y="222" class="item">bag-equiv. of result</text>
+  <text x="940" y="235" class="item">rows (tol 0.01)</text>
+  <text x="932" y="254" class="item-b">Mongo</text>
+  <text x="940" y="268" class="item">doc-set match on</text>
+  <text x="940" y="281" class="item">aggregate output</text>
+  <text x="932" y="300" class="item-b">Extract</text>
+  <text x="940" y="314" class="item">field F1 ≥ 0.85</text>
+  <text x="932" y="333" class="item-b">MultiTool</text>
+  <text x="940" y="347" class="item">tool-set + order</text>
+  <text x="932" y="366" class="item-b">Policy-Action</text>
+  <text x="940" y="380" class="item">exact action +</text>
+  <text x="940" y="393" class="item">compliance match</text>
+  <text x="932" y="410" class="item-b" fill="#c0392b">yields (correct, reason)</text>
+
+  <!-- Card 6: Result + metrics -->
+  <rect x="1140" y="168" width="180" height="248" rx="7" fill="#ffffff" stroke="#2980b9" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="1140" y="168" width="180" height="22" rx="7" fill="#2980b9"/>
+  <rect x="1140" y="180" width="180" height="10" fill="#2980b9"/>
+  <text x="1230" y="183" text-anchor="middle" class="card-head" fill="#fff">LOGGED TRACE</text>
+  <text x="1152" y="208" class="card-head">per-task JSON</text>
+  <text x="1152" y="223" class="mono">task_correct</text>
+  <text x="1152" y="237" class="mono">total_cost_usd</text>
+  <text x="1152" y="251" class="mono">total_latency_ms</text>
+  <text x="1152" y="265" class="mono">node_results[]</text>
+  <text x="1160" y="279" class="mono">tier, tokens,</text>
+  <text x="1160" y="293" class="mono">model_used</text>
+  <text x="1152" y="307" class="mono">evaluator_reason</text>
+  <line x1="1152" y1="318" x2="1308" y2="318" stroke="#dfe6e9"/>
+  <text x="1152" y="336" class="card-head">aggregate metrics</text>
+  <text x="1152" y="352" class="item">• accuracy (per class)</text>
+  <text x="1152" y="367" class="item">• cost / task · Pareto</text>
+  <text x="1152" y="382" class="item">• latency</text>
+  <text x="1152" y="399" class="item-b" fill="#2980b9">• ρ composition penalty</text>
+  <text x="1152" y="412" class="item">  planner vs oracle cost</text>
+
+  <!-- ============ BOTTOM: rho explainer + legend ============ -->
+  <rect x="40" y="440" width="850" height="134" rx="8" fill="#f4f6f7" stroke="#bdc3c7" stroke-width="1.5"/>
+  <text x="58" y="463" class="card-head" font-size="13">Why execution-based + ρ matters</text>
+  <text x="58" y="484" class="legend">Static benchmarks score an LLM's text against a reference answer. EntBench instead <tspan font-weight="700">runs</tspan> the generated SQL / Mongo</text>
+  <text x="58" y="501" class="legend">pipeline / tool-plan against live backends, so a task is correct only if its execution reproduces the gold result, capturing</text>
+  <text x="58" y="518" class="legend">real failure modes (bad joins, empty aggregates, malformed plans) that text comparison misses.</text>
+  <text x="58" y="542" class="legend"><tspan font-weight="700">ρ (composition penalty)</tspan> = (cost of the plan run at the planner's chosen tiers) / (cost of the cheapest per-subtask</text>
+  <text x="58" y="559" class="legend">oracle assignment); ρ &gt; 1 means the planner over-provisioned tiers relative to the per-node optimum.</text>
+
+  <!-- Legend -->
+  <rect x="910" y="440" width="410" height="134" rx="8" fill="#f4f6f7" stroke="#bdc3c7" stroke-width="1.5"/>
+  <text x="928" y="464" class="card-head" font-size="13">Legend</text>
+  <rect x="928" y="476" width="16" height="16" rx="3" fill="#fff9c4" stroke="#f39c12" stroke-width="2"/>
+  <text x="952" y="488" class="legend">Live infrastructure stage (the contribution)</text>
+  <rect x="928" y="500" width="16" height="16" rx="3" fill="#e8f8f5" stroke="#16a085" stroke-width="1.5"/>
+  <text x="952" y="512" class="legend">Input / definition</text>
+  <rect x="1150" y="500" width="16" height="16" rx="3" fill="#fdecef" stroke="#c0392b" stroke-width="1.5"/>
+  <text x="1174" y="512" class="legend">Evaluation</text>
+  <rect x="928" y="524" width="16" height="16" rx="3" fill="#fef5e7" stroke="#e67e22" stroke-width="1.5"/>
+  <text x="952" y="536" class="legend">Planner / router</text>
+  <rect x="1150" y="524" width="16" height="16" rx="3" fill="#eaf2f8" stroke="#2980b9" stroke-width="1.5"/>
+  <text x="1174" y="536" class="legend">Logged output</text>
+
+  <text x="40" y="600" class="subtitle">Held fixed across all routers: planner model (Haiku 4.5), specialist prompts, retry policy, and seed set (3 seeds) — isolating the effect of tier assignment.</text>
 </svg>
