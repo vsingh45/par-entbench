@@ -44,6 +44,10 @@ Click the badge above to open the interactive architecture diagram in draw.io vi
 - Composition penalty (ρ): PaR 3.33 vs all_frontier 1.27
 - Total cost: $5.11 USD
 
+> **Note:** `frugal_cascade` results above predate a fix to its confidence
+> scorer (the cascade previously never escalated; see `frugal_cascade` in the
+> Routers section). These figures are being regenerated and will change.
+
 ## Quick start
 
 ### 1. Install
@@ -183,7 +187,7 @@ Seven routing strategies are compared:
 | `all_small`         | Every node uses Haiku 4.5 — cost lower bound                |
 | `sink_frontier`     | Frontier on terminal nodes only                              |
 | `source_frontier`   | Frontier on root nodes only                                  |
-| `frugal_cascade`    | Small first; escalate on low confidence (FrugalGPT-style)   |
+| `frugal_cascade`    | Small first; an LLM-judge scoring function rates each answer and the cascade escalates to the next tier when confidence is below threshold (FrugalGPT-style cascade with an LLM-judge scorer rather than a trained DistilBERT scorer; the judge's cost is billed) |
 | `par_no_rationale`  | Ablation: PaR without cost_rationale (Cross-Recon only)     |
 
 ## EntBench task classes

@@ -20,6 +20,7 @@ from collections.abc import Callable
 
 import anthropic
 
+from baselines.frugal_confidence import score_confidence
 from par.dispatcher import collect_upstream_outputs, execute_subtask, get_ready_subtasks
 from par.observability import DEFAULT_KILL_SWITCH_USD, compute_cost
 from par.types import NodeResult, Subtask, Tier, WorkflowState
@@ -218,10 +219,33 @@ def frugal_cascade_dispatch(
                 if cumulative_spend >= kill_switch_ceiling:
                     kill_switch_triggered = True
 
-                confidence = (result.output or {}).get("confidence", 1.0)
                 final_result = result
 
-                if result.error or confidence >= confidence_threshold or tier == "frontier":
+                # FrugalGPT scoring function: judge the answer to decide whether
+                # to accept this tier or escalate. The judge is a real Haiku call,
+                # so bill its cost to keep the cost comparison honest.
+                confidence, judge_usage = score_confidence(
+                    client=client,
+                    subtask_description=subtask.description,
+                    specialist_type=subtask.specialist,
+                    output=result.output,
+                    error=result.error,
+                )
+                judge_cost = compute_cost(
+                    tier="small",
+                    input_tokens=judge_usage["input_tokens"],
+                    output_tokens=judge_usage["output_tokens"],
+                    cached_tokens=judge_usage["cached_tokens"],
+                )
+                cumulative_spend += judge_cost
+                if cumulative_spend >= kill_switch_ceiling:
+                    kill_switch_triggered = True
+
+                # A hard error escalates; otherwise accept iff confident enough,
+                # or once we've reached the top tier (nowhere left to escalate).
+                if (not result.error) and (confidence >= confidence_threshold or tier == "frontier"):
+                    break
+                if result.error and tier == "frontier":
                     break
 
             node_results.append(final_result)  # type: ignore[arg-type]

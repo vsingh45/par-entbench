@@ -2,8 +2,8 @@
 par/planner.py — Planner agent for PaR.
 
 The planner decomposes the user query into subtasks AND assigns each
-subtask to a model tier in one structured output. Runs on Sonnet 4.6
-(mid tier) across all routers — the planner itself is held fixed.
+subtask to a model tier in one structured output. Runs on Haiku 4.5
+(small tier) across all routers — the planner itself is held fixed.
 
 The cost_rationale field forces the planner to explicitly justify its
 tier assignments. PaR-no-rationale (ablation) uses a variant without it.
@@ -18,7 +18,7 @@ import anthropic
 from .observability import compute_cost
 from .types import Plan, Subtask, WorkflowState
 
-PLANNER_MODEL = os.environ.get("PLANNER_MODEL", "claude-sonnet-4-6")
+PLANNER_MODEL = os.environ.get("PLANNER_MODEL", "claude-haiku-4-5-20251001")
 
 
 # ---------------------------------------------------------------------------

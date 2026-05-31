@@ -1,5 +1,11 @@
 Loaded 1157 result records from results/combined/
 
+NOTE: All `frugal_cascade` rows below predate a fix to its confidence scorer.
+In these records the cascade never escalated (the confidence key was always
+absent, so it defaulted to 1.0), making frugal_cascade equivalent to all_small.
+After the scorer fix it cascades and bills an LLM-judge call; regenerate this
+file from re-run results before using any frugal_cascade numbers.
+
 ======================================================================
 SECTION 1: OVERALL PER-ROUTER (all 54 tasks)
 ======================================================================
