@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_budget_analysis",
+        "description": "Generate SQL query to retrieve budget allocation by product category, historical spend trends, variance analysis, and cost metrics over time periods. Aggregate spending and budget by category with year-over-year or period-over-period comparisons.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "budget_reallocation_strategy",
+        "description": "Reconcile and analyze budget allocation patterns from SQL results. Classify spending efficiency by category (high-efficiency, neutral, low-efficiency). Identify cost trends (increasing, stable, declining) and generate reallocation recommendations based on budget utilization rates, cost trends, and ROI signals. Output prioritized reallocation actions.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_budget_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid tier) to gather multi-dimensional budget and spending data with aggregation across product categories and time periods \u2014 moderately complex due to the need for variance analysis and period comparisons. (2) cross_recon (mid tier) to analyze the results, classify efficiency patterns, identify trends, and synthesize reallocation strategy \u2014 mid complexity because it requires multi-signal analysis (utilization, trend direction, implicit ROI) but operates on a single source (SQL output). No frontier complexity needed: no multi-CTE window functions on the SQL side, and the reconciliation is single-source pattern recognition + recommendation synthesis. No policy_action subtask: reallocation strategy is a business optimization recommendation, not a compliance/governance decision."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_budget_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 479,
+      "output_tokens": 467,
+      "cached_tokens": 0,
+      "latency_ms": 7181,
+      "output": {
+        "sql": "SELECT product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS total_spend, SUM(daily_active_seats) AS total_active_seats, COUNT(DISTINCT license_id) AS license_count, COUNT(DISTINCT user_id) AS user_count, AVG(amount_usd) AS avg_spend_per_event, SUM(amount_usd) / NULLIF(SUM(daily_active_seats), 0) AS cost_per_active_seat, LAG(SUM(amount_usd)) OVER (PARTITION BY product, fiscal_quarter ORDER BY fiscal_year) AS prior_year_spend, SUM(amount_usd) - LAG(SUM(amount_usd)) OVER (PARTITION BY product, fiscal_quarter ORDER BY fiscal_year) AS yoy_variance, ROUND(100.0 * (SUM(amount_usd) - LAG(SUM(amount_usd)) OVER (PARTITION BY product, fiscal_quarter ORDER BY fiscal_year)) / NULLIF(LAG(SUM(amount_usd)) OVER (PARTITION BY product, fiscal_quarter ORDER BY fiscal_year), 0), 2) AS yoy_variance_pct, SUM(SUM(amount_usd)) OVER (PARTITION BY fiscal_year, fiscal_quarter) AS total_period_spend, ROUND(100.0 * SUM(amount_usd) / NULLIF(SUM(SUM(amount_usd)) OVER (PARTITION BY fiscal_year, fiscal_quarter), 0), 2) AS spend_share_pct, SUM(SUM(amount_usd)) OVER (PARTITION BY product, fiscal_year ORDER BY fiscal_quarter ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS ytd_spend FROM consumption_facts GROUP BY product, fiscal_year, fiscal_quarter ORDER BY fiscal_year DESC, fiscal_quarter DESC, total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "budget_reallocation_strategy",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 769,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 12869,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"sql_budget_analysis\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"query_intent\": \"budget_allocation_analysis\",\n        \"metrics_captured\": [\n          \"total_spend\",\n          \"total_active_seats\",\n          \"license_count\",\n          \"user_count\",\n          \"avg_spend_per_event\",\n          \"cost_per_active_seat\",\n          \"prior_year_spend\",\n          \"yoy_variance\",\n          \"yoy_variance_pct\",\n          \"total_period_spend\",\n          \"spend_share_pct\",\n          \"ytd_spend\"\n        ],\n        \"dimensions\": [\"product\", \"fiscal_year\", \"fiscal_quarter\"],\n        \"data_available\": false,\n        \"reason\": \"SQL query definition provided but no result rows returned in upstream output\"\n      },\n      \"classification\": \"no_recent_activity\",\n      \"efficiency_classification\": \"neutral\",\n      \"cost_trend\": \"stable\",\n      \"reallocation_recommendation\": null,\n      \"analyst_note\": \"No SQL result rows were supplied. Cannot perform numeric reconciliation, efficiency scoring, or trend derivation without actual row-level data.\"\n    }\n  ],\n  \"reconciliation_metadata\": {\n    \"primary_source\": \"mongodb\",\n    \"secondary_source\": \"sql\",\n    \"join_semantics\": \"LEFT JOIN on entity_key\",\n    \"mongo_row_count\": 0,\n    \"sql_row_count\": 0,\n    \"matched_rows\": 0,\n    \"mongo_only_rows\": 0,\n    \"sql_only_rows\": 0,\n    \"reconciliation_status\": \"incomplete\",\n    \"blocking_reason\": \"No operational state from MongoDB and no result rows from SQL were provided. Both sources returned empty datasets.\",\n    \"required_to_proceed\": [\n      \"MongoDB operational documents containing product-level budget allocation records\",\n      \"SQL query execution results with actual row data for all SELECT columns\"\n    ]\n  },\n  \"analysis_framework\": {\n    \"efficiency_classification_logic\": {\n      \"high-efficiency\": \"cost_per_active_seat declining YoY AND spend_share_pct stable or declining AND user_count growing\",\n      \"neutral\": \"cost_per_active_seat within +/-5% YoY AND spend_share_pct within +/-2% AND user_count stable\",\n      \"low-efficiency\": \"cost_per_active_seat increasing YoY AND spend_share_pct growing AND user_count flat or declining\"\n    },\n    \"cost_trend_logic\": {\n      \"increasing\": \"yoy_variance_pct > 10\",\n      \"stable\": \"yoy_variance_pct between -10 and 10\",\n      \"declining\": \"yoy_variance_pct < -10\"\n    },\n    \"reallocation_priority_logic\": {\n      \"P1_reduce\": \"low-efficiency AND cost_trend=increasing AND ytd_spend > 20% total_period_spend\",\n      \"P2_hold\": \"neutral AND cost_trend=stable\",\n      \"P3_expand\": \"high-efficiency AND cost_trend=stable OR declining AND spend_share_pct < 15%\",\n      \"P4_monitor\": \"any"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.022749,
+  "total_latency_ms": 20050,
+  "cumulative_spend_usd": 0.080107,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

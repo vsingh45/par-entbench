@@ -1,0 +1,162 @@
+{
+  "task_id": "MTP-003",
+  "task_class": "multitool_plan",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_adobe",
+        "description": "Fetch Adobe license data from MongoDB (contracts, users, seat counts, renewal dates)",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "snowflake_q4",
+        "description": "Query Snowflake for Adobe Q4 usage metrics (licenses consumed, overage, cost)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_post",
+        "description": "Reconcile MongoDB license state with Snowflake Q4 usage, classify posture (compliant/over-provisioned/at-risk), generate summary, and post to #sam-team Slack channel",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "mongo_adobe",
+          "snowflake_q4"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks minimum: (1) mongo_query for license data retrieval, (2) sql_gen for Snowflake Q4 usage metrics, (3) cross_recon to reconcile both sources, classify posture, and handle the Slack post action. The mongo and sql subtasks run in parallel (no dependencies), then cross_recon consumes both outputs. All assigned to mid tier: multi-document MongoDB aggregation, multi-table SQL join, and cross-source reconciliation with classification logic. The Slack posting is a data action within cross_recon (not a separate multitool_plan step since the registry call is straightforward). Total plan fits the 6-tool-call budget: 2 data fetches + 1 reconciliation with embedded action."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_adobe",
+      "specialist": "mongo_query",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1230,
+      "output_tokens": 537,
+      "cached_tokens": 0,
+      "latency_ms": 6588,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Adobe",
+              "status": "active"
+            }
+          },
+          {
+            "$lookup": {
+              "from": "sam_seat_assignments",
+              "localField": "license_id",
+              "foreignField": "license_id",
+              "as": "seat_assignments"
+            }
+          },
+          {
+            "$addFields": {
+              "total_assigned_seats": {
+                "$size": "$seat_assignments"
+              },
+              "active_seats": {
+                "$size": {
+                  "$filter": {
+                    "input": "$seat_assignments",
+                    "as": "seat",
+                    "cond": {
+                      "$eq": [
+                        "$$seat.status",
+                        "active"
+                      ]
+                    }
+                  }
+                }
+              },
+              "inactive_seats": {
+                "$size": {
+                  "$filter": {
+                    "input": "$seat_assignments",
+                    "as": "seat",
+                    "cond": {
+                      "$or": [
+                        {
+                          "$eq": [
+                            "$$seat.status",
+                            "inactive"
+                          ]
+                        },
+                        {
+                          "$or": [
+                            {
+                              "$eq": [
+                                "$$seat.last_active_date",
+                                null
+                              ]
+                            },
+                            {
+                              "$not": [
+                                {
+                                  "$gt": [
+                                    "$$seat.last_active_date",
+                                    null
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "snowflake_q4",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 479,
+      "output_tokens": 132,
+      "cached_tokens": 0,
+      "latency_ms": 2745,
+      "output": {
+        "sql": "SELECT license_id, product, SUM(daily_active_seats) AS total_seats_consumed, SUM(CASE WHEN event_type = 'overage' THEN amount_usd ELSE 0 END) AS overage_cost_usd, SUM(amount_usd) AS total_cost_usd, COUNT(DISTINCT event_id) AS event_count FROM consumption_facts WHERE publisher = 'Adobe' AND fiscal_quarter = 4 GROUP BY license_id, product ORDER BY total_cost_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_post",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 683,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 15250,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"mongo_adobe::sam_licenses[publisher=Adobe,status=active] <-> snowflake_q4::consumption_facts[publisher=Adobe,fiscal_quarter=4]\",\n      \"mongo_value\": {\n        \"source\": \"sam_licenses\",\n        \"status\": \"active\",\n        \"publisher\": \"Adobe\",\n        \"fields_computed\": [\"total_assigned_seats\", \"active_seats\", \"inactive_seats\"],\n        \"data\": null,\n        \"note\": \"MongoDB query not executed; no result payload provided in upstream_outputs\"\n      },\n      \"sql_value\": {\n        \"source\": \"consumption_facts\",\n        \"fiscal_quarter\": 4,\n        \"publisher\": \"Adobe\",\n        \"fields_computed\": [\"total_seats_consumed\", \"overage_cost_usd\", \"total_cost_usd\", \"event_count\"],\n        \"data\": null,\n        \"note\": \"Snowflake query not executed; no result payload provided in upstream_outputs\"\n      },\n      \"classification\": \"unresolvable\",\n      \"posture\": null,\n      \"reconciliation_warnings\": [\n        \"NO_MONGO_RESULT_PAYLOAD: upstream_outputs.mongo_adobe contains only a query definition, not executed result rows. Reconciliation cannot proceed without actual documents.\",\n        \"NO_SQL_RESULT_PAYLOAD: upstream_outputs.snowflake_q4 contains only a SQL string, not executed result rows. Reconciliation cannot proceed without actual rows.\",\n        \"TOOL_CALL_BUDGET_CONSTRAINT_NOTED: Caller specified a budget of 6 tool calls for fetch+reconcile+post; this reconciler operates only on already-returned data and does not invoke external systems (MongoDB, Snowflake, or Slack). No Slack post was made.\",\n        \"CROSS_SYSTEM_ACTION_BLOCKED: Posting to #sam-team Slack channel is an out-of-band side-effect that falls outside the scope of a stateless reconciliation engine. This action must be performed by an orchestration layer with authenticated Slack credentials.\",\n        \"SIMULTANEOUS_FETCH_NOT_APPLICABLE: Reconciliation is a deterministic, single-pass operation on provided data. Parallel fetching of upstream sources is an orchestration concern, not a reconciler concern.\"\n      ],\n      \"recommended_orchestration_steps\": [\n        \"1. Execute MongoDB aggregation pipeline against sam_licenses + sam_seat_assignments and capture result documents.\",\n        \"2. Execute Snowflake SQL against consumption_facts and capture result rows.\",\n        \"3. Submit both result payloads to this reconciler.\",\n        \"4. Reconciler will LEFT JOIN on license_id, compute posture per license (compliant / over-provisioned / at-risk), and return reconciled JSON.\",\n        \"5. Orchestration layer formats the reconciled JSON into a human-readable summary.\",\n        \"6. Orchestration layer posts summary to #sam-team via Slack API using authenticated bot token.\"\n      ],\n      \"posture_classification_logic_preview\": {\n        \"compliant\": \"active_seats <= total_seats_consumed <= licensed_capacity AND overage_cost_usd == 0\",\n        \"over_provisioned\": \"active_seats < (licensed_capacity * 0.7) AND overage_cost_usd == 0 \u2014 seats paid"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.029211,
+  "total_latency_ms": 24583,
+  "cumulative_spend_usd": 0.42078200000000004,
+  "evaluator_reason": "no_plan_in_output"
+}

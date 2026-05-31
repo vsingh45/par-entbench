@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_analysis",
+        "description": "Query spend data for current month and prior 3 months, calculate 3-month average and variance metrics, identify anomalies using statistical thresholds (normal_variance < 15%, concerning 15-30%, critical > 30%)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_classify",
+        "description": "Reconcile current month spend against 3-month baseline, classify each anomaly into normal_variance, concerning, or critical buckets based on deviation percentage and business context rules",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_spend_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks (not one) because the query explicitly requires both spend computation AND classification logic. The sql_gen task handles the analytical heavy lifting (multi-month aggregation, variance calculation, anomaly detection) at mid tier due to window functions and multi-row aggregation. The cross_recon task at mid tier applies the classification framework and determines posture (normal_variance/concerning/critical) based on deviation thresholds and business rules. This is lighter downstream work that benefits from the structured sql output, so mid tier is appropriate for reliable classification without over-provisioning to frontier."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 498,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 12522,
+      "output": {
+        "raw_output": "{\"sql\": \"WITH monthly_spend AS (\\n  SELECT\\n    DATE_TRUNC('month', event_date) AS spend_month,\\n    publisher,\\n    product,\\n    SUM(amount_usd) AS total_spend\\n  FROM consumption_facts\\n  WHERE event_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months'\\n  GROUP BY DATE_TRUNC('month', event_date), publisher, product\\n),\\ncurrent_month AS (\\n  SELECT\\n    publisher,\\n    product,\\n    total_spend AS current_spend\\n  FROM monthly_spend\\n  WHERE spend_month = DATE_TRUNC('month', CURRENT_DATE)\\n),\\nprior_3_months AS (\\n  SELECT\\n    publisher,\\n    product,\\n    AVG(total_spend) AS avg_3mo_spend,\\n    STDDEV(total_spend) AS stddev_3mo_spend,\\n    MIN(total_spend) AS min_3mo_spend,\\n    MAX(total_spend) AS max_3mo_spend,\\n    COUNT(*) AS months_of_data\\n  FROM monthly_spend\\n  WHERE spend_month >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months'\\n    AND spend_month < DATE_TRUNC('month', CURRENT_DATE)\\n  GROUP BY publisher, product\\n),\\nanomaly_analysis AS (\\n  SELECT\\n    cm.publisher,\\n    cm.product,\\n    cm.current_spend,\\n    p3.avg_3mo_spend,\\n    p3.stddev_3mo_spend,\\n    p3.min_3mo_spend,\\n    p3.max_3mo_spend,\\n    p3.months_of_data,\\n    CASE\\n      WHEN p3.avg_3mo_spend IS NULL OR p3.avg_3mo_spend = 0 THEN NULL\\n      ELSE ROUND(((cm.current_spend - p3.avg_3mo_spend) / p3.avg_3mo_spend) * 100, 2)\\n    END AS variance_pct,\\n    CASE\\n      WHEN p3.avg_3mo_spend IS NULL OR p3.avg_3mo_spend = 0 THEN cm.current_spend\\n      ELSE cm.current_spend - p3.avg_3mo_spend\\n    END AS spend_delta\\n  FROM current_month cm\\n  LEFT JOIN prior_3_months p3\\n    ON cm.publisher = p3.publisher\\n    AND cm.product = p3.product\\n)\\nSELECT\\n  publisher,\\n  product,\\n  ROUND(current_spend, 2) AS current_month_spend,\\n  ROUND(avg_3mo_spend, 2) AS avg_3mo_spend,\\n  ROUND(stddev_3mo_spend, 2) AS stddev_3mo_spend,\\n  ROUND(min_3mo_spend, 2) AS min_3mo_spend,\\n  ROUND(max_3mo_spend, 2) AS max_3mo_spend,\\n"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_classify",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1097,
+      "output_tokens": 503,
+      "cached_tokens": 0,
+      "latency_ms": 10289,
+      "output": {
+        "raw_output": "I notice the SQL output appears to be a query definition rather than actual result data. I'll reconcile using the MongoDB source as primary, applying null/0 for missing SQL metrics, and classify based on the business context rules provided.\n\nSince no MongoDB operational data or SQL result rows were provided, I'll return an empty reconciled set reflecting the absence of entity records from both sources:\n\n{\"reconciled\": []}\n\nHowever, if you intended to provide actual row-level data, here is how the reconciliation would look with illustrative structure based on the schema implied by the SQL (publisher + product as entity key, current_month_spend vs avg_3mo_spend driving variance_pct, classified as normal_variance when |variance_pct| < 20, concerning when 20\u201350, critical when > 50 or new spend with no baseline):\n\n{\"reconciled\": [{\"entity_key\": \"publisher:__UNKNOWN__|product:__UNKNOWN__\", \"mongo_value\": null, \"sql_value\": {\"current_month_spend\": null, \"avg_3mo_spend\": null, \"stddev_3mo_spend\": null, \"min_3mo_spend\": null, \"max_3mo_spend\": null, \"months_of_data\": null, \"variance_pct\": null, \"spend_delta\": null}, \"classification\": \"no_data_available\", \"reconciliation_notes\": {\"primary_source\": \"mongodb\", \"sql_source_status\": \"query_definition_received_no_result_rows\", \"mongo_source_status\": \"no_operational_records_provided\", \"join_semantics\": \"LEFT JOIN on mongodb as primary\", \"classification_rules_applied\": {\"normal_variance\": \"|variance_pct| < 20 AND months_of_data >= 2\", \"concerning\": \"|variance_pct| >= 20 AND |variance_pct| < 50 OR months_of_data == 1\", \"critical\": \"|variance_pct| >= 50 OR avg_3mo_spend IS NULL AND current_spend > 0 (new spend no baseline) OR current_spend == 0 AND avg_3mo_spend > 0 (sudden drop to zero)\"}}}]}"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.02433,
+  "total_latency_ms": 22811,
+  "cumulative_spend_usd": 0.123937,
+  "evaluator_reason": "step1_sql_fail: no_sql_in_output"
+}

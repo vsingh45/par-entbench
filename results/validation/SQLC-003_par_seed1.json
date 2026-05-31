@@ -1,0 +1,81 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_declining_publishers",
+        "description": "Query publishers with declining quarterly trends in 2024. Calculate quarter-over-quarter spend/volume changes and filter for negative trends across quarters.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal_posture",
+        "description": "For each declining publisher from sql_declining_publishers output, reconcile current spend trajectory with historical contract terms and performance data. Generate renewal recommendation (hold, expand, reduce) based on reconciliation of decline severity, contract obligations, and strategic value.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_declining_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid tier) to identify publishers with declining QoQ trends in 2024 using multi-quarter aggregations and window functions to calculate trends; (2) cross_recon (mid tier) to reconcile the SQL output with contract/performance data and generate renewal posture recommendations. The reconciliation includes classification and recommendation logic which is part of cross_recon's scope, not a separate policy_action\u2014the query asks for business recommendations, not governance compliance. Both mid tier because sql_declining_publishers requires QoQ calculations and cross_recon requires multi-signal reasoning (decline severity + contract terms + strategic value) but neither requires frontier-level complexity."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_declining_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 469,
+      "output_tokens": 799,
+      "cached_tokens": 0,
+      "latency_ms": 17145,
+      "output": {
+        "raw_output": "{\"sql\": \"WITH quarterly_spend AS (\n  SELECT\n    publisher,\n    fiscal_quarter,\n    SUM(amount_usd) AS total_spend,\n    SUM(daily_active_seats) AS total_seats,\n    COUNT(DISTINCT event_id) AS event_count\n  FROM consumption_facts\n  WHERE event_date >= '2024-01-01' AND event_date < '2025-01-01'\n  GROUP BY publisher, fiscal_quarter\n),\nranked AS (\n  SELECT\n    publisher,\n    fiscal_quarter,\n    total_spend,\n    total_seats,\n    event_count,\n    LAG(total_spend) OVER (PARTITION BY publisher ORDER BY fiscal_quarter) AS prev_spend,\n    LAG(total_seats) OVER (PARTITION BY publisher ORDER BY fiscal_quarter) AS prev_seats\n  FROM quarterly_spend\n),\nqoq_changes AS (\n  SELECT\n    publisher,\n    fiscal_quarter,\n    total_spend,\n    total_seats,\n    event_count,\n    prev_spend,\n    prev_seats,\n    CASE WHEN prev_spend IS NOT NULL THEN ROUND((total_spend - prev_spend) / NULLIF(prev_spend, 0) * 100, 2) END AS spend_pct_change,\n    CASE WHEN prev_seats IS NOT NULL THEN ROUND((total_seats - prev_seats) / NULLIF(prev_seats, 0) * 100, 2) END AS seats_pct_change\n  FROM ranked\n),\ndeclining_publishers AS (\n  SELECT\n    publisher,\n    COUNT(*) FILTER (WHERE spend_pct_change < 0) AS quarters_with_spend_decline,\n    COUNT(*) FILTER (WHERE spend_pct_change IS NOT NULL) AS total_comparable_quarters,\n    AVG(spend_pct_change) AS avg_spend_pct_change,\n    AVG(seats_pct_change) AS avg_seats_pct_change,\n    MIN(total_spend) AS min_quarterly_spend,\n    MAX(total_spend) AS max_quarterly_spend,\n    SUM(total_spend) AS annual_spend\n  FROM qoq_changes\n  WHERE spend_pct_change IS NOT NULL\n  GROUP BY publisher\n  HAVING COUNT(*) FILTER (WHERE spend_pct_change < 0) >= 1\n),\nrecommendations AS (\n  SELECT\n    publisher,\n    quarters_with_spend_decline,\n    total_comparable_quarters,\n    ROUND(avg_spend_pct_change, 2) AS avg_spend_pct_change,\n    ROUND(avg_seats_pct_change, 2) AS avg_seats_pct_change,\n    ROUND(annual_spend, 2) AS annual_spend,\n    ROUND(min_quarterly_spend, 2) AS min_quarterly_spend,\n    ROUND(max_quarterly_spend, 2) AS max_quarterly_spend,\n    CASE\n      WHEN quarters_with_spend_decline = total_comparable_quarters AND avg_spend_pct_change < -20 THEN 'reduce'\n      WHEN quarters_with_spend_decline = total_comparable_quarters AND avg_spend_pct_change BETWEEN -20 AND 0 THEN 'hold'"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1166,
+      "output_tokens": 174,
+      "cached_tokens": 0,
+      "latency_ms": 4346,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "publisher_unknown_1",
+            "mongo_value": null,
+            "sql_value": {
+              "quarters_with_spend_decline": null,
+              "total_comparable_quarters": null,
+              "avg_spend_pct_change": null,
+              "avg_seats_pct_change": null,
+              "annual_spend": null,
+              "min_quarterly_spend": null,
+              "max_quarterly_spend": null
+            },
+            "classification": "no_recent_activity",
+            "renewal_recommendation": null,
+            "notes": "SQL query output was truncated before result rows were returned; CASE expression incomplete and no publisher rows present. MongoDB source provided no operational contract or performance documents. Cannot reconcile without data from either source. Manual review required."
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.019500000000000003,
+  "total_latency_ms": 21491,
+  "cumulative_spend_usd": 0.099607,
+  "evaluator_reason": "step1_sql_fail: no_sql_in_output"
+}

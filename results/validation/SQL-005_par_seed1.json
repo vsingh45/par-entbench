@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-005",
+  "task_class": "sql_gen",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_01",
+        "description": "Query SaaS metrics database to calculate average cost per active seat by product for Q4 2024. Calculate: SUM(cost) / COUNT(DISTINCT active_seats) grouped by product. Sort results in descending order by average cost per seat.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single SQL query with aggregation and grouping across multiple rows and products. Requires mid-tier to handle the JOIN logic (if cost and seat data are in different tables), GROUP BY, and sorting logic reliably. No cross-source reconciliation or complex window functions needed, so frontier tier is not justified. This is a straightforward aggregation task that does not require multi-step decomposition.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_01",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 490,
+      "output_tokens": 96,
+      "cached_tokens": 0,
+      "latency_ms": 2193,
+      "output": {
+        "sql": "SELECT product, SUM(amount_usd) / NULLIF(COUNT(DISTINCT daily_active_seats), 0) AS avg_cost_per_seat FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date < '2025-01-01' AND fiscal_quarter = 4 GROUP BY product ORDER BY avg_cost_per_seat DESC"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0029100000000000003,
+  "total_latency_ms": 2193,
+  "cumulative_spend_usd": 0.015184,
+  "evaluator_reason": "result_bag_mismatch"
+}

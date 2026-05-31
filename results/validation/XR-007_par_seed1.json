@@ -1,0 +1,72 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "aws_spend_query",
+        "description": "Query AWS committed contract values and actual month-over-month spend by service/region, including commitment terms and utilization rates",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_commitment",
+        "description": "Reconcile contracted commit levels against actual spend data, classify each commitment as overcommitted, underutilized, or optimally matched, and generate recommendations for adjustment",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "aws_spend_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid tier) to extract AWS commitment contracts and actual spend\u2014requires joins across commitment and billing tables, potentially with window functions to calculate trailing spend averages and utilization percentages. (2) cross_recon (mid tier) to reconcile the two data streams, classify commitment health, and recommend actions (scale up underutilized commitments, right-size overcommitted ones, or reallocate reserves). Cross_recon handles classification and recommendations as part of its reconciliation scope; no separate policy_action needed because this is operational optimization, not governance compliance. Total: 2 subtasks for minimum coverage."
+  },
+  "node_results": [
+    {
+      "subtask_id": "aws_spend_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 460,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9535,
+      "output": {
+        "raw_output": "{\"sql\": \"SELECT\\n  cf.product AS service_region,\\n  cf.publisher,\\n  DATE_TRUNC('month', cf.event_date) AS spend_month,\\n  SUM(cf.amount_usd) AS actual_spend_usd,\\n  COUNT(DISTINCT cf.license_id) AS active_licenses,\\n  AVG(cf.daily_active_seats) AS avg_daily_active_seats,\\n  MAX(cf.daily_active_seats) AS max_daily_active_seats,\\n  SUM(SUM(cf.amount_usd)) OVER (\\n    PARTITION BY cf.product, cf.publisher\\n    ORDER BY DATE_TRUNC('month', cf.event_date)\\n    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW\\n  ) AS cumulative_spend_usd,\\n  LAG(SUM(cf.amount_usd)) OVER (\\n    PARTITION BY cf.product, cf.publisher\\n    ORDER BY DATE_TRUNC('month', cf.event_date)\\n  ) AS prior_month_spend_usd,\\n  SUM(cf.amount_usd) - LAG(SUM(cf.amount_usd)) OVER (\\n    PARTITION BY cf.product, cf.publisher\\n    ORDER BY DATE_TRUNC('month', cf.event_date)\\n  ) AS mom_spend_change_usd,\\n  CASE\\n    WHEN LAG(SUM(cf.amount_usd)) OVER (\\n      PARTITION BY cf.product, cf.publisher\\n      ORDER BY DATE_TRUNC('month', cf.event_date)\\n    ) > 0\\n    THEN ROUND(\\n      (SUM(cf.amount_usd) - LAG(SUM(cf.amount_usd)) OVER (\\n        PARTITION BY cf.product, cf.publisher\\n        ORDER BY DATE_TRUNC('month', cf.event_date)\\n      )) / LAG(SUM(cf.amount_usd)) OVER (\\n        PARTITION BY cf.product, cf.publisher\\n        ORDER BY DATE_TRUNC('month', cf.event_date)\\n      ) * 100, 2\\n    )\\n    ELSE NULL\\n  END AS mom_pct_change,\\n  committed.committed_amount_usd,\\n  committed.contract_count,\\n  ROUND(\\n    CASE\\n      WHEN committed.committed_amount_usd > 0\\n      THEN SUM(cf.amount_usd) / committed.committed_amount_usd * 100\\n      ELSE NULL\\n    END, 2\\n  ) AS utilization_pct,\\n  CASE\\n    WHEN committed.committed_amount_usd IS NULL THEN 'No Contract'\\n    WHEN SUM(cf.amount_usd) > committed.committed_amount_usd * 1.10 THEN 'Overcommitment Risk'\\n    WHEN SUM(cf.amount_usd) < committed.committed_amount_usd * 0.80 THEN 'Underutilized'\\n    ELSE 'On Track'\\n  END AS utilization_status\\nFROM consumption_facts cf\\nLE"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_commitment",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1092,
+      "output_tokens": 86,
+      "cached_tokens": 0,
+      "latency_ms": 2551,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "NO_MONGO_SOURCE_DETECTED",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "error",
+            "recommendation": "No MongoDB operational data was provided as primary source. Cannot perform LEFT JOIN reconciliation without MongoDB output. Please supply MongoDB contracted commitment records as the primary input."
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.017946,
+  "total_latency_ms": 12086,
+  "cumulative_spend_usd": 0.32384500000000005,
+  "evaluator_reason": "no_mongo_node"
+}

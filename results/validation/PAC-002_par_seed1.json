@@ -1,0 +1,51 @@
+{
+  "task_id": "PAC-002",
+  "task_class": "policy_action",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "Engineer 'u_7732' attempts to deploy a hotfix to production environment 'prod-us-east-1' outside of the approved maintenance window (current time: 2:15 AM UTC Tuesday).",
+        "specialist": "policy_action",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 540,
+      "output_tokens": 211,
+      "cached_tokens": 0,
+      "latency_ms": 2012,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-401": "pass",
+          "POL-402": "fail",
+          "POL-403": "fail"
+        },
+        "reason": "Deployment denied: Current time (Tuesday 02:15 UTC) falls outside approved maintenance window (Saturday 10 PM - Sunday 6 AM UTC). POL-402 requires CAB approval for out-of-window production deployments. User role 'engineer' satisfies POL-401 requirements, but temporal and approval constraints block action.",
+        "applied_constraints": [
+          "Production deployment blocked outside maintenance window",
+          "Change Advisory Board (CAB) approval required to proceed",
+          "Approved maintenance window: Saturday 22:00 - Sunday 06:00 UTC"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001595,
+  "total_latency_ms": 2012,
+  "cumulative_spend_usd": 0.5682149999999999,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

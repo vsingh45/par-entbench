@@ -1,0 +1,94 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_datadog_license_data",
+        "description": "Query Datadog license allocation data including tier, user count, instance count, and active service allocations from the SaaS entitlement tracking system",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_datadog_usage_metrics",
+        "description": "Retrieve Datadog actual usage metrics including DAU/MAU, instances monitored, logs ingested, and custom metrics usage with daily granularity over the past 12 months",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_analyze_trends",
+        "description": "Reconcile license allocations against actual usage metrics, calculate utilization rates, identify growth patterns, gap analysis, and generate trend classifications (overprovisioned/underutilized/optimized) with month-over-month growth rate analysis",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "fetch_datadog_license_data",
+          "fetch_datadog_usage_metrics"
+        ]
+      }
+    ],
+    "cost_rationale": "This analysis requires three parallel data-collection tasks followed by sophisticated reconciliation. The sql_gen (mid tier) retrieves license allocation data from relational tables with standard joins. The mongo_query (mid tier) fetches time-series usage metrics and aggregations. The cross_recon task (frontier) performs complex reconciliation: aligning two data sources with different schemas, calculating multi-signal utilization ratios, time-series growth analysis with trend inference, and generating posture classifications\u2014all requiring higher reasoning. The plan is minimal: it avoids unnecessary intermediate transforms and combines all analysis outputs into a single cross_recon subtask rather than splitting into separate reporting tasks."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_datadog_license_data",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 466,
+      "output_tokens": 171,
+      "cached_tokens": 0,
+      "latency_ms": 4011,
+      "output": {
+        "sql": "SELECT publisher, product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS total_amount_usd, SUM(daily_active_seats) AS total_daily_active_seats, COUNT(DISTINCT license_id) AS license_count, COUNT(DISTINCT user_id) AS distinct_users, COUNT(event_id) AS total_events, AVG(daily_active_seats) AS avg_daily_active_seats, AVG(amount_usd) AS avg_amount_usd FROM consumption_facts WHERE publisher ILIKE '%datadog%' GROUP BY publisher, product, fiscal_year, fiscal_quarter ORDER BY fiscal_year DESC, fiscal_quarter DESC, total_amount_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_datadog_usage_metrics",
+      "specialist": "mongo_query",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1228,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9081,
+      "output": {
+        "collection": "sam_licenses"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_analyze_trends",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 766,
+      "output_tokens": 56,
+      "cached_tokens": 0,
+      "latency_ms": 1161,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "datadog",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.024876999999999996,
+  "total_latency_ms": 14253,
+  "cumulative_spend_usd": 0.20890500000000004,
+  "evaluator_reason": "stage1_mongo_fail: no_pipeline_in_output"
+}

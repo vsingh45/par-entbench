@@ -1,0 +1,94 @@
+{
+  "task_id": "XR-002",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_active_contracts",
+        "description": "Query MongoDB to fetch all active billing contracts with contract ID, vendor, contract start/end dates, and contracted annual value (CAV). Filter for contracts with active status.",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_2024_invoices",
+        "description": "Query SQL warehouse to retrieve all invoices issued in 2024, grouped by contract ID, with total invoice amount per contract. Include contract identifier for matching.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_variance",
+        "description": "Reconcile contracted annual values (from MongoDB) against actual 2024 invoice totals (from SQL). Calculate variance percentage for each contract. Flag contracts with material variance exceeding 10% threshold. Classify variance direction (over/under) and generate variance analysis with flagged contract list.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "mongo_active_contracts",
+          "sql_2024_invoices"
+        ]
+      }
+    ],
+    "cost_rationale": "Three-subtask plan required: (1) MongoDB query of active contracts (small: straightforward filter and field selection), (2) SQL aggregation of 2024 invoices by contract (small: single-table aggregation with date filter), (3) Cross-reconciliation of two sources with variance calculation and flagging logic (mid: requires matching contract IDs across sources, calculating percentages, applying threshold logic, and generating classification/analysis output). The cross_recon tier is mid because it combines two source results, performs mathematical operations, applies conditional flagging, and produces an actionable recommendation set\u2014beyond simple lookup capability. No policy_action needed because variance flagging is analytical classification, not governance policy evaluation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_active_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1235,
+      "output_tokens": 64,
+      "cached_tokens": 0,
+      "latency_ms": 722,
+      "output": {
+        "collection": "billing_contracts",
+        "pipeline": [
+          {
+            "$match": {
+              "status": "active"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_2024_invoices",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 478,
+      "output_tokens": 88,
+      "cached_tokens": 0,
+      "latency_ms": 1097,
+      "output": {
+        "sql": "SELECT contract_id, SUM(amount_usd) AS total_invoice_amount_2024, COUNT(*) AS invoice_count FROM invoice_facts WHERE invoice_date >= '2024-01-01' AND invoice_date < '2025-01-01' GROUP BY contract_id ORDER BY contract_id"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_variance",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 421,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 11407,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"CONTRACT-1001\",\n      \"mongo_value\": {\n        \"contract_id\": \"CONTRACT-1001\",\n        \"status\": \"active\",\n        \"contracted_annual_value_usd\": 120000,\n        \"client_name\": \"Acme Corp\",\n        \"contract_start_date\": \"2023-03-01\",\n        \"contract_end_date\": \"2025-02-28\"\n      },\n      \"sql_value\": {\n        \"total_invoice_amount_2024\": 118500,\n        \"invoice_count\": 12\n      },\n      \"variance_usd\": -1500,\n      \"variance_pct\": -1.25,\n      \"variance_direction\": \"under\",\n      \"material_flag\": false,\n      \"classification\": \"stable\"\n    },\n    {\n      \"entity_key\": \"CONTRACT-1002\",\n      \"mongo_value\": {\n        \"contract_id\": \"CONTRACT-1002\",\n        \"status\": \"active\",\n        \"contracted_annual_value_usd\": 240000,\n        \"client_name\": \"Globex Industries\",\n        \"contract_start_date\": \"2022-07-01\",\n        \"contract_end_date\": \"2025-06-30\"\n      },\n      \"sql_value\": {\n        \"total_invoice_amount_2024\": 198000,\n        \"invoice_count\": 11\n      },\n      \"variance_usd\": -42000,\n      \"variance_pct\": -17.5,\n      \"variance_direction\": \"under\",\n      \"material_flag\": true,\n      \"classification\": \"at_risk\"\n    },\n    {\n      \"entity_key\": \"CONTRACT-1003\",\n      \"mongo_value\": {\n        \"contract_id\": \"CONTRACT-1003\",\n        \"status\": \"active\",\n        \"contracted_annual_value_usd\": 60000,\n        \"client_name\": \"Initech Solutions\",\n        \"contract_start_date\": \"2024-01-15\",\n        \"contract_end_date\": \"2025-01-14\"\n      },\n      \"sql_value\": {\n        \"total_invoice_amount_2024\": 68400,\n        \"invoice_count\": 12\n      },\n      \"variance_usd\": 8400,\n      \"variance_pct\": 14.0,\n      \"variance_direction\": \"over\",\n      \"material_flag\": true,\n      \"classification\": \"growing\"\n    },\n    {\n      \"entity_key\": \"CONTRACT-1004\",\n      \"mongo_value\": {\n        \"contract_id\": \"CONTRACT-1004\",\n        \"status\": \"active\",\n        \"contracted_annual_value_usd\": 360000,\n        \"client_name\": \"Umbrella Enterprises\",\n        \"contract_start_date\": \"2021-11-01\",\n        \"contract_end_date\": \"2026-10-31\"\n      },\n      \"sql_value\": {\n        \"total_invoice_amount_2024\": 361800,\n        \"invoice_count\": 12\n      },\n      \"variance_usd\": 1800,\n      \"variance_pct\": 0.5,\n      \"variance_direction\": \""
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.015736,
+  "total_latency_ms": 13226,
+  "cumulative_spend_usd": 0.339581,
+  "evaluator_reason": "ok"
+}

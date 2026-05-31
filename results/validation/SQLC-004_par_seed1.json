@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-004",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "vendor_risk_query",
+        "description": "Query vendor reliability data to retrieve vendor IDs, reliability metrics, incident counts, and SLA compliance rates",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "vendor_risk_classification",
+        "description": "Classify each vendor as low_risk, medium_risk, or high_risk based on incident history, reliability metrics, and SLA compliance; assign risk scores",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "vendor_risk_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (small tier) to query vendor data from a single source\u2014straightforward multi-column SELECT with filtering/aggregation on incident and reliability tables. (2) cross_recon (mid tier) to classify vendors by risk based on the query results\u2014this involves multi-signal reconciliation (incidents, SLA, reliability metrics) and posture classification, which is within cross_recon's scope and warrants mid-tier reasoning to handle decision thresholds and classification logic. No additional policy_action needed since risk classification is analytical, not a governance approval. No unnecessary subtasks\u2014the query results feed directly into classification without intermediate steps."
+  },
+  "node_results": [
+    {
+      "subtask_id": "vendor_risk_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 468,
+      "output_tokens": 270,
+      "cached_tokens": 0,
+      "latency_ms": 1866,
+      "output": {
+        "sql": "SELECT vendor_name, COUNT(DISTINCT invoice_id) as total_invoices, SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as paid_count, ROUND(100.0 * SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) / NULLIF(COUNT(DISTINCT invoice_id), 0), 2) as sla_compliance_rate, COUNT(CASE WHEN status NOT IN ('paid', 'pending') THEN 1 END) as incident_count, CASE WHEN COUNT(CASE WHEN status NOT IN ('paid', 'pending') THEN 1 END) = 0 THEN 'low_risk' WHEN COUNT(CASE WHEN status NOT IN ('paid', 'pending') THEN 1 END) <= 2 THEN 'medium_risk' ELSE 'high_risk' END as vendor_risk_classification FROM invoice_facts GROUP BY vendor_name ORDER BY incident_count DESC, sla_compliance_rate ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "vendor_risk_classification",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 542,
+      "output_tokens": 509,
+      "cached_tokens": 0,
+      "latency_ms": 9281,
+      "output": {
+        "raw_output": "I need to reconcile the SQL results with MongoDB data. Since no MongoDB operational data was explicitly provided in the upstream outputs, I'll treat the SQL result as the primary historical source and apply LEFT JOIN semantics \u2014 but since the task specifies MongoDB as primary and no MongoDB payload was returned, I'll construct the reconciliation using the SQL classifications as the authoritative signal, flagging missing MongoDB context with nulls, and deriving risk scores from the available SQL metrics.\n\nBased on the SQL schema and logic provided, here is the reconciled output with synthetic risk scoring derived from `incident_count` and `sla_compliance_rate`:\n\n```json\n{\"reconciled\": [{\"entity_key\": \"vendor_risk_query\", \"mongo_value\": null, \"sql_value\": {\"query\": \"SELECT vendor_name, COUNT(DISTINCT invoice_id) as total_invoices, SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as paid_count, ROUND(100.0 * SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) / NULLIF(COUNT(DISTINCT invoice_id), 0), 2) as sla_compliance_rate, COUNT(CASE WHEN status NOT IN ('paid', 'pending') THEN 1 END) as incident_count, CASE WHEN COUNT(CASE WHEN status NOT IN ('paid', 'pending') THEN 1 END) = 0 THEN 'low_risk' WHEN COUNT(CASE WHEN status NOT IN ('paid', 'pending') THEN 1 END) <= 2 THEN 'medium_risk' ELSE 'high_risk' END as vendor_risk_classification FROM invoice_facts GROUP BY vendor_name ORDER BY incident_count DESC, sla_compliance_rate ASC\", \"status\": \"query_defined_no_rows_returned\"}, \"classification\": \"no_recent_activity\", \"risk_score\": null, \"risk_classification\": null, \"note\": \"MongoDB operational data absent; SQL returned query definition only with no result rows. Cannot assign vendor-level risk scores without executed SQL output or MongoDB reliability metrics. Awaiting data hydration.\"}]}"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.011079,
+  "total_latency_ms": 11147,
+  "cumulative_spend_usd": 0.135016,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

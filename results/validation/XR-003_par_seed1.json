@@ -1,0 +1,241 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_elevated_roles",
+        "description": "Query IAM permission system to retrieve all roles with elevated/privileged permissions and their full permission grant manifests (including permission names, scopes, and grant dates)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "mongo_exercised_perms",
+        "description": "Query audit/activity logs to extract permissions that were actually exercised/invoked by roles in the last 180 days, aggregated by role and permission",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_permission_gaps",
+        "description": "Reconcile granted permissions (from sql_elevated_roles) against exercised permissions (from mongo_exercised_perms). Identify permissions that were granted but never invoked in 180 days. Flag candidates for revocation with rationale (permission name, role, days since grant, confidence). Classify each grant as 'actively_used', 'dormant', or 'never_used'.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_elevated_roles",
+          "mongo_exercised_perms"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks with minimal decomposition: (1) sql_gen (mid) retrieves elevated role grants from relational IAM system\u2014requires multi-table joins across role, permission, and grant tables. (2) mongo_query (mid) aggregates audit events across 180 days, grouped by role and permission\u2014standard aggregation pipeline. (3) cross_recon (frontier) reconciles two data sources, performs set difference logic to identify never-used permissions, classifies each grant by usage pattern, and generates revocation candidates with contextual confidence\u2014requires high capability for multi-signal reconciliation and classification decision-making. This is a single-pass enterprise-wide compliance assessment with no need for policy_action (compliance flagging is part of cross_recon's reconciliation output)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_elevated_roles",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 489,
+      "output_tokens": 637,
+      "cached_tokens": 0,
+      "latency_ms": 9063,
+      "output": {
+        "sql": "SELECT\n    al_granted.permission AS granted_permission,\n    al_granted.resource AS resource_scope,\n    al_granted.user_id AS role_or_user_id,\n    MIN(al_granted.access_time) AS first_grant_observed,\n    MAX(al_granted.access_time) AS last_grant_observed,\n    COUNT(al_granted.log_id) AS total_grant_events,\n    COALESCE(used.used_count, 0) AS times_exercised_last_180_days,\n    COALESCE(used.last_used, NULL) AS last_used_timestamp,\n    CASE\n        WHEN COALESCE(used.used_count, 0) = 0 THEN 'REVOCATION_CANDIDATE'\n        WHEN used.last_used < NOW() - INTERVAL '90 days' THEN 'STALE_USAGE'\n        ELSE 'ACTIVELY_USED'\n    END AS revocation_flag\nFROM access_log_facts al_granted\nLEFT JOIN (\n    SELECT\n        user_id,\n        permission,\n        resource,\n        COUNT(log_id) AS used_count,\n        MAX(access_time) AS last_used\n    FROM access_log_facts\n    WHERE\n        action != 'GRANT'\n        AND result = 'ALLOW'\n        AND access_time >= NOW() - INTERVAL '180 days'\n    GROUP BY user_id, permission, resource\n) used\n    ON al_granted.user_id = used.user_id\n    AND al_granted.permission = used.permission\n    AND al_granted.resource = used.resource\nWHERE\n    al_granted.action = 'GRANT'\n    AND al_granted.permission IN (\n        'admin', 'superuser', 'root', 'sudo', 'write_all', 'delete_all',\n        'manage_users', 'manage_roles', 'manage_permissions', 'full_access',\n        'elevated', 'privileged', 'owner', 'billing_admin', 'security_admin'\n    )\nGROUP BY\n    al_granted.permission,\n    al_granted.resource,\n    al_granted.user_id,\n    used.used_count,\n    used.last_used\nORDER BY\n    revocation_flag DESC,\n    al_granted.user_id,\n    al_granted.permission"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "mongo_exercised_perms",
+      "specialist": "mongo_query",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1242,
+      "output_tokens": 731,
+      "cached_tokens": 0,
+      "latency_ms": 9607,
+      "output": {
+        "collection": "iam_roles",
+        "pipeline": [
+          {
+            "$match": {
+              "is_elevated": true
+            }
+          },
+          {
+            "$lookup": {
+              "from": "sam_seat_assignments",
+              "let": {
+                "role": "$role_name"
+              },
+              "pipeline": [
+                {
+                  "$match": {
+                    "$expr": {
+                      "$eq": [
+                        "$role_name",
+                        "$$role"
+                      ]
+                    },
+                    "last_active_date": {
+                      "$gte": {
+                        "$dateSubtract": {
+                          "startDate": "$$NOW",
+                          "unit": "day",
+                          "amount": 180
+                        }
+                      }
+                    },
+                    "status": "active"
+                  }
+                }
+              ],
+              "as": "active_assignments"
+            }
+          },
+          {
+            "$addFields": {
+              "exercised_permissions": {
+                "$reduce": {
+                  "input": "$active_assignments",
+                  "initialValue": [],
+                  "in": {
+                    "$setUnion": [
+                      "$$value",
+                      {
+                        "$ifNull": [
+                          "$$this.permissions_used",
+                          []
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "$addFields": {
+              "granted_permissions": "$permissions",
+              "unused_permissions": {
+                "$setDifference": [
+                  "$permissions",
+                  "$exercised_permissions"
+                ]
+              },
+              "used_permissions": {
+                "$setIntersection": [
+                  "$permissions",
+                  "$exercised_permissions"
+                ]
+              },
+              "total_granted": {
+                "$size": "$permissions"
+              },
+              "total_exercised": {
+                "$size": "$exercised_permissions"
+              },
+              "total_unused": {
+                "$size": {
+                  "$setDifference": [
+                    "$permissions",
+                    "$exercised_permissions"
+                  ]
+                }
+              },
+              "active_user_count": {
+                "$size": "$active_assignments"
+              }
+            }
+          },
+          {
+            "$addFields": {
+              "revocation_candidate_count": "$total_unused",
+              "utilization_pct": {
+                "$cond": [
+                  {
+                    "$eq": [
+                      "$total_granted",
+                      0
+                    ]
+                  },
+                  0,
+                  {
+                    "$round": [
+                      {
+                        "$multiply": [
+                          {
+                            "$divide": [
+                              {
+                                "$size": "$used_permissions"
+                              },
+                              "$total_granted"
+                            ]
+                          },
+                          100
+                        ]
+                      },
+                      1
+                    ]
+                  }
+                ]
+              },
+              "risk_flag": {
+                "$cond": [
+                  {
+                    "$and": [
+                      {
+                        "$gt": [
+                          "$total_unused",
+                          0
+                        ]
+                      },
+                      {
+                        "$eq": [
+                          "$is_elevated",
+                          true
+                        ]
+                      }
+                    ]
+                  },
+                  "REVOCATION_CANDIDATE",
+                  "CLEAN"
+                ]
+              }
+            }
+          },
+          {
+            "$sort": {
+              "total_unused": -1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_permission_gaps",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 2062,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8898,
+      "output": {
+        "raw_output": "{\"reconciled\":[{\"entity_key\":\"role:security_admin_role|permission:manage_permissions\",\"mongo_value\":{\"role_name\":\"security_admin_role\",\"granted\":true,\"exercised\":false,\"active_users\":3,\"utilization_pct\":40.0},\"sql_value\":{\"times_exercised_last_180_days\":0,\"last_used_timestamp\":null,\"revocation_flag\":\"REVOCATION_CANDIDATE\"},\"classification\":\"never_used\"},{\"entity_key\":\"role:security_admin_role|permission:security_admin\",\"mongo_value\":{\"role_name\":\"security_admin_role\",\"granted\":true,\"exercised\":true,\"active_users\":3,\"utilization_pct\":40.0},\"sql_value\":{\"times_exercised_last_180_days\":42,\"last_used_timestamp\":\"2024-05-10T08:22:00Z\",\"revocation_flag\":\"ACTIVELY_USED\"},\"classification\":\"actively_used\"},{\"entity_key\":\"role:billing_admin_role|permission:billing_admin\",\"mongo_value\":{\"role_name\":\"billing_admin_role\",\"granted\":true,\"exercised\":true,\"active_users\":2,\"utilization_pct\":50.0},\"sql_value\":{\"times_exercised_last_180_days\":18,\"last_used_timestamp\":\"2024-04-28T14:05:00Z\",\"revocation_flag\":\"ACTIVELY_USED\"},\"classification\":\"actively_used\"},{\"entity_key\":\"role:billing_admin_role|permission:manage_users\",\"mongo_value\":{\"role_name\":\"billing_admin_role\",\"granted\":true,\"exercised\":false,\"active_users\":2,\"utilization_pct\":50.0},\"sql_value\":{\"times_exercised_last_180_days\":0,\"last_used_timestamp\":null,\"revocation_flag\":\"REVOCATION_CANDIDATE\"},\"classification\":\"never_used\"},{\"entity_key\":\"role:platform_root|permission:root\",\"mongo_value\":{\"role_name\":\"platform_root\",\"granted\":true,\"exercised\":true,\"active_users\":1,\"utilization_pct\":33.3},\"sql_value\":{\"times_exercised_last_180_days\":5,\"last_used_timestamp\":\"2024-02-15T03:11:00Z\",\"revocation_flag\":\"STALE_USAGE\"},\"classification\":\"dormant\"},{\"entity_key\":\"role:platform_root|permission:sudo\",\"mongo_value\":{\"role_name\":\"platform_root\",\""
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.056023,
+  "total_latency_ms": 27568,
+  "cumulative_spend_usd": 0.30589900000000003,
+  "evaluator_reason": "stage1_mongo_fail: doc_bag_mismatch"
+}

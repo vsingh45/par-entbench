@@ -1,0 +1,55 @@
+{
+  "task_id": "PAC-003",
+  "task_class": "policy_action",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_emergency_access",
+        "description": "Evaluate emergency access request from u_9981 (senior-engineer role) to db-payments-primary against access control and incident-response policies. Verify requestor eligibility, incident severity justification (P1), approved access window, and any required additional approvals or audit conditions.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single subtask: This is a straightforward policy evaluation task requiring one policy_action call. The query explicitly requests governance/access control decision (emergency access approval) against policy registry. Mid tier is appropriate because it requires evaluating multiple policy criteria (user role eligibility, incident severity verification, access controls, approval chain) and determining conditional grant/denial with audit requirements, not a simple single-rule check. No cross-recon, cross-source reconciliation, or multi-tool orchestration is needed\u2014this is purely a policy decision gate."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_emergency_access",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 567,
+      "output_tokens": 478,
+      "cached_tokens": 0,
+      "latency_ms": 10322,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-501": "pass",
+          "POL-502": "pass_conditional",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "User u_9981 (senior-engineer) holds an active P1 incident ticket INC-20241215-0042, satisfying POL-501's requirement for an active incident ticket in lieu of DBA role. POL-502's dual-approval requirement is waived under the declared P1 incident exception, but access must be time-bounded and scoped to read_write operations necessary for incident investigation only. POL-503 mandates that this emergency access grant be fully logged and subject to mandatory post-incident review within 24 hours of access closure.",
+        "applied_constraints": [
+          "Access is strictly time-limited to the duration of incident INC-20241215-0042; must be revoked immediately upon P1 incident resolution or within 4 hours, whichever comes first.",
+          "All queries and write operations executed against db-payments-primary during this session must be captured in the audit log with full statement-level logging enabled.",
+          "Read_write scope must be limited to tables and schemas directly relevant to the P1 incident investigation; bulk exports and schema modifications are prohibited.",
+          "Incident ticket INC-20241215-0042 must remain in active/open status for the duration of the access window; automatic revocation triggers if ticket is closed.",
+          "A post-incident access review must be completed within 24 hours of access closure per POL-503, including review by a DBA and the user's manager.",
+          "An automated alert must be dispatched to the security operations team and on-call DBA at time of access grant for real-time oversight.",
+          "If incident severity is downgraded from P1 to a lower severity during the session, dual-approval per POL-502 must be obtained immediately or access must be revoked."
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.008871,
+  "total_latency_ms": 10322,
+  "cumulative_spend_usd": 0.5655659999999999,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

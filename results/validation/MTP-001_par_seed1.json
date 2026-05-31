@@ -1,0 +1,180 @@
+{
+  "task_id": "MTP-001",
+  "task_class": "multitool_plan",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_ms_licenses",
+        "description": "Query MongoDB to count total Microsoft licenses and retrieve license inventory details",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_ms_spend",
+        "description": "Query Snowflake to calculate last month's Microsoft spend (invoices, billing records, or vendor spend table)",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "email_sam_summary",
+        "description": "Compose and send email summary to SAM team with license count and last month's spend data",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "mongo_ms_licenses",
+          "sql_ms_spend"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) MongoDB query for license inventory \u2014 straightforward count operation, small tier sufficient; (2) Snowflake query for monthly spend \u2014 single-table or simple join filtering by vendor and date range, small tier sufficient; (3) Email composition and dispatch \u2014 requires multitool_plan to orchestrate email send from enterprise tool registry. All tasks are simple, single-tool operations requiring small-tier models. Dependencies are linear: data retrieval tasks run in parallel, then email generation depends on both results.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_ms_licenses",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1214,
+      "output_tokens": 200,
+      "cached_tokens": 0,
+      "latency_ms": 1397,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Microsoft"
+            }
+          },
+          {
+            "$group": {
+              "_id": null,
+              "total_count": {
+                "$sum": 1
+              },
+              "total_contract_value": {
+                "$sum": "$contract_value_usd"
+              },
+              "total_seats": {
+                "$sum": "$seat_count"
+              }
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_ms_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 471,
+      "output_tokens": 96,
+      "cached_tokens": 0,
+      "latency_ms": 965,
+      "output": {
+        "sql": "SELECT vendor_name, SUM(amount_usd) as total_spend, COUNT(*) as invoice_count FROM invoice_facts WHERE vendor_name = 'Microsoft' AND invoice_date >= CURRENT_DATE - INTERVAL '1 month' AND invoice_date < DATE_TRUNC('month', CURRENT_DATE) GROUP BY vendor_name"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "email_sam_summary",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 624,
+      "output_tokens": 668,
+      "cached_tokens": 0,
+      "latency_ms": 3919,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "resource": "email.send",
+              "action": "send_to_sam_team"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "mongo.aggregate",
+            "arguments": {
+              "collection": "sam_licenses",
+              "pipeline": [
+                {
+                  "$match": {
+                    "publisher": "Microsoft"
+                  }
+                },
+                {
+                  "$group": {
+                    "_id": null,
+                    "total_count": {
+                      "$sum": 1
+                    },
+                    "total_contract_value": {
+                      "$sum": "$contract_value_usd"
+                    },
+                    "total_seats": {
+                      "$sum": "$seat_count"
+                    }
+                  }
+                }
+              ]
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "sql.snowflake.query",
+            "arguments": {
+              "query": "SELECT vendor_name, SUM(amount_usd) as total_spend, COUNT(*) as invoice_count FROM invoice_facts WHERE vendor_name = 'Microsoft' AND invoice_date >= CURRENT_DATE - INTERVAL '1 month' AND invoice_date < DATE_TRUNC('month', CURRENT_DATE) GROUP BY vendor_name"
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "email.send",
+            "arguments": {
+              "to": "sam-team@company.com",
+              "subject": "Microsoft License & Spend Summary Report",
+              "body": "SAM Team,\n\nHere is the Microsoft license and spend summary:\n\nLICENSE INVENTORY:\n- Total Licenses: $2.total_count\n- Total Contract Value: $2.total_contract_value\n- Total Seats: $2.total_seats\n\nLAST MONTH SPEND (Microsoft):\n- Vendor: $3.vendor_name\n- Total Spend: $3.total_spend\n- Invoice Count: $3.invoice_count\n\nBest regards,\nSAM Automation"
+            },
+            "depends_on": [
+              2,
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "email_sent",
+              "resource": "sam_team",
+              "details": "License and spend summary email sent to SAM team with Microsoft license count and last month's spend data",
+              "status": "success"
+            },
+            "depends_on": [
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007129,
+  "total_latency_ms": 6281,
+  "cumulative_spend_usd": 0.508475,
+  "evaluator_reason": "missing_tools: {'mongo.find'}"
+}
