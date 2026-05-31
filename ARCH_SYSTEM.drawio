@@ -1,0 +1,101 @@
+<mxfile host="draw.io" modified="2026-05-31T11:10:00.000Z" agent="Claude" version="1.0" type="device">
+  <diagram id="system-arch" name="System Architecture">
+    <mxGraphModel dx="1000" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="600" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="PaR-EntBench: System Architecture" style="text;fontSize=18;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="0" y="20" width="1000" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- User Query -->
+        <mxCell id="user" value="User Query&#xa;task definition" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f4f8;strokeColor=#2c3e50;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="50" y="80" width="150" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Planner -->
+        <mxCell id="planner" value="Planner&#xa;Haiku 4.5" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f4f8;strokeColor=#2c3e50;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="280" y="80" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow user to planner -->
+        <mxCell id="arrow1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="user" target="planner">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Router -->
+        <mxCell id="router" value="Router&#xa;PaR / FrugalCascade&#xa;AllSmall / AllFrontier&#xa;SinkFrontier..." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f4f8;strokeColor=#2c3e50;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="520" y="60" width="160" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow planner to router -->
+        <mxCell id="arrow2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="planner" target="router">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Dispatcher -->
+        <mxCell id="dispatcher" value="Dispatcher&#xa;tier assign" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f4f8;strokeColor=#2c3e50;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="760" y="80" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow router to dispatcher -->
+        <mxCell id="arrow3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="router" target="dispatcher">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Specialists -->
+        <mxCell id="specialists" value="Specialists&#xa;SQL, Mongo, Extract&#xa;MultiTool, Policy&#xa;CrossRecon" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f4f8;strokeColor=#2c3e50;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="100" y="250" width="140" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Databases -->
+        <mxCell id="databases" value="Live Data&#xa;Postgres, MongoDB" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3cd;strokeColor=#856404;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="340" y="270" width="120" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow dispatcher to specialists -->
+        <mxCell id="arrow4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="dispatcher" target="specialists">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow specialists to databases -->
+        <mxCell id="arrow5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="specialists" target="databases">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Evaluators -->
+        <mxCell id="evaluators" value="Evaluators&#xa;Task-specific&#xa;execution-based&#xa;F1, accuracy, cost" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f4f8;strokeColor=#2c3e50;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="560" y="250" width="140" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow databases to evaluators -->
+        <mxCell id="arrow6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="databases" target="evaluators">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Results -->
+        <mxCell id="results" value="Results&#xa;Per-node metrics&#xa;accuracy, cost,&#xa;latency, ρ" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f4f8;strokeColor=#2c3e50;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="800" y="250" width="140" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow evaluators to results -->
+        <mxCell id="arrow7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="evaluators" target="results">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Analysis -->
+        <mxCell id="analysis" value="Analysis&#xa;Accuracy, cost, Pareto&#xa;ρ composition penalty" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f4f8;strokeColor=#2c3e50;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="400" y="420" width="200" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow results to analysis -->
+        <mxCell id="arrow8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="results" target="analysis">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

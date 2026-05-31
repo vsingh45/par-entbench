@@ -42,11 +42,15 @@ Click the badge above to open the interactive architecture diagram in draw.io vi
 
 ![PaR-EntBench System Architecture](./ARCH_SYSTEM.svg)
 
+**Edit in draw.io:** [Click here](https://app.diagrams.net/?url=https://raw.githubusercontent.com/vsingh45/par-entbench/main/ARCH_SYSTEM.drawio) · **Files:** [SVG](./ARCH_SYSTEM.svg) | [draw.io](./ARCH_SYSTEM.drawio)
+
 *Shows the data flow from user query through planner, routers, specialists, live databases, evaluators, and final analysis. The key insight: **planner (Haiku 4.5) and specialist infrastructure are held fixed** across all routers — only the **tier assignment strategy** changes.*
 
 ### Execution-Based Evaluation Pipeline
 
 ![Evaluation Pipeline](./EVAL_PIPELINE.svg)
+
+**Edit in draw.io:** [Click here](https://app.diagrams.net/?url=https://raw.githubusercontent.com/vsingh45/par-entbench/main/EVAL_PIPELINE.drawio) · **Files:** [SVG](./EVAL_PIPELINE.svg) | [draw.io](./EVAL_PIPELINE.drawio)
 
 *The 6-step pipeline that makes EntBench execution-based rather than reference-based: task definition → planner + router → specialist execution → live database hit → task-specific evaluator → logged result. Each task's verdict depends on real Postgres/MongoDB execution, not just model output comparison.*
 
