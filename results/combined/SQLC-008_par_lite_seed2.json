@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "par_lite",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_budget_analysis",
+        "description": "Query budget allocation by product category with cost trends (YoY/QoQ growth rates, spend distribution, variance analysis). Generate SQL with CTEs to compute category-level aggregations, rolling trends, and variance metrics.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_strategy",
+        "description": "Reconcile budget allocation data with historical spend patterns and cost drivers. Perform posture analysis on each category (growth, decline, efficiency). Generate reallocation recommendations prioritizing high ROI categories and cost optimization opportunities.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_budget_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid) queries budget data by category with trend calculations\u2014multi-table joins and aggregation justify mid tier. (2) cross_recon (frontier) synthesizes SQL results with domain logic to classify category postures and generate reallocation strategy\u2014requires inference over trends and multi-signal reasoning, justifying frontier capability. No policy_action needed: recommendation is strategic analysis, not governance approval. No multitool_plan: single workflow within SQL + reconciliation logic."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_budget_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 478,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9717,
+      "output": {
+        "raw_output": "{\"sql\": \"WITH category_quarterly AS (\\n  SELECT\\n    product,\\n    fiscal_year,\\n    fiscal_quarter,\\n    SUM(amount_usd) AS quarterly_spend,\\n    COUNT(DISTINCT license_id) AS license_count,\\n    AVG(daily_active_seats) AS avg_active_seats,\\n    COUNT(DISTINCT user_id) AS distinct_users\\n  FROM consumption_facts\\n  GROUP BY product, fiscal_year, fiscal_quarter\\n),\\ncategory_annual AS (\\n  SELECT\\n    product,\\n    fiscal_year,\\n    SUM(amount_usd) AS annual_spend,\\n    COUNT(DISTINCT license_id) AS annual_licenses,\\n    AVG(daily_active_seats) AS avg_annual_seats,\\n    COUNT(DISTINCT user_id) AS annual_users\\n  FROM consumption_facts\\n  GROUP BY product, fiscal_year\\n),\\nyoy_growth AS (\\n  SELECT\\n    a.product,\\n    a.fiscal_year,\\n    a.annual_spend,\\n    a.annual_licenses,\\n    a.avg_annual_seats,\\n    a.annual_users,\\n    b.annual_spend AS prev_year_spend,\\n    ROUND(\\n      CASE\\n        WHEN b.annual_spend IS NULL OR b.annual_spend = 0 THEN NULL\\n        ELSE ((a.annual_spend - b.annual_spend) / b.annual_spend) * 100\\n      END, 2\\n    ) AS yoy_growth_pct,\\n    (a.annual_spend - COALESCE(b.annual_spend, 0)) AS yoy_spend_delta\\n  FROM category_annual a\\n  LEFT JOIN category_annual b\\n    ON a.product = b.product\\n    AND a.fiscal_year = b.fiscal_year + 1\\n),\\nqoq_growth AS (\\n  SELECT\\n    a.product,\\n    a.fiscal_year,\\n    a.fiscal_quarter,\\n    a.quarterly_spend,\\n    a.license_count,\\n    a.avg_active_seats,\\n    a.distinct_users,\\n    b.quarterly_spend AS prev_quarter_spend,\\n    ROUND(\\n      CASE\\n        WHEN b.quarterly_spend IS NULL OR b.quarterly_spend = 0 THEN NULL\\n        ELSE ((a.quarterly_spend - b.quarterly_spend) / b.quarterly_spend) * 100\\n      END, 2\\n    ) AS qoq_growth_pct,\\n    (a.quarterly_spend - COALESCE(b.quarterly_spend, 0)) AS qoq_spend_delta\\n  FROM category_quarterly a\\n  LEFT JOIN category_quarterly b\\n    ON a.product = b.product\\n    AND (\\n      (a.fiscal_year = b.fiscal_year AND a.fiscal_quarter = b.fiscal_quarter + 1)\\n      OR (a.fiscal_year = b.fiscal_year + 1 AND a.fiscal_quarter = 1 AND b.fiscal_quarter = 4)\\n    )\\n),\\ntotal_spend_by_"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_strategy",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1679,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 1689,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.022179,
+  "total_latency_ms": 11406,
+  "cumulative_spend_usd": 1.764934000000001,
+  "evaluator_reason": "step1_sql_fail: no_sql_in_output"
+}

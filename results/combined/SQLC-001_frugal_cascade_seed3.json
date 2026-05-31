@@ -1,0 +1,116 @@
+{
+  "task_id": "SQLC-001",
+  "task_class": "sql_compose",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top_publishers",
+        "description": "Generate SQL query to fetch top 5 publishers by spend in Q4 2024 (October-December 2024), ordered by total spend descending",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_risk_assessment",
+        "description": "Reconcile Q4 2024 spend data with publisher performance metrics and contract terms to classify which of the top 5 publishers are at-risk (e.g., spending declining, contract renewal issues, SLA violations, vendor health concerns) and generate risk summary for SAM team",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_top_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (small tier) for a straightforward single-aggregate query filtering Q4 2024 and ranking by spend\u2014no complex CTEs or window functions needed; (2) cross_recon (mid tier) to reconcile the spend results with publisher health signals (contract data, performance metrics, renewal status) and generate risk classification. This tier avoids frontier-level inference but supports multi-signal assessment needed for SAM-focused risk summary. The plan does not include policy_action because risk assessment is part of reconciliation logic, not policy compliance evaluation. Minimal decomposition: both SQL generation and risk synthesis are necessary and cannot be combined into a single call."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 487,
+      "output_tokens": 71,
+      "cached_tokens": 0,
+      "latency_ms": 1288,
+      "output": {
+        "sql": "SELECT publisher, SUM(amount_usd) as total_spend FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date <= '2024-12-31' GROUP BY publisher ORDER BY total_spend DESC LIMIT 5"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_risk_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 381,
+      "output_tokens": 556,
+      "cached_tokens": 0,
+      "latency_ms": 4333,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "publisher_1",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "insufficient_data",
+            "note": "MongoDB operational state not provided in upstream_outputs"
+          },
+          {
+            "entity_key": "publisher_2",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "insufficient_data",
+            "note": "MongoDB operational state not provided in upstream_outputs"
+          },
+          {
+            "entity_key": "publisher_3",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "insufficient_data",
+            "note": "MongoDB operational state not provided in upstream_outputs"
+          },
+          {
+            "entity_key": "publisher_4",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "insufficient_data",
+            "note": "MongoDB operational state not provided in upstream_outputs"
+          },
+          {
+            "entity_key": "publisher_5",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "insufficient_data",
+            "note": "MongoDB operational state not provided in upstream_outputs"
+          }
+        ],
+        "error": "Cannot reconcile: MongoDB query results missing from upstream_outputs. Provide both MongoDB operational state (contract terms, SLA violations, vendor health) and SQL historical spend data for complete at-risk classification.",
+        "required_data_sources": [
+          "MongoDB: publisher contracts, SLA metrics, renewal status, vendor health scores",
+          "SQL: Q4 2024 spend trends, YoY comparison, consumption patterns"
+        ],
+        "sam_team_summary": {
+          "status": "pending_data",
+          "at_risk_criteria": [
+            "spend_declining_qoq",
+            "contract_renewal_within_60_days",
+            "sla_violation_count_gt_0",
+            "vendor_health_score_lt_70",
+            "utilization_below_contracted_baseline"
+          ],
+          "action_required": "Supply MongoDB and actual SQL query results to proceed with reconciliation and risk assessment"
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0040030000000000005,
+  "total_latency_ms": 5621,
+  "cumulative_spend_usd": 0.5704239999999998,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

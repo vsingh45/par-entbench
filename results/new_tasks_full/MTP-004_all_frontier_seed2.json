@@ -1,0 +1,387 @@
+{
+  "task_id": "MTP-004",
+  "task_class": "multitool_plan",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "identify_affected_service",
+        "description": "Query CloudWatch metrics and logs to identify the affected service, extract service name, error patterns, and affected resources from CloudWatch Insights",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_and_extract_logs",
+        "description": "Retrieve error logs from S3 based on the identified service and time window, extract relevant error messages, stack traces, and contextual data",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "identify_affected_service"
+        ]
+      },
+      {
+        "id": "create_slack_channel",
+        "description": "Create a dedicated Slack incident channel with naming convention based on service name and incident timestamp, configure channel topic and permissions",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "identify_affected_service"
+        ]
+      },
+      {
+        "id": "assess_severity",
+        "description": "Analyze CloudWatch metrics (error rate, latency, availability), S3 logs context, and affected service criticality to generate initial severity assessment (Critical/High/Medium/Low) with confidence score",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "identify_affected_service",
+          "fetch_and_extract_logs"
+        ]
+      },
+      {
+        "id": "post_severity_slack",
+        "description": "Format severity assessment results and post initial incident report to Slack channel including service name, severity level, affected components, and recommended immediate actions",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "create_slack_channel",
+          "assess_severity"
+        ]
+      }
+    ],
+    "cost_rationale": "This incident response workflow requires multi-tool orchestration across AWS (CloudWatch, S3), Slack, and analytical capabilities. Five subtasks are minimal and necessary: (1) multitool_plan for CloudWatch inspection (mid tier due to conditional routing based on metrics), (2) multitool_plan for S3 log retrieval (mid tier due to cross-service coordination and data extraction), (3) multitool_plan for Slack channel creation (small tier—straightforward API call), (4) cross_recon to synthesize CloudWatch + S3 findings into severity assessment (mid tier for multi-signal analysis), (5) multitool_plan to post formatted results (small tier). Dependencies enforce correct sequencing: service identification must precede log fetching and channel creation, both of which must complete before severity assessment, which must complete before Slack posting. This avoids redundant calls and respects the enterprise tool registry pattern."
+  },
+  "node_results": [
+    {
+      "subtask_id": "identify_affected_service",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 646,
+      "output_tokens": 477,
+      "cached_tokens": 0,
+      "latency_ms": 6211,
+      "output": {
+        "plan": [
+          {
+            "tool": "datadog.query_metric",
+            "arguments": {
+              "query": "aws.cloudwatch.errors{*} by {service}",
+              "time_range": "last_15m"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "datadog.list_alerts",
+            "arguments": {
+              "filter": {
+                "status": "triggered",
+                "source": "cloudwatch"
+              }
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "sql.snowflake.query",
+            "arguments": {
+              "query": "SELECT service_name, error_pattern, resource_id, COUNT(*) as occurrences FROM cloudwatch_insights_logs WHERE timestamp >= DATEADD(minute, -15, CURRENT_TIMESTAMP()) AND severity IN ('ERROR','CRITICAL') GROUP BY service_name, error_pattern, resource_id ORDER BY occurrences DESC LIMIT 50"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "incident_triage_query",
+              "details": {
+                "metrics": "$1.results",
+                "alerts": "$2.results",
+                "insights": "$3.results"
+              }
+            },
+            "depends_on": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#incident-response",
+              "message": "Incident triage results — Affected services and error patterns: $3.results | Active alerts: $2.results | Error metrics: $1.results"
+            },
+            "depends_on": [
+              3
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_and_extract_logs",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1145,
+      "output_tokens": 766,
+      "cached_tokens": 0,
+      "latency_ms": 8395,
+      "output": {
+        "plan": [
+          {
+            "tool": "sql.snowflake.query",
+            "arguments": {
+              "query": "SELECT service_name, error_pattern FROM cloudwatch_insights_logs WHERE timestamp >= DATEADD(minute, -15, CURRENT_TIMESTAMP()) AND severity IN ('ERROR','CRITICAL') GROUP BY service_name, error_pattern ORDER BY COUNT(*) DESC LIMIT 1"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "resource": "s3://prod-logs",
+              "action": "read"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "file.read",
+            "arguments": {
+              "path": "s3://prod-logs/$1.results.service_name/",
+              "time_window": "last_15m",
+              "filter": {
+                "severity": [
+                  "ERROR",
+                  "CRITICAL"
+                ]
+              }
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "sql.snowflake.query",
+            "arguments": {
+              "query": "SELECT timestamp, service_name, error_message, stack_trace, request_id, user_id, host, region, correlation_id FROM s3_error_logs WHERE service_name = '$1.results.service_name' AND timestamp >= DATEADD(minute, -15, CURRENT_TIMESTAMP()) AND severity IN ('ERROR','CRITICAL') ORDER BY timestamp DESC LIMIT 500"
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "file.write",
+            "arguments": {
+              "path": "s3://incident-artifacts/extracted_errors_$1.results.service_name.json",
+              "content": {
+                "raw_logs": "$3.results",
+                "structured_errors": "$4.results"
+              }
+            },
+            "depends_on": [
+              3,
+              4
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "s3_error_log_extraction",
+              "details": {
+                "service": "$1.results.service_name",
+                "raw_logs_ref": "$3.results",
+                "structured_errors": "$4.results",
+                "artifact": "$5.path"
+              }
+            },
+            "depends_on": [
+              3,
+              4,
+              5
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#incident-response",
+              "message": "Extracted error logs for service $1.results.service_name (last 15m). Structured errors: $4.results | Artifact: $5.path"
+            },
+            "depends_on": [
+              4,
+              5
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "create_slack_channel",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1145,
+      "output_tokens": 344,
+      "cached_tokens": 0,
+      "latency_ms": 4813,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "action": "slack.create_channel",
+              "resource": "slack.workspace"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#incident-response",
+              "message": "Creating dedicated incident channel for affected service: $identify_affected_service.results"
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#inc-service-auto",
+              "message": "Incident channel created. Topic: Active incident response for service identified in upstream triage. Affected service details: $identify_affected_service.results. Restricted to incident responders and on-call engineers."
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "incident_channel_created",
+              "details": {
+                "naming_convention": "#inc-<service>-<timestamp>",
+                "upstream_context": "$identify_affected_service.results",
+                "permission_check": "$1.allowed"
+              }
+            },
+            "depends_on": [
+              1,
+              2,
+              3
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "assess_severity",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1770,
+      "output_tokens": 127,
+      "cached_tokens": 0,
+      "latency_ms": 2453,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "identify_affected_service",
+            "mongo_value": "triage_plan_generated",
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "fetch_and_extract_logs",
+            "mongo_value": "log_extraction_plan_generated",
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "post_severity_slack",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1144,
+      "output_tokens": 493,
+      "cached_tokens": 0,
+      "latency_ms": 7128,
+      "output": {
+        "plan": [
+          {
+            "tool": "datadog.query_metric",
+            "arguments": {
+              "metric": "service.health",
+              "context": "$assess_severity.reconciled"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "services",
+              "filter": {
+                "status": "affected"
+              }
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#inc-service-auto",
+              "message": "🚨 INITIAL SEVERITY ASSESSMENT 🚨\nService: $2.results.service_name\nSeverity: $1.severity\nAffected Components: $2.results.components\nRecommended Immediate Actions:\n1. Page on-call engineer\n2. Begin log analysis from S3\n3. Initiate rollback if recent deploy\n4. Notify stakeholders\nUpstream context: $assess_severity.reconciled"
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#incident-response",
+              "message": "Initial incident report posted to #inc-service-auto. Severity: $1.severity. Service: $2.results.service_name."
+            },
+            "depends_on": [
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "initial_severity_report_posted",
+              "details": {
+                "channel": "#inc-service-auto",
+                "severity": "$1.severity",
+                "service": "$2.results.service_name",
+                "components": "$2.results.components"
+              }
+            },
+            "depends_on": [
+              3,
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.084425,
+  "total_latency_ms": 29000,
+  "cumulative_spend_usd": 5.924131000000005
+}

@@ -1,0 +1,53 @@
+{
+  "task_id": "PAC-003",
+  "task_class": "policy_action",
+  "router": "all_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_emergency_access",
+        "description": "Evaluate emergency access request for u_9981 (senior-engineer) to db-payments-primary against access control and incident response policies. Determine if the request meets policy criteria for temporary elevated access during P1 incidents.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask (mid tier) because this is an explicit access control governance decision. The request asks for policy evaluation against rules governing emergency access, incident response scope, and role-based permissions. Mid tier is appropriate because it involves multi-signal reasoning: verifying the user's role, the incident severity (P1), the target resource (production database), and cross-referencing multiple applicable policies (emergency access, incident response, database access control). Small tier would be insufficient for this multi-policy reasoning. One subtask is sufficient\u2014all policy evaluation happens in a single call. No additional subtasks needed as the output is a governance decision (approve/deny with conditions), not data reconciliation or tool orchestration.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_emergency_access",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 797,
+      "output_tokens": 269,
+      "cached_tokens": 0,
+      "latency_ms": 4187,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-501": "pass",
+          "POL-502": "pass_conditional",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "Senior-engineer u_9981 has an active P1 incident ticket (INC-20241215-0042) satisfying POL-501. POL-502 dual approval is waived under declared P1 exception. Access permitted subject to POL-503 mandatory logging and 24-hour post-incident review.",
+        "applied_constraints": [
+          "Access scoped to incident INC-20241215-0042 duration",
+          "All read_write operations must be audit-logged",
+          "Mandatory post-access review within 24 hours per POL-503",
+          "Access auto-revokes upon incident closure",
+          "P1 incident status must remain active; access revoked if downgraded"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01071,
+  "total_latency_ms": 4187,
+  "cumulative_spend_usd": 4.985918000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

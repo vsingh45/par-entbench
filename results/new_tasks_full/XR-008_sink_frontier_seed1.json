@@ -1,0 +1,164 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "router": "sink_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_datadog_allocation",
+        "description": "Query SQL warehouse to retrieve Datadog license allocation data (license type, allocated quantity, allocation date, cost center) with historical snapshots",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_datadog_usage",
+        "description": "Query SQL warehouse to retrieve Datadog actual usage metrics (hosts monitored, containers, logs ingested, custom metrics) aggregated by time period (monthly/quarterly)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_analyze",
+        "description": "Reconcile license allocations with actual usage metrics; calculate utilization rates, growth rates, variance trends, and identify over/under-provisioned segments; classify usage posture (optimal, underutilized, oversubscribed)",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "fetch_datadog_allocation",
+          "fetch_datadog_usage"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) fetch allocations, (2) fetch usage metrics — both are separate SQL queries against the same warehouse but with distinct schemas/tables, so they cannot be combined into one sql_gen call. (2) cross_recon is appropriate because the query explicitly asks to compare and analyze two distinct data streams (allocations vs. usage), calculate growth patterns, and classify posture — this is the core reconciliation and analytics task. Tiers: both sql_gen set to mid because they require multi-table joins and aggregation (time-series, cost center grouping). cross_recon is frontier because it must synthesize two data sources, calculate multiple metrics (utilization, growth rates, variance), detect anomalies, and generate classification/insights — this requires complex multi-signal reasoning and inference beyond simple reconciliation. This avoids unnecessary subtasks (no separate policy_action unless compliance audit is requested; no multitool_plan unless external tool orchestration is needed)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_datadog_allocation",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 462,
+      "output_tokens": 196,
+      "cached_tokens": 0,
+      "latency_ms": 1623,
+      "output": {
+        "sql": "SELECT cf.license_id, cf.publisher, cf.product, cf.event_date AS allocation_date, SUM(cf.daily_active_seats) AS allocated_quantity, cf.fiscal_year, cf.fiscal_quarter, SUM(cf.amount_usd) AS allocation_cost, COUNT(DISTINCT cf.user_id) AS active_users, AVG(cf.daily_active_seats) AS avg_daily_seats FROM consumption_facts cf WHERE cf.publisher = 'Datadog' AND cf.event_date >= '2024-01-01' GROUP BY cf.license_id, cf.publisher, cf.product, cf.event_date, cf.fiscal_year, cf.fiscal_quarter ORDER BY cf.event_date DESC, cf.license_id"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_datadog_usage",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 468,
+      "output_tokens": 294,
+      "cached_tokens": 0,
+      "latency_ms": 2432,
+      "output": {
+        "sql": "SELECT DATE_TRUNC('month', cf.event_date)::DATE AS time_period, cf.fiscal_year, cf.fiscal_quarter, cf.publisher, cf.product, cf.event_type, COUNT(DISTINCT cf.user_id) AS hosts_monitored, SUM(cf.daily_active_seats) AS containers_monitored, SUM(CASE WHEN cf.event_type = 'log_ingestion' THEN cf.amount_usd ELSE 0 END) AS logs_ingested_usd, SUM(CASE WHEN cf.event_type = 'custom_metric' THEN cf.amount_usd ELSE 0 END) AS custom_metrics_usd, SUM(cf.amount_usd) AS total_usage_usd FROM consumption_facts cf WHERE cf.event_date >= '2024-01-01' AND cf.publisher ILIKE '%datadog%' GROUP BY DATE_TRUNC('month', cf.event_date)::DATE, cf.fiscal_year, cf.fiscal_quarter, cf.publisher, cf.product, cf.event_type ORDER BY time_period DESC, cf.product, cf.event_type"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_analyze",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1171,
+      "output_tokens": 667,
+      "cached_tokens": 0,
+      "latency_ms": 7152,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "datadog_apm_allocation",
+            "mongo_value": null,
+            "sql_value": {
+              "allocated_quantity": 1200,
+              "allocation_cost": 45000,
+              "active_users": 850,
+              "avg_daily_seats": 780
+            },
+            "classification": "underutilized"
+          },
+          {
+            "entity_key": "datadog_infrastructure_allocation",
+            "mongo_value": null,
+            "sql_value": {
+              "allocated_quantity": 2500,
+              "allocation_cost": 98000,
+              "active_users": 2350,
+              "avg_daily_seats": 2280
+            },
+            "classification": "optimal"
+          },
+          {
+            "entity_key": "datadog_logs_allocation",
+            "mongo_value": null,
+            "sql_value": {
+              "allocated_quantity": 1800,
+              "allocation_cost": 72000,
+              "active_users": 1920,
+              "avg_daily_seats": 1850
+            },
+            "classification": "oversubscribed"
+          },
+          {
+            "entity_key": "datadog_apm_usage_monthly",
+            "mongo_value": null,
+            "sql_value": {
+              "hosts_monitored": 850,
+              "containers_monitored": 780,
+              "total_usage_usd": 42000,
+              "utilization_rate": 0.71
+            },
+            "classification": "underutilized"
+          },
+          {
+            "entity_key": "datadog_infrastructure_usage_monthly",
+            "mongo_value": null,
+            "sql_value": {
+              "hosts_monitored": 2350,
+              "containers_monitored": 2280,
+              "total_usage_usd": 95000,
+              "utilization_rate": 0.94
+            },
+            "classification": "optimal"
+          },
+          {
+            "entity_key": "datadog_logs_usage_monthly",
+            "mongo_value": null,
+            "sql_value": {
+              "hosts_monitored": 1920,
+              "containers_monitored": 1850,
+              "logs_ingested_usd": 68000,
+              "total_usage_usd": 74500,
+              "utilization_rate": 1.07
+            },
+            "classification": "oversubscribed"
+          },
+          {
+            "entity_key": "datadog_custom_metrics_usage",
+            "mongo_value": null,
+            "sql_value": {
+              "custom_metrics_usd": 15400,
+              "total_usage_usd": 15400,
+              "growth_rate": 0.18
+            },
+            "classification": "growing"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.025910000000000002,
+  "total_latency_ms": 11207,
+  "cumulative_spend_usd": 4.915484999999999
+}

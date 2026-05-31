@@ -1,0 +1,89 @@
+{
+  "task_id": "SQLC-002",
+  "task_class": "sql_compose",
+  "router": "all_small",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_identify_top_customers",
+        "description": "Query TPC-H warehouse to identify top 10 customers in BUILDING market segment ranked by lifetime value (total revenue from all orders), returning customer ID, name, and lifetime value metrics.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_order_patterns",
+        "description": "Query TPC-H warehouse to retrieve order history patterns for the identified top 10 customers, including order frequency, average order value, product categories purchased, temporal distribution, and repeat purchase metrics.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": [
+          "sql_identify_top_customers"
+        ]
+      },
+      {
+        "id": "generate_narratives",
+        "description": "Using the top 10 customer lifetime values and their order patterns, generate personalized retention narratives for each customer that reference their specific order behavior, purchasing trends, and engagement patterns to support retention strategy.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_identify_top_customers",
+          "sql_order_patterns"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) Initial SQL to identify top 10 customers in BUILDING segment by lifetime value\u2014mid tier for multi-table join with aggregation across orders. (2) Follow-on SQL for order pattern details (frequency, product mix, temporal trends)\u2014mid tier for aggregation and windowing across order history. (3) Narrative generation\u2014frontier tier because it requires synthesizing customer value data with behavioral pattern insights to produce personalized, contextual retention narratives that reference specific order behaviors. The frontier tier's reasoning capability is necessary to extract meaningful insights from order patterns and craft compelling narrative that connects customer value to retention motivation. Single-source (TPC-H SQL) so no cross_recon for reconciliation, but cross_recon specialist selected for the narrative synthesis task as it involves multi-signal reasoning and output generation beyond simple extraction."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_identify_top_customers",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 491,
+      "output_tokens": 140,
+      "cached_tokens": 0,
+      "latency_ms": 1328,
+      "output": {
+        "sql": "SELECT c.c_custkey, c.c_name, SUM(o.o_totalprice) AS lifetime_value, COUNT(o.o_orderkey) AS total_orders, AVG(o.o_totalprice) AS avg_order_value FROM customer c INNER JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name ORDER BY lifetime_value DESC LIMIT 10"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_order_patterns",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 626,
+      "output_tokens": 555,
+      "cached_tokens": 0,
+      "latency_ms": 3586,
+      "output": {
+        "sql": "WITH top_customers AS (SELECT c.c_custkey, c.c_name, SUM(o.o_totalprice) AS lifetime_value, COUNT(o.o_orderkey) AS total_orders, AVG(o.o_totalprice) AS avg_order_value FROM customer c INNER JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name ORDER BY lifetime_value DESC LIMIT 10) SELECT tc.c_custkey, tc.c_name, tc.lifetime_value, tc.total_orders, tc.avg_order_value, COUNT(DISTINCT o.o_orderkey) AS order_frequency, AVG(o.o_totalprice) AS avg_order_val, MIN(o.o_orderdate) AS first_order_date, MAX(o.o_orderdate) AS last_order_date, EXTRACT(DAY FROM MAX(o.o_orderdate) - MIN(o.o_orderdate)) AS customer_tenure_days, COUNT(DISTINCT DATE_TRUNC('month', o.o_orderdate)) AS months_active, ROUND(COUNT(DISTINCT o.o_orderkey)::NUMERIC / NULLIF(EXTRACT(DAY FROM MAX(o.o_orderdate) - MIN(o.o_orderdate))::NUMERIC / 30, 0), 2) AS orders_per_month, COUNT(CASE WHEN o.o_orderstatus = 'F' THEN 1 END) AS completed_orders, COUNT(CASE WHEN o.o_orderstatus = 'P' THEN 1 END) AS pending_orders, ROUND(AVG(l.l_quantity), 2) AS avg_line_quantity, COUNT(DISTINCT l.l_linenumber) AS total_line_items FROM top_customers tc INNER JOIN orders o ON tc.c_custkey = o.o_custkey LEFT JOIN lineitem l ON o.o_orderkey = l.l_orderkey GROUP BY tc.c_custkey, tc.c_name, tc.lifetime_value, tc.total_orders, tc.avg_order_value ORDER BY tc.lifetime_value DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "generate_narratives",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 975,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 6740,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"customer_lifetime_value_reconciliation\",\n      \"status\": \"awaiting_execution\",\n      \"note\": \"MongoDB operational state not provided; SQL queries defined for reconciliation\",\n      \"sql_sources\": [\n        {\n          \"query_id\": \"sql_identify_top_customers\",\n          \"purpose\": \"Identify top 10 BUILDING segment customers by lifetime value\",\n          \"expected_output_fields\": [\"c_custkey\", \"c_name\", \"lifetime_value\", \"total_orders\", \"avg_order_value\"]\n        },\n        {\n          \"query_id\": \"sql_order_patterns\",\n          \"purpose\": \"Enrich top customers with detailed order patterns and engagement metrics\",\n          \"expected_output_fields\": [\n            \"c_custkey\",\n            \"c_name\",\n            \"lifetime_value\",\n            \"total_orders\",\n            \"avg_order_value\",\n            \"order_frequency\",\n            \"first_order_date\",\n            \"last_order_date\",\n            \"customer_tenure_days\",\n            \"months_active\",\n            \"orders_per_month\",\n            \"completed_orders\",\n            \"pending_orders\",\n            \"avg_line_quantity\",\n            \"total_line_items\"\n          ]\n        }\n      ],\n      \"retention_narrative_framework\": {\n        \"classification_criteria\": {\n          \"stable\": \"Consistent order frequency, high completion rate, long tenure\",\n          \"growing\": \"Increasing order value, accelerating order frequency, expanding basket\",\n          \"at_risk\": \"Declining order frequency, pending orders increasing, longer gaps since last order\",\n          \"high_value_strategic\": \"Lifetime value > 90th percentile, high orders_per_month, consistent engagement\"\n        },\n        \"narrative_components\": [\n          \"Customer tenure and relationship longevity\",\n          \"Purchase pattern consistency and trends\",\n          \"Order value trajectory (avg order value insights)\",\n          \"Engagement frequency (orders per month)\",\n          \"Product basket characteristics (line items per order)\",\n          \"Order fulfillment health (completion vs pending ratio)\",\n          \"Behavioral signals for retention risk assessment\"\n        ],\n        \"personalization_data_points\": [\n          \"Individual customer name\",\n          \"Specific lifetime value and ranking context\",\n          \"Exact order counts and frequency metrics\",\n          \"Date-based engagement windows\",\n          \"Product quantity preferences\",\n          \"Order status distribution pattern\"\n        ]\n      },\n      \"execution_requirements\": {\n        \"step_1\": \"Execute sql_identify_top_customers to retrieve baseline top 10\",\n        \"step_2\": \"Execute sql_order_patterns with results from step_1 for enrichment\",\n        \"step_3\": \"Generate retention narrative for each customer using reconciled data\",\n        \"step_4\": \"Classify each customer into retention strategy category\",\n        \"step_5\": \"Output personalized narratives with classification and metrics\"\n      },\n      \"expected_output_structure\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"customer_rank\": \"integer (1-10)\",\n          \"customer_id\": \"integer\",\n          \"customer_name\": \"string\",\n          \"lifetime_value\": \"numeric\",\n          \"classification\": \"string\",\n          \"narrative\": \"string\",\n          \"key_metrics\": {"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009567,
+  "total_latency_ms": 11654,
+  "cumulative_spend_usd": 0.8096149999999996,
+  "evaluator_reason": "step2_consumer_narrative_check_failed"
+}

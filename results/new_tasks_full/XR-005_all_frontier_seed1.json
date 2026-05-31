@@ -1,0 +1,69 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "router": "all_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sf_seats_query",
+        "description": "Query Salesforce system to retrieve licensed seat counts, active seat assignments, and user status (active/inactive) to identify unutilized licenses. Includes aggregation by license type and department.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "license_gap_analysis",
+        "description": "Reconcile licensed seat capacity against actual seat assignments, calculate utilization metrics (% utilization, surplus/deficit per license type), identify specific unutilized license slots, and classify risk posture (over-licensed, under-licensed, optimized).",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid tier) pulls Salesforce licensing data with multi-table joins and aggregation to correlate licensed seat inventory with actual assignments; (2) cross_recon (mid tier) reconciles the two counts, calculates utilization deltas, and classifies each license category. No policy_action needed—this is analytical classification, not governance approval. No third extract step needed since SQL output provides the raw data. Mid tier for both because Salesforce licensing involves multiple dimensions (license types, users, assignments, status flags) but no complex window functions or cross-collection inference."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sf_seats_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 734,
+      "output_tokens": 165,
+      "cached_tokens": 0,
+      "latency_ms": 2280,
+      "output": {
+        "sql": "SELECT product, SUM(daily_active_seats) AS total_active_seats, COUNT(DISTINCT license_id) AS total_licenses, COUNT(DISTINCT user_id) AS active_users, SUM(amount_usd) AS total_cost_usd FROM consumption_facts WHERE publisher = 'Salesforce' AND event_date >= '2024-01-01' GROUP BY product ORDER BY total_cost_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "license_gap_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 460,
+      "output_tokens": 132,
+      "cached_tokens": 0,
+      "latency_ms": 2605,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "_meta",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "error_missing_inputs"
+          }
+        ],
+        "error": "No upstream MongoDB or SQL outputs provided to reconcile. Cannot compute seat utilization without licensed_seats (operational/MongoDB) and assigned_seats (historical/SQL) datasets."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.013395,
+  "total_latency_ms": 4885,
+  "cumulative_spend_usd": 3.098631000000002
+}

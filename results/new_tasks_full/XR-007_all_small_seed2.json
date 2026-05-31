@@ -1,0 +1,86 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "aws_commitment_query",
+        "description": "Query AWS commitment data (contract terms, commitment levels, commit dates, expiry dates) from the SQL warehouse. Group by service/region/term to establish baseline commitment structure.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "aws_spend_query",
+        "description": "Query actual AWS spend from the SQL warehouse (monthly/rolling actual usage costs by service/region/linked account) for the same periods as commitments. Aggregate to match commitment dimensions.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "commitment_analysis",
+        "description": "Reconcile commitment levels against actual spend to calculate utilization rates, identify commitment burn rate, surface gaps between contracted vs actual by service/term. Classify each commitment as overcommitted, underutilized, or optimally utilized. Generate recommendations for rebalancing.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "aws_commitment_query",
+          "aws_spend_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Minimum decomposition: Two independent queries (commitment data + spend data) followed by a single cross_recon subtask that reconciles both sources and produces utilization classification and recommendations. No policy_action needed (this is cost optimization analysis, not governance). Both sql_gen subtasks are assigned small tier (straightforward warehouse queries with grouping). The cross_recon is mid tier because it must reconcile two datasets, compute utilization metrics (utilization rate, burn rate, variance), classify posture across multiple dimensions, and generate nuanced rebalancing recommendations.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "aws_commitment_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 469,
+      "output_tokens": 232,
+      "cached_tokens": 0,
+      "latency_ms": 2669,
+      "output": {
+        "raw_output": "{\n  \"sql\": \"SELECT vendor_name, contract_id, invoice_date AS commit_date, due_date AS expiry_date, amount_usd AS commitment_level, status, DATE_TRUNC('month', invoice_date)::DATE AS commitment_month FROM invoice_facts WHERE vendor_name ILIKE '%AWS%' OR vendor_name ILIKE '%Amazon%' ORDER BY vendor_name, contract_id, invoice_date\"\n}\n```\n\n**Note:** The current schema does not contain AWS-specific commitment contract data with service types, regions, or term structures. The query above returns available invoice/contract data. To fully address the requirement, the warehouse would need additional tables such as:\n- `aws_commitments(commitment_id, contract_id, service_type, region, term_months, commitment_amount, start_date, expiry_date)`\n- `aws_actual_spend(contract_id, service_type, region, spend_date, actual_amount_usd)`"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "aws_spend_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 471,
+      "output_tokens": 175,
+      "cached_tokens": 0,
+      "latency_ms": 1840,
+      "output": {
+        "sql": "SELECT DATE_TRUNC('month', cf.event_date)::DATE AS month, cf.publisher, cf.product, SUM(cf.amount_usd) AS actual_spend_usd, SUM(cf.daily_active_seats) AS total_seats, cf.fiscal_year, cf.fiscal_quarter FROM consumption_facts cf WHERE cf.event_date >= '2024-01-01' AND cf.publisher IS NOT NULL AND cf.product IS NOT NULL GROUP BY DATE_TRUNC('month', cf.event_date)::DATE, cf.publisher, cf.product, cf.fiscal_year, cf.fiscal_quarter ORDER BY month DESC, cf.publisher, cf.product"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "commitment_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 702,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 6106,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"AWS_commitment_reconciliation_gap\",\n      \"mongo_value\": null,\n      \"sql_value\": null,\n      \"classification\": \"data_structure_mismatch\",\n      \"recommendation\": \"CRITICAL: Current schema does not support commitment-level reconciliation\"\n    },\n    {\n      \"entity_key\": \"invoice_facts_available\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"table\": \"invoice_facts\",\n        \"fields\": [\"vendor_name\", \"contract_id\", \"invoice_date\", \"due_date\", \"amount_usd\", \"status\"],\n        \"coverage\": \"aggregate contract/invoice level only\"\n      },\n      \"classification\": \"insufficient_granularity\",\n      \"recommendation\": \"Cannot reconcile commitments vs spend without service_type, region, and term_months dimensions\"\n    },\n    {\n      \"entity_key\": \"consumption_facts_available\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"table\": \"consumption_facts\",\n        \"fields\": [\"event_date\", \"publisher\", \"product\", \"amount_usd\", \"daily_active_seats\", \"fiscal_year\", \"fiscal_quarter\"],\n        \"coverage\": \"operational spend granular by product/publisher\"\n      },\n      \"classification\": \"partial_data\",\n      \"recommendation\": \"Spend data exists but lacks commitment contract linkage\"\n    },\n    {\n      \"entity_key\": \"AWS_commitment_contract_data\",\n      \"mongo_value\": \"MISSING\",\n      \"sql_value\": null,\n      \"classification\": \"no_recent_activity\",\n      \"recommendation\": \"CREATE TABLE aws_commitments(commitment_id, contract_id, service_type, region, term_months, commitment_amount, start_date, expiry_date, renewal_status)\"\n    },\n    {\n      \"entity_key\": \"AWS_actual_spend_mapping\",\n      \"mongo_value\": \"MISSING\",\n      \"sql_value\": null,\n      \"classification\": \"at_risk\",\n      \"recommendation\": \"CREATE TABLE aws_actual_spend(contract_id, service_type, region, spend_date, actual_amount_usd, utilization_pct) to enable commitment-to-spend matching\"\n    },\n    {\n      \"entity_key\": \"utilization_rate_calculation\",\n      \"mongo_value\": null,\n      \"sql_value\": null,\n      \"classification\": \"uncomputable\",\n      \"recommendation\": \"Cannot calculate utilization_rate = actual_spend_usd / commitment_amount without commitment contract dimensions\"\n    },\n    {\n      \"entity_key\": \"commitment_burn_rate\",\n      \"mongo_value\": null,\n      \"sql_value\": null,\n      \"classification\": \"uncomputable\",\n      \"recommendation\": \"Cannot calculate monthly_burn_rate without linking consumption_facts.amount_usd to specific commitment_ids with term_months\"\n    },\n    {\n      \"entity_key\": \"overcommitment_detection\",\n      \"mongo_value\": null,\n      \"sql_value\": null,\n      \"classification\": \"uncomputable\",\n      \"recommendation\": \"Overcommitment occurs when: utilization_rate < 0.70 AND remaining_commitment_term > 6_months. Requires commitment schema"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007677,
+  "total_latency_ms": 10615,
+  "cumulative_spend_usd": 4.278697000000002
+}

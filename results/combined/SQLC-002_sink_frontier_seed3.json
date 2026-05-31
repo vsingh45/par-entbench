@@ -1,0 +1,96 @@
+{
+  "task_id": "SQLC-002",
+  "task_class": "sql_compose",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_gen_ltv",
+        "description": "Generate SQL query to identify top 10 TPC-H customers by lifetime value (total order amount) in market segment 'BUILDING'. Return customer_id, customer_name, and total_lifetime_value.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_gen_order_patterns",
+        "description": "Generate SQL query to retrieve detailed order patterns for the identified top 10 customers: order frequency, order dates, average order value, order count by month, and largest/smallest orders. Include temporal and behavioral dimensions.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": [
+          "sql_gen_ltv"
+        ]
+      },
+      {
+        "id": "cross_recon_narratives",
+        "description": "Reconcile top 10 customer LTV data with their order patterns. For each customer, synthesize a personalized retention narrative that references their order pattern (frequency, seasonal trends, order magnitude), lifetime relationship duration, and segment value. Generate 10 distinct narratives with customer-specific language.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_gen_ltv",
+          "sql_gen_order_patterns"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks, minimal decomposition: (1) sql_gen_ltv (mid-tier) identifies top 10 with a straightforward aggregation and segment filter; (2) sql_gen_order_patterns (mid-tier) retrieves rich behavioral data with window functions or date grouping but is still a single focused query; (3) cross_recon (frontier-tier) performs the heavy synthesis\u2014it must synthesize 10 personalized narratives by correlating LTV rankings with multi-dimensional order patterns and generating contextual, customer-specific language. Frontier tier is justified because narrative generation requires inference, contextual understanding of customer behavior, and high-quality synthesis across two data sources. The plan avoids unnecessary policy_action (no compliance requirement) and keeps subtasks to the minimum needed to deliver the full answer."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_gen_ltv",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 497,
+      "output_tokens": 120,
+      "cached_tokens": 0,
+      "latency_ms": 1162,
+      "output": {
+        "sql": "SELECT c.c_custkey AS customer_id, c.c_name AS customer_name, SUM(o.o_totalprice) AS total_lifetime_value FROM customer c INNER JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name ORDER BY total_lifetime_value DESC LIMIT 10"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_gen_order_patterns",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 609,
+      "output_tokens": 435,
+      "cached_tokens": 0,
+      "latency_ms": 2562,
+      "output": {
+        "sql": "WITH top_customers AS (SELECT c.c_custkey AS customer_id, c.c_name AS customer_name, SUM(o.o_totalprice) AS total_lifetime_value FROM customer c INNER JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name ORDER BY total_lifetime_value DESC LIMIT 10) SELECT tc.customer_id, tc.customer_name, tc.total_lifetime_value, o.o_orderkey, o.o_orderdate, o.o_totalprice, o.o_orderstatus, o.o_orderpriority, COUNT(*) OVER (PARTITION BY tc.customer_id) AS total_order_count, AVG(o.o_totalprice) OVER (PARTITION BY tc.customer_id) AS avg_order_value, MAX(o.o_totalprice) OVER (PARTITION BY tc.customer_id) AS largest_order_value, MIN(o.o_totalprice) OVER (PARTITION BY tc.customer_id) AS smallest_order_value, TO_CHAR(o.o_orderdate, 'YYYY-MM') AS order_month, COUNT(*) OVER (PARTITION BY tc.customer_id, TO_CHAR(o.o_orderdate, 'YYYY-MM')) AS orders_per_month, RANK() OVER (PARTITION BY tc.customer_id ORDER BY o.o_orderdate) AS order_sequence FROM top_customers tc INNER JOIN orders o ON tc.customer_id = o.o_custkey ORDER BY tc.total_lifetime_value DESC, tc.customer_id, o.o_orderdate"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_narratives",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1294,
+      "output_tokens": 54,
+      "cached_tokens": 0,
+      "latency_ms": 1466,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "customer_1",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "pending_data"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.011701,
+  "total_latency_ms": 5190,
+  "cumulative_spend_usd": 0.8478959999999998,
+  "evaluator_reason": "step2_consumer_narrative_check_failed"
+}

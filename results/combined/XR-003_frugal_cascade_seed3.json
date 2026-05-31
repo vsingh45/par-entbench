@@ -1,0 +1,87 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_1",
+        "description": "Query IAM role definitions to extract all granted permissions (policies, inline policies, group memberships) for roles classified as 'elevated'.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_2",
+        "description": "Query CloudTrail/audit logs for the last 180 days to extract all IAM API calls and resource access events, mapped to roles and specific permissions exercised.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_1",
+        "description": "Reconcile granted permissions (from sql_1) against exercised permissions (from sql_2). Identify permission gaps (granted but never used in 180 days). Classify each unused permission by risk category (e.g., highly sensitive, rarely needed, dead code) and produce revocation candidates with justification.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_1",
+          "sql_2"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: (1) sql_gen to extract granted permissions from IAM role definitions (mid tier: requires multi-table joins across IAM policy documents and role hierarchies); (2) sql_gen to extract exercised permissions from 180-day audit logs (mid tier: requires filtering, mapping, and aggregation from potentially large event logs); (3) cross_recon at frontier tier to reconcile two distinct sources (IAM state vs. historical audit trails), classify unused permissions by risk and business context, and generate prioritized revocation recommendations. Cross_recon is appropriate here because it must synthesize signals from both the granted and exercised datasets, apply risk classification logic, and produce nuanced recommendations. The plan does not include policy_action because the query asks for candidates and justification, not for enforcement of a specific governance policy\u2014that is part of the reconciliation and classification logic in cross_recon."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 483,
+      "output_tokens": 272,
+      "cached_tokens": 0,
+      "latency_ms": 3970,
+      "output": {
+        "raw_output": "{\n  \"sql\": \"SELECT al.permission, al.resource, COUNT(DISTINCT al.user_id) as users_exercising, COUNT(*) as total_exercises, MAX(al.access_time) as last_used FROM access_log_facts al WHERE al.access_time >= CURRENT_DATE - INTERVAL '180 days' AND al.result = 'success' GROUP BY al.permission, al.resource ORDER BY total_exercises DESC\"\n}\n```\n\n**Note:** The provided schema lacks IAM role definition tables (no `iam_roles`, `role_policies`, `group_memberships`, or role classification metadata). The query above extracts actual permission usage from access logs. To fully address the task, the schema would need:\n- `iam_roles(role_id, role_name, elevation_level)` \n- `role_policies(role_id, policy_name, permission, resource)`\n- `group_memberships(user_id, group_id, role_id)`\n\nThe current query identifies permissions being actively used; granted-but-unused permissions would require a FULL OUTER JOIN between granted permissions (unavailable in schema) and exercised permissions."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_2",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 489,
+      "output_tokens": 115,
+      "cached_tokens": 0,
+      "latency_ms": 2144,
+      "output": {
+        "sql": "SELECT user_id, permission, resource, action, result, access_time, COUNT(*) as exercise_count, MAX(access_time) as last_exercised FROM access_log_facts WHERE access_time >= CURRENT_DATE - INTERVAL '180 days' AND permission IS NOT NULL AND resource IS NOT NULL GROUP BY user_id, permission, resource, action, result, access_time ORDER BY user_id, last_exercised DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_1",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 712,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 5893,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [],\n  \"errors\": [\n    {\n      \"error_type\": \"SCHEMA_INSUFFICIENCY\",\n      \"severity\": \"CRITICAL\",\n      \"message\": \"Cannot reconcile granted vs. exercised permissions: IAM role definition tables are absent from schema\",\n      \"missing_tables\": [\n        \"iam_roles\",\n        \"role_policies\",\n        \"group_memberships\",\n        \"permission_grants\"\n      ],\n      \"impact\": \"LEFT JOIN semantics cannot be applied; no source-of-truth for 'granted permissions'\"\n    },\n    {\n      \"error_type\": \"DATA_SOURCE_MISMATCH\",\n      \"severity\": \"HIGH\",\n      \"message\": \"sql_1 and sql_2 outputs not provided as actual result sets; only query definitions received\",\n      \"required_inputs\": [\n        \"sql_1 result rows (permission, resource, users_exercising, total_exercises, last_used)\",\n        \"sql_2 result rows (user_id, permission, resource, action, result, access_time, exercise_count, last_exercised)\"\n      ],\n      \"impact\": \"Cannot perform actual reconciliation without concrete result sets\"\n    }\n  ],\n  \"reconciliation_strategy\": {\n    \"required_schema_additions\": {\n      \"iam_roles\": [\n        \"role_id (PK)\",\n        \"role_name\",\n        \"elevation_level (enum: basic, elevated, admin, super_admin)\",\n        \"created_date\",\n        \"last_modified\"\n      ],\n      \"role_policies\": [\n        \"policy_id (PK)\",\n        \"role_id (FK)\",\n        \"permission\",\n        \"resource\",\n        \"granted_date\",\n        \"expires_date\"\n      ],\n      \"group_memberships\": [\n        \"membership_id (PK)\",\n        \"user_id (FK)\",\n        \"group_id (FK)\",\n        \"role_id (FK)\",\n        \"assignment_date\"\n      ]\n    },\n    \"corrected_query_structure\": \"SELECT rp.permission, rp.resource, rp.role_id, r.elevation_level, COUNT(DISTINCT gm.user_id) as users_granted, COUNT(DISTINCT CASE WHEN al.access_time >= CURRENT_DATE - INTERVAL '180 days' AND al.result = 'success' THEN al.user_id END) as users_exercising, COUNT(al.access_id) as total_exercises, MAX(al.access_time) as last_used FROM role_policies rp JOIN iam_roles r ON rp.role_id = r.role_id LEFT JOIN group_memberships gm ON rp.role_id = gm.role_id LEFT JOIN access_log_facts al ON gm.user_id = al.user_id AND rp.permission = al.permission AND rp.resource = al.resource WHERE r.elevation_level IN ('elevated', 'admin', 'super_admin') GROUP BY rp.permission, rp.resource, rp.role_id, r.elevation_level HAVING users_exercising IS NULL OR users_exercising = 0 OR users_exercising < users_granted * 0.1 ORDER BY r.elevation_level DESC, users_granted DESC\"\n  },\n  \"classification_framework\": {"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007619,
+  "total_latency_ms": 12007,
+  "cumulative_spend_usd": 3.1538960000000027,
+  "evaluator_reason": "no_mongo_node"
+}

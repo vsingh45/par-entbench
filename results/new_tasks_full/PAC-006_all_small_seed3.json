@@ -1,0 +1,52 @@
+{
+  "task_id": "PAC-006",
+  "task_class": "policy_action",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "An infrastructure engineer proposes rolling out Docker image changes to all microservices in production without prior staging validation.",
+        "specialist": "policy_action",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task — Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 501,
+      "output_tokens": 239,
+      "cached_tokens": 0,
+      "latency_ms": 2231,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-601": "fail",
+          "POL-602": "fail",
+          "POL-603": "fail"
+        },
+        "reason": "Proposed action violates three critical policies: (1) POL-601 requires minimum 48-hour staging validation before production rollout; (2) POL-602 requires change board approval and monitoring setup which are not mentioned; (3) POL-603 requires rollback capability and traffic monitoring as prerequisites. Direct production rollout without staging testing and approvals is denied.",
+        "applied_constraints": [
+          "Mandatory staging validation for minimum 48 hours required before any production deployment",
+          "Change board approval required prior to production rollout",
+          "Post-deployment monitoring must be configured before rollout begins",
+          "Automated rollback capability must be verified and ready",
+          "Traffic monitoring infrastructure must be in place"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001696,
+  "total_latency_ms": 2231,
+  "cumulative_spend_usd": 8.562347000000006
+}

@@ -1,0 +1,97 @@
+{
+  "task_id": "XR-004",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_sam_licenses",
+        "description": "Extract licensed user counts and SKU details from SAM (Software Asset Management) system. Return structured data with user counts, license types, and assignment dates.",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_consumption_facts",
+        "description": "Query consumption facts database to retrieve active users, usage metrics, and spend data for Microsoft products. Aggregate by product/SKU and time period.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_classify",
+        "description": "Reconcile SAM licensed user counts against consumption facts active users. Calculate under/over-provisioning variance. Classify spend posture (optimized, over-provisioned, under-provisioned) and generate recommendations for license optimization.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "extract_sam_licenses",
+          "query_consumption_facts"
+        ]
+      }
+    ],
+    "cost_rationale": "3 subtasks minimum: (1) extract SAM licenses from document/system source \u2192 extract/small; (2) query consumption facts from SQL warehouse \u2192 sql_gen/mid for multi-table aggregation; (3) reconcile two distinct sources with variance analysis and posture classification \u2192 cross_recon/frontier. Frontier tier for cross_recon because reconciliation requires multi-signal analysis across licensing policy, consumption patterns, and spend variance to produce reliable under/over-provisioning classification and actionable optimization recommendations. The classification and recommendations are part of the reconciliation task, not a separate policy_action, since the query asks for posture identification rather than policy compliance evaluation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_sam_licenses",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 255,
+      "output_tokens": 119,
+      "cached_tokens": 0,
+      "latency_ms": 1344,
+      "output": {
+        "error": "No document provided",
+        "message": "Unable to extract SAM licensing data - no document content supplied in task",
+        "expected_fields": {
+          "licensed_user_counts": null,
+          "sku_details": null,
+          "license_types": null,
+          "assignment_dates": null,
+          "active_users": null,
+          "consumption_facts": null,
+          "provisioning_status": null
+        }
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_consumption_facts",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 474,
+      "output_tokens": 629,
+      "cached_tokens": 0,
+      "latency_ms": 11798,
+      "output": {
+        "sql": "SELECT product, fiscal_year, fiscal_quarter, COUNT(DISTINCT user_id) AS active_users, SUM(daily_active_seats) AS total_active_seat_days, AVG(daily_active_seats) AS avg_daily_active_seats, COUNT(DISTINCT license_id) AS distinct_licenses, SUM(amount_usd) AS total_spend_usd, AVG(amount_usd) AS avg_spend_usd, COUNT(event_id) AS total_events, SUM(CASE WHEN event_type = 'usage' THEN daily_active_seats ELSE 0 END) AS usage_event_seats, SUM(CASE WHEN event_type = 'overage' THEN amount_usd ELSE 0 END) AS overage_spend_usd, SUM(CASE WHEN event_type = 'license' THEN daily_active_seats ELSE 0 END) AS licensed_seats, ROUND( CASE WHEN SUM(CASE WHEN event_type = 'license' THEN daily_active_seats ELSE 0 END) > 0 THEN (SUM(CASE WHEN event_type = 'usage' THEN daily_active_seats ELSE 0 END)::NUMERIC / NULLIF(SUM(CASE WHEN event_type = 'license' THEN daily_active_seats ELSE 0 END), 0)) * 100 ELSE NULL END, 2) AS utilization_pct, CASE WHEN SUM(CASE WHEN event_type = 'license' THEN daily_active_seats ELSE 0 END) > SUM(CASE WHEN event_type = 'usage' THEN daily_active_seats ELSE 0 END) THEN 'OVER_PROVISIONED' WHEN SUM(CASE WHEN event_type = 'license' THEN daily_active_seats ELSE 0 END) < SUM(CASE WHEN event_type = 'usage' THEN daily_active_seats ELSE 0 END) THEN 'UNDER_PROVISIONED' ELSE 'BALANCED' END AS provisioning_status, SUM(CASE WHEN event_type = 'license' THEN daily_active_seats ELSE 0 END) - SUM(CASE WHEN event_type = 'usage' THEN daily_active_seats ELSE 0 END) AS seat_variance FROM consumption_facts WHERE publisher ILIKE '%Microsoft%' GROUP BY product, fiscal_year, fiscal_quarter ORDER BY fiscal_year DESC, fiscal_quarter DESC, total_spend_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_classify",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1496,
+      "output_tokens": 13,
+      "cached_tokens": 0,
+      "latency_ms": 1882,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.019512,
+  "total_latency_ms": 15024,
+  "cumulative_spend_usd": 2.468148,
+  "evaluator_reason": "no_mongo_node"
+}

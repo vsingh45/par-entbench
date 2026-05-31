@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "par_lite",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_declining_publishers",
+        "description": "Query SQL warehouse to identify publishers with declining quarterly spend trends in 2024 (Q1 > Q2 > Q3 > Q4 or any downward multi-quarter pattern). Return publisher ID, name, and quarterly spend breakdown.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "generate_renewal_recommendations",
+        "description": "For each publisher with declining trend, generate renewal recommendation (hold, expand, reduce) by analyzing trend severity, spend history, contract status, and strategic value. Classify each publisher's posture and output structured recommendation.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "fetch_declining_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid-tier) to fetch publishers with declining Q1-Q4 trends in 2024 using window functions and conditional aggregation\u2014mid complexity due to multi-quarter comparison and filtering logic. (2) cross_recon (mid-tier) to reconcile the declining trend data with contract/spend context and generate renewal posture recommendations\u2014this is classification and recommendation generation, which is cross_recon's scope. No separate policy_action needed since governance evaluation was not requested. No multitool_plan needed. Minimal decomposition: one fetch step, one recommendation step."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_declining_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 492,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9385,
+      "output": {
+        "raw_output": "{\"sql\": \"WITH quarterly_spend AS (\\n  SELECT\\n    publisher,\\n    SUM(CASE WHEN fiscal_quarter = 1 THEN amount_usd ELSE 0 END) AS q1_spend,\\n    SUM(CASE WHEN fiscal_quarter = 2 THEN amount_usd ELSE 0 END) AS q2_spend,\\n    SUM(CASE WHEN fiscal_quarter = 3 THEN amount_usd ELSE 0 END) AS q3_spend,\\n    SUM(CASE WHEN fiscal_quarter = 4 THEN amount_usd ELSE 0 END) AS q4_spend,\\n    COUNT(DISTINCT CASE WHEN fiscal_quarter = 1 THEN fiscal_quarter END) AS has_q1,\\n    COUNT(DISTINCT CASE WHEN fiscal_quarter = 2 THEN fiscal_quarter END) AS has_q2,\\n    COUNT(DISTINCT CASE WHEN fiscal_quarter = 3 THEN fiscal_quarter END) AS has_q3,\\n    COUNT(DISTINCT CASE WHEN fiscal_quarter = 4 THEN fiscal_quarter END) AS has_q4\\n  FROM consumption_facts\\n  WHERE event_date >= '2024-01-01'\\n    AND event_date < '2025-01-01'\\n  GROUP BY publisher\\n),\\ndecline_analysis AS (\\n  SELECT\\n    publisher,\\n    q1_spend,\\n    q2_spend,\\n    q3_spend,\\n    q4_spend,\\n    -- Count how many consecutive downward steps exist across available quarters\\n    (\\n      CASE WHEN has_q1 = 1 AND has_q2 = 1 AND q2_spend < q1_spend THEN 1 ELSE 0 END +\\n      CASE WHEN has_q2 = 1 AND has_q3 = 1 AND q3_spend < q2_spend THEN 1 ELSE 0 END +\\n      CASE WHEN has_q3 = 1 AND has_q4 = 1 AND q4_spend < q3_spend THEN 1 ELSE 0 END\\n    ) AS declining_steps,\\n    (\\n      CASE WHEN has_q1 = 1 AND has_q2 = 1 THEN 1 ELSE 0 END +\\n      CASE WHEN has_q2 = 1 AND has_q3 = 1 THEN 1 ELSE 0 END +\\n      CASE WHEN has_q3 = 1 AND has_q4 = 1 THEN 1 ELSE 0 END\\n    ) AS comparable_steps,\\n    -- Overall spend trend: last available quarter vs first available quarter\\n    CASE\\n      WHEN has_q4 = 1 AND has_q1 = 1 THEN q4_spend - q1_spend\\n      WHEN has_q3 = 1 AND has_q1 = 1 THEN q3_spend - q1_spend\\n      WHEN has_q2 = 1 AND has_q1 = 1 THEN q2_"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "generate_renewal_recommendations",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1095,
+      "output_tokens": 370,
+      "cached_tokens": 0,
+      "latency_ms": 8892,
+      "output": {
+        "raw_output": "I need to reconcile the available data. The MongoDB source (operational state) and SQL source (historical data) need to be cross-referenced. Based on the provided upstream output, the SQL query was truncated but I can work with the partial data structure. The MongoDB operational state is implied as the primary source. I'll construct the reconciliation based on what's available, applying LEFT JOIN semantics with null/0 fills for missing SQL metrics.\n\n```json\n{\"reconciled\": [{\"entity_key\": \"fetch_declining_publishers\", \"mongo_value\": {\"status\": \"query_truncated\", \"publishers_identified\": null, \"operational_state\": \"partial_result\", \"contract_status\": \"unknown\", \"strategic_value\": \"unknown\"}, \"sql_value\": {\"q1_spend\": null, \"q2_spend\": null, \"q3_spend\": null, \"q4_spend\": null, \"declining_steps\": 0, \"comparable_steps\": 0, \"spend_trend_delta\": null, \"trend_severity\": \"indeterminate\", \"query_completion\": false, \"query_truncated_at\": \"decline_analysis_cte\"}, \"classification\": \"no_recent_activity\", \"recommendation\": \"hold\", \"reason\": \"SQL result was truncated before producing publisher-level rows; no spend history or trend severity could be computed. MongoDB operational state yields no active contract or strategic value signal. Recommend hold pending full query execution and data revalidation.\", \"confidence\": \"low\", \"action_required\": \"re-run SQL query with complete CTE chain, validate MongoDB publisher contract documents, then re-reconcile for expand/reduce classification\"}]}"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.022311,
+  "total_latency_ms": 18277,
+  "cumulative_spend_usd": 1.3554169999999996,
+  "evaluator_reason": "step1_sql_fail: no_sql_in_output"
+}

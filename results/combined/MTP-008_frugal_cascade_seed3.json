@@ -1,0 +1,110 @@
+{
+  "task_id": "MTP-008",
+  "task_class": "multitool_plan",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "orchestrate_tools",
+        "description": "Generate a multi-tool orchestration plan to retrieve project requirements from Jira, check team availability from calendar API, schedule standup meeting, and share agenda via Slack. Map to the 25-tool enterprise registry and sequence execution with proper data flow.",
+        "specialist": "multitool_plan",
+        "tier": "frontier",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This query explicitly requests orchestration of multiple enterprise tools (Jira, calendar API, meeting scheduler, Slack) with a complex data flow: requirements flow from Jira \u2192 availability check \u2192 meeting scheduling \u2192 agenda sharing. This is the definition of a multitool_plan scenario. A single frontier-tier subtask is sufficient because multitool_plan is specifically designed to handle multi-step tool invocation sequencing and dependency management across the tool registry in one call. No separate data extraction or reconciliation is needed; the plan agent handles tool-call orchestration and sequencing. Frontier tier is necessary for the complexity of coordinating four distinct systems with proper data flow and error handling.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "orchestrate_tools",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 480,
+      "output_tokens": 662,
+      "cached_tokens": 0,
+      "latency_ms": 4705,
+      "output": {
+        "plan": [
+          {
+            "tool": "jira.list_tickets",
+            "arguments": {
+              "project": "project",
+              "status": "in progress",
+              "limit": 50
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "time_min": "2024-01-01T00:00:00Z",
+              "time_max": "2024-01-01T23:59:59Z",
+              "calendar_id": "team"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "resource": "calendar.create_event",
+              "action": "create"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.create_event",
+            "arguments": {
+              "title": "Team Standup Meeting",
+              "description": "Daily standup: Project requirements review - $1.issues[0].key: $1.issues[0].summary",
+              "start_time": "2024-01-01T09:30:00Z",
+              "end_time": "2024-01-01T10:00:00Z",
+              "attendees": [
+                "team@company.com"
+              ],
+              "availability_check": "$2.events"
+            },
+            "depends_on": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "create_event",
+              "resource": "standup_meeting",
+              "resource_id": "$4.event_id",
+              "details": "Standup scheduled based on $1.issues.length requirements and $2.events.length calendar conflicts checked"
+            },
+            "depends_on": [
+              4
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#team-standup",
+              "message": "\ud83d\udcc5 **Team Standup Scheduled**\n\n**Time:** 2024-01-01 09:30 AM\n**Duration:** 30 minutes\n\n**Agenda - Active Requirements:**\n$1.issues.map(i => '\u2022 ' + i.key + ': ' + i.summary).join('\\n')\n\n**Availability Status:** $2.events.length calendar conflicts reviewed\n\n**Meeting Link:** $4.event_link"
+            },
+            "depends_on": [
+              1,
+              2,
+              4,
+              5
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0037900000000000004,
+  "total_latency_ms": 4705,
+  "cumulative_spend_usd": 8.214462000000001,
+  "evaluator_reason": "missing_tools: {'slack.messages.post', 'calendar.events.create', 'calendar.availability.check', 'jira.issue.get'}"
+}

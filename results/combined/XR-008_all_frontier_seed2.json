@@ -1,0 +1,63 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "ddog_usage_query",
+        "description": "Query SQL warehouse for Datadog license allocations, actual usage metrics (events, containers, synthetics runs, APM hosts), and historical growth patterns over last 12 months",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "ddog_trend_analysis",
+        "description": "Reconcile allocated vs. actual usage from SQL results, identify variance patterns, classify utilization posture (over-provisioned, optimal, under-provisioned), generate growth trend analysis and recommendations for license optimization",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid-tier) to aggregate multi-metric licensing and usage data across time periods with growth calculations; (2) cross_recon (mid-tier) to reconcile allocated vs. actual usage, identify variance patterns, classify utilization posture, and generate optimization recommendations. The cross_recon agent is appropriate here because it reconciles two related but distinct data streams (allocations vs. actual usage metrics) and generates classification and recommendations. No policy_action needed\u2014this is posture analysis, not compliance evaluation. No multitool_plan needed\u2014work is contained within SQL and reconciliation. Tier assignment: mid for both because sql_gen requires multi-table joins across license and usage fact tables with time-series aggregation; cross_recon requires multi-signal analysis and posture classification but not complex policy logic or external tool orchestration."
+  },
+  "node_results": [
+    {
+      "subtask_id": "ddog_usage_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 723,
+      "output_tokens": 232,
+      "cached_tokens": 0,
+      "latency_ms": 5202,
+      "output": {
+        "sql": "SELECT publisher, product, event_type, DATE_TRUNC('month', event_date) AS usage_month, SUM(amount_usd) AS total_amount_usd, SUM(daily_active_seats) AS total_active_seats, COUNT(DISTINCT event_id) AS event_count, COUNT(DISTINCT user_id) AS unique_users FROM consumption_facts WHERE publisher = 'Datadog' AND event_date >= CURRENT_DATE - INTERVAL '12 months' GROUP BY publisher, product, event_type, DATE_TRUNC('month', event_date) ORDER BY usage_month, product, event_type"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "ddog_trend_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 442,
+      "output_tokens": 42,
+      "cached_tokens": 0,
+      "latency_ms": 3421,
+      "output": {
+        "reconciled": [],
+        "note": "No upstream MongoDB or SQL outputs provided to reconcile"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.012675,
+  "total_latency_ms": 8623,
+  "cumulative_spend_usd": 4.821721000000001,
+  "evaluator_reason": "no_mongo_node"
+}

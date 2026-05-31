@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_analysis",
+        "description": "Query SQL warehouse to compute current month spend, 3-month rolling average, and variance metrics by vendor/category. Calculate variance percentage and deviation from baseline.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_classify",
+        "description": "Reconcile spend variance results and classify anomalies into three tiers (normal_variance, concerning, critical) based on deviation thresholds. Generate anomaly summary with root-cause indicators.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_spend_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks are the minimum: (1) sql_gen computes the spend metrics and variance in a single multi-CTE query (current month + 3-month avg + variance calc); assigned mid tier because it requires multi-month aggregation logic and window functions. (2) cross_recon performs the classification logic\u2014mapping variance to severity classes\u2014and is assigned mid tier because it interprets multi-signal variance data and applies classification rules. No policy_action is needed because classification is a data-driven decision, not a governance approval. No separate extraction or multitool_plan is needed."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 478,
+      "output_tokens": 491,
+      "cached_tokens": 0,
+      "latency_ms": 7178,
+      "output": {
+        "sql": "SELECT vendor_name, current_month, current_spend, avg_3mo, ROUND(avg_3mo * 0.10, 2) AS threshold_10pct, ROUND(avg_3mo * 0.25, 2) AS threshold_25pct, ROUND(current_spend - avg_3mo, 2) AS variance_usd, CASE WHEN avg_3mo = 0 THEN NULL ELSE ROUND(((current_spend - avg_3mo) / avg_3mo) * 100, 2) END AS variance_pct, CASE WHEN avg_3mo = 0 THEN 'no_baseline' WHEN ABS(current_spend - avg_3mo) <= avg_3mo * 0.10 THEN 'normal_variance' WHEN ABS(current_spend - avg_3mo) <= avg_3mo * 0.25 THEN 'concerning' ELSE 'critical' END AS anomaly_classification FROM ( SELECT vendor_name, DATE_TRUNC('month', invoice_date) AS current_month, SUM(CASE WHEN DATE_TRUNC('month', invoice_date) = DATE_TRUNC('month', CURRENT_DATE) THEN amount_usd ELSE 0 END) AS current_spend, AVG(monthly_spend) OVER (PARTITION BY vendor_name ORDER BY DATE_TRUNC('month', invoice_date) ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING) AS avg_3mo FROM ( SELECT vendor_name, DATE_TRUNC('month', invoice_date) AS invoice_month, SUM(amount_usd) AS monthly_spend, invoice_date FROM invoice_facts GROUP BY vendor_name, DATE_TRUNC('month', invoice_date), invoice_date ) monthly_agg GROUP BY vendor_name, DATE_TRUNC('month', invoice_date) ) spend_summary WHERE current_month = DATE_TRUNC('month', CURRENT_DATE) ORDER BY ABS(variance_usd) DESC NULLS LAST"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_classify",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 779,
+      "output_tokens": 403,
+      "cached_tokens": 0,
+      "latency_ms": 11810,
+      "output": {
+        "raw_output": "I notice this input contains only a SQL query definition but no actual result data from either MongoDB or SQL execution. I'll reconcile based on the structural intent: MongoDB (operational state) is absent, and SQL results are also not yet returned \u2014 both sources are effectively empty/unexecuted.\n\nHowever, interpreting the task as a **schema-driven reconciliation template** with the SQL as the historical source and assuming the MongoDB operational layer would track vendor contract/status metadata, I'll return a valid reconciliation reflecting the no-data state with anomaly summary scaffolding:\n\n{\"reconciled\":[{\"entity_key\":\"__no_mongo_records_found__\",\"mongo_value\":null,\"sql_value\":null,\"classification\":\"no_data\",\"anomaly_summary\":{\"total_vendors_evaluated\":0,\"tiers\":{\"normal_variance\":{\"count\":0,\"vendors\":[]},\"concerning\":{\"count\":0,\"vendors\":[]},\"critical\":{\"count\":0,\"vendors\":[]}},\"root_cause_indicators\":{\"missing_mongo_source\":\"MongoDB operational data was not provided or returned zero documents. Cannot establish primary source for LEFT JOIN anchor.\",\"missing_sql_results\":\"SQL spend analysis query was provided as a definition only \u2014 no result rows were returned. Verify invoice_facts table has current-month data and avg_3mo window covers at least one prior month.\",\"reconciliation_gap\":\"Without both sources, variance classification (normal_variance / concerning / critical) cannot be computed. Thresholds require avg_3mo > 0 to avoid no_baseline state.\"},\"recommended_actions\":[\"Execute SQL against live invoice_facts and return row-level results\",\"Provide MongoDB vendor operational records (contract status, expected spend bands, active flags)\",\"Re-submit both result sets for full LEFT JOIN reconciliation and tiered anomaly classification\"]}}]}"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.017181000000000002,
+  "total_latency_ms": 18988,
+  "cumulative_spend_usd": 0.045591,
+  "evaluator_reason": "step1_sql_fail: generated_sql_execution_error"
+}

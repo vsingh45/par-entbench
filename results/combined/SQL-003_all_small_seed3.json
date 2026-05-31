@@ -1,0 +1,62 @@
+{
+  "task_id": "SQL-003",
+  "task_class": "sql_gen",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "adobe_spend_analysis",
+        "description": "Query Adobe spend data for 2024 by quarter, compute QoQ change, and rank products by Q4 spend",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "microsoft_spend_analysis",
+        "description": "Query Microsoft spend data for 2024 by quarter, compute QoQ change, and rank products by Q4 spend",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Two independent sql_gen subtasks (mid tier each) are needed because Adobe and Microsoft are distinct data queries that can run in parallel. While both follow the same analytical pattern, combining them into one SQL would require complex UNION logic and make the query harder to debug/maintain. Mid tier is appropriate for each because they require: (1) aggregation by quarter and product, (2) window functions (LAG/LEAD for QoQ calculation, ROW_NUMBER for ranking), and (3) filtering/grouping across multiple columns. This is straightforward multi-table join + window function work that mid-tier agents handle reliably. The plan stays minimal (2 subtasks) because both publishers use the same database substrate and the query logic is identical\u2014we don't split further."
+  },
+  "node_results": [
+    {
+      "subtask_id": "adobe_spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 475,
+      "output_tokens": 521,
+      "cached_tokens": 0,
+      "latency_ms": 3289,
+      "output": {
+        "sql": "WITH quarterly_spend AS (SELECT cf.publisher, cf.product, cf.fiscal_quarter, SUM(cf.amount_usd) as quarterly_amount FROM consumption_facts cf WHERE cf.publisher IN ('Adobe', 'Microsoft') AND cf.event_date >= '2024-01-01' AND cf.event_date < '2025-01-01' GROUP BY cf.publisher, cf.product, cf.fiscal_quarter), qoq_change AS (SELECT curr.publisher, curr.product, curr.fiscal_quarter, curr.quarterly_amount, LAG(curr.quarterly_amount) OVER (PARTITION BY curr.publisher, curr.product ORDER BY curr.fiscal_quarter) as prev_quarter_amount, CASE WHEN LAG(curr.quarterly_amount) OVER (PARTITION BY curr.publisher, curr.product ORDER BY curr.fiscal_quarter) IS NOT NULL THEN ROUND(((curr.quarterly_amount - LAG(curr.quarterly_amount) OVER (PARTITION BY curr.publisher, curr.product ORDER BY curr.fiscal_quarter)) / LAG(curr.quarterly_amount) OVER (PARTITION BY curr.publisher, curr.product ORDER BY curr.fiscal_quarter) * 100)::NUMERIC, 2) ELSE NULL END as qoq_pct_change FROM quarterly_spend curr), q4_ranking AS (SELECT qc.publisher, qc.product, qc.fiscal_quarter, qc.quarterly_amount, qc.prev_quarter_amount, qc.qoq_pct_change, ROW_NUMBER() OVER (PARTITION BY qc.publisher ORDER BY CASE WHEN qc.fiscal_quarter = 4 THEN qc.quarterly_amount ELSE 0 END DESC) as q4_product_rank FROM qoq_change qc) SELECT qr.publisher, qr.product, qr.fiscal_quarter, qr.quarterly_amount, qr.prev_quarter_amount, qr.qoq_pct_change, qr.q4_product_rank FROM q4_ranking qr ORDER BY qr.publisher, qr.fiscal_quarter, qr.q4_product_rank"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "microsoft_spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 475,
+      "output_tokens": 306,
+      "cached_tokens": 0,
+      "latency_ms": 2139,
+      "output": {
+        "sql": "WITH quarterly_spend AS (SELECT publisher, product, fiscal_quarter, SUM(amount_usd) as quarterly_spend FROM consumption_facts WHERE publisher IN ('Adobe', 'Microsoft') AND event_date >= '2024-01-01' AND event_date < '2025-01-01' GROUP BY publisher, product, fiscal_quarter), ranked_products AS (SELECT publisher, product, fiscal_quarter, quarterly_spend, LAG(quarterly_spend) OVER (PARTITION BY publisher, product ORDER BY fiscal_quarter) as prev_quarter_spend, ROUND(((quarterly_spend - LAG(quarterly_spend) OVER (PARTITION BY publisher, product ORDER BY fiscal_quarter)) / LAG(quarterly_spend) OVER (PARTITION BY publisher, product ORDER BY fiscal_quarter) * 100)::NUMERIC, 2) as qoq_change_pct, ROW_NUMBER() OVER (PARTITION BY publisher, fiscal_quarter ORDER BY quarterly_spend DESC) as product_rank_in_quarter FROM quarterly_spend) SELECT publisher, product, fiscal_quarter, quarterly_spend, prev_quarter_spend, qoq_change_pct, product_rank_in_quarter FROM ranked_products ORDER BY publisher, fiscal_quarter, product_rank_in_quarter"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.005085000000000001,
+  "total_latency_ms": 5428,
+  "cumulative_spend_usd": 0.22236099999999998,
+  "evaluator_reason": "result_bag_mismatch"
+}

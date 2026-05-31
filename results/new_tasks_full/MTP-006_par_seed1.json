@@ -1,0 +1,123 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sam_contract_dates",
+        "description": "Query SAM system to retrieve active contracts with renewal dates, vendor info, and contract values. Extract upcoming renewal milestones within 90-day window.",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "consumption_trends",
+        "description": "Query consumption database to analyze usage trends over last 12 months for contracts identified in renewal window. Calculate spend velocity and usage patterns by contract.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "risk_assessment",
+        "description": "Reconcile SAM contract data with consumption trends. Classify renewal risk (high/medium/low) based on renewal proximity, spend trending, usage volatility, and vendor concentration. Generate renewal recommendations (renew, renegotiate, migrate, discontinue).",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sam_contract_dates",
+          "consumption_trends"
+        ]
+      },
+      {
+        "id": "procurement_notification",
+        "description": "Format risk assessment output into procurement notification payload (contract ID, vendor, renewal date, risk level, recommendation, consumption summary). Structure for email/workflow dispatch to procurement team.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": [
+          "risk_assessment"
+        ]
+      }
+    ],
+    "cost_rationale": "4 subtasks structured as a pipeline: (1) SAM retrieval uses multitool_plan (mid tier) because pulling renewal dates from SAM likely requires multi-step tool orchestration (API auth, filtering, formatting). (2) Consumption query is a single SQL_gen (mid tier) with aggregation windows for trend analysis. (3) Risk assessment is cross_recon (frontier) to reconcile two data sources (contracts + consumption), classify risk across multiple signals (date proximity, spend velocity, volatility), and generate prioritized recommendations—this requires multi-signal reasoning. (4) Notification formatting is sql_gen (small tier) to structure the output; it's straightforward data mapping and doesn't require complex logic. Sequential dependencies: procurement notification depends on risk assessment; both earlier queries feed the risk assessment step. This avoids unnecessary parallel work and keeps the specialist scope tight to their core responsibilities."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sam_contract_dates",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 452,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10346,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"resource\": \"sam_system\",\n        \"action\": \"read\",\n        \"context\": \"license_renewal_workflow\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"contracts\",\n        \"filter\": {\n          \"status\": \"active\",\n          \"renewal_date\": {\n            \"$gte\": \"{{TODAY}}\",\n            \"$lte\": \"{{TODAY+90DAYS}}\"\n          }\n        },\n        \"projection\": {\n          \"contract_id\": 1,\n          \"vendor_name\": 1,\n          \"vendor_contact\": 1,\n          \"contract_value\": 1,\n          \"renewal_date\": 1,\n          \"license_type\": 1,\n          \"seat_count\": 1,\n          \"auto_renew\": 1,\n          \"cancellation_notice_days\": 1,\n          \"product_name\": 1\n        },\n        \"sort\": {\n          \"renewal_date\": 1\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT contract_id, product_name, DATE_TRUNC('month', usage_date) AS usage_month, SUM(active_seats) AS seats_used, AVG(utilization_pct) AS avg_utilization, MAX(peak_utilization_pct) AS peak_utilization FROM license_consumption WHERE contract_id IN ({{$2.results[*].contract_id}}) AND usage_date >= DATEADD('day', -90, CURRENT_DATE()) GROUP BY 1, 2, 3 ORDER BY contract_id, usage_month DESC\"\n      },\n      \"depends_on\": [2]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT contract_id, COUNT(DISTINCT user_id) AS unique_users_last30, SUM(CASE WHEN last_login_date >= DATEADD('day', -30, CURRENT_DATE()) THEN 1 ELSE 0 END) AS active_users_last30, SUM(CASE WHEN last_login_date < DATEADD('day', -60, CURRENT_DATE()) THEN 1 ELSE 0 END) AS dormant_users FROM license_user_activity WHERE contract_id IN ({{$2.results[*].contract_id}}) GROUP BY 1\"\n      },\n      \"depends_on\": [2]\n    },\n    {\n      \"tool\": \"mongo.aggregate\",\n      \"arguments\": {\n        \"collection\": \"contracts\",\n        \"pipeline\": [\n          {\n            \"$match\": {\n              \"status\": \"active\",\n              \"renewal_date\": {\n                \"$gte\": \"{{TODAY}}\",\n                \"$lte\": \"{{TODAY+90DAYS}}\"\n              }\n            }\n          },\n          {\n            \"$lookup\": {\n              \"from\": \"renewal_history\",\n              \"localField\": \"contract_id\",\n              \"foreignField\": \""
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "consumption_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 470,
+      "output_tokens": 593,
+      "cached_tokens": 0,
+      "latency_ms": 7674,
+      "output": {
+        "sql": "SELECT cf.license_id, cf.publisher, cf.product, cf.fiscal_year, cf.fiscal_quarter, SUM(cf.amount_usd) AS total_spend, AVG(cf.amount_usd) AS avg_monthly_spend, SUM(cf.daily_active_seats) AS total_active_seats, AVG(cf.daily_active_seats) AS avg_active_seats, COUNT(DISTINCT cf.user_id) AS unique_users, COUNT(cf.event_id) AS event_count, MIN(cf.event_date) AS first_event_date, MAX(cf.event_date) AS last_event_date, SUM(SUM(cf.amount_usd)) OVER (PARTITION BY cf.license_id ORDER BY cf.fiscal_year, cf.fiscal_quarter ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumulative_spend, SUM(cf.amount_usd) - LAG(SUM(cf.amount_usd)) OVER (PARTITION BY cf.license_id ORDER BY cf.fiscal_year, cf.fiscal_quarter) AS spend_delta_vs_prior_quarter, CASE WHEN AVG(cf.daily_active_seats) = 0 THEN NULL ELSE SUM(cf.amount_usd) / NULLIF(AVG(cf.daily_active_seats), 0) END AS spend_per_active_seat, CASE WHEN SUM(cf.amount_usd) - LAG(SUM(cf.amount_usd)) OVER (PARTITION BY cf.license_id ORDER BY cf.fiscal_year, cf.fiscal_quarter) > SUM(cf.amount_usd) * 0.2 THEN 'HIGH_GROWTH' WHEN SUM(cf.amount_usd) - LAG(SUM(cf.amount_usd)) OVER (PARTITION BY cf.license_id ORDER BY cf.fiscal_year, cf.fiscal_quarter) < -(SUM(cf.amount_usd) * 0.2) THEN 'DECLINING' ELSE 'STABLE' END AS spend_velocity_flag FROM consumption_facts cf WHERE cf.event_date >= CURRENT_DATE - INTERVAL '12 months' AND cf.event_date < CURRENT_DATE GROUP BY cf.license_id, cf.publisher, cf.product, cf.fiscal_year, cf.fiscal_quarter ORDER BY cf.license_id, cf.fiscal_year, cf.fiscal_quarter"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "risk_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 2652,
+      "output_tokens": 235,
+      "cached_tokens": 0,
+      "latency_ms": 4624,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "contract_id_pending",
+            "mongo_value": {
+              "note": "MongoDB contract list not materialized in upstream output; plan truncated before results returned"
+            },
+            "sql_value": null,
+            "classification": "insufficient_data"
+          }
+        ],
+        "_meta": {
+          "warning": "Upstream MongoDB output contained only a query plan, not result rows. SQL consumption_trends query is defined but no result set provided. Unable to perform per-contract reconciliation without actual data.",
+          "recommended_action": "Re-run with materialized query results from both sources to enable per-contract renewal risk classification (high/medium/low) and recommendations (renew/renegotiate/migrate/discontinue)."
+        }
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "procurement_notification",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 635,
+      "output_tokens": 382,
+      "cached_tokens": 0,
+      "latency_ms": 3765,
+      "output": {
+        "raw_output": "{\n  \"sql\": \"SELECT c.contract_id, i.vendor_name, i.due_date AS renewal_date, cf.publisher, cf.product, SUM(cf.amount_usd) AS total_consumption_usd, COUNT(DISTINCT cf.user_id) AS active_users, MAX(cf.event_date) AS last_activity_date FROM invoice_facts i LEFT JOIN consumption_facts cf ON i.vendor_name = cf.publisher LEFT JOIN (SELECT DISTINCT contract_id FROM invoice_facts) c ON i.invoice_id = c.contract_id WHERE i.due_date >= CURRENT_DATE AND i.status IN ('pending', 'open') GROUP BY c.contract_id, i.vendor_name, i.due_date, cf.publisher, cf.product ORDER BY i.due_date ASC\"\n}\n```\n\n**Note:** The upstream risk assessment indicates insufficient materialized data. The query above structures available procurement notification fields but cannot classify risk levels (high/medium/low) or generate recommendations without:\n\n1. Actual contract renewal dates and vendor master data\n2. Materialized consumption trend results per contract\n3. Reconciled MongoDB contract records with SQL invoice/consumption facts\n\n**Recommended action:** Execute this query with complete data source materialization, then apply business logic to classify:\n- **High risk:** renewal_date ≤ 30 days AND (last_activity_date ≥ 90 days ago OR active_users declining)\n- **Medium risk:** renewal_date ≤ 60 days AND moderate consumption\n- **Low risk:** renewal_date > 60 days OR active consumption with renewal buffer"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.045341,
+  "total_latency_ms": 26409,
+  "cumulative_spend_usd": 6.904489000000007
+}

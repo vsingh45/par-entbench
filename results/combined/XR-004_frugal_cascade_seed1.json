@@ -1,0 +1,159 @@
+{
+  "task_id": "XR-004",
+  "task_class": "cross_recon",
+  "router": "frugal_cascade",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_sam_licenses",
+        "description": "Extract licensed user counts and license types from SAM (Software Asset Management) documentation or database. Return structured data with license SKUs, quantities, and user assignments.",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_consumption_facts",
+        "description": "Query consumption facts warehouse to retrieve active users by Microsoft product/SKU, license types, and consumption metrics. Return active user counts aggregated by product and license type.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_classify",
+        "description": "Reconcile SAM licensed users against consumption facts active users. Calculate provisioning variance (over/under by SKU), classify each product as over-provisioned, under-provisioned, or optimally provisioned. Identify savings opportunities and compliance risks. Return reconciliation matrix with variance percentages and posture recommendations.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "extract_sam_licenses",
+          "query_consumption_facts"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) Extract licenses from SAM\u2014simple document/database field extraction (small). (2) Query consumption facts for active user counts\u2014multi-table join with aggregation by SKU/product (mid). (3) Reconcile the two sources, compute variance ratios, classify posture, and generate recommendations\u2014requires cross-source signal fusion and judgment (frontier). The reconciliation drives the tier: comparing license vs. consumption, calculating under/over-provisioning percentages, and formulating optimization recommendations demands inference and domain knowledge. This is a classic two-source reconciliation case requiring classification and posture decision-making, which is frontier-level cross_recon work."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_sam_licenses",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 256,
+      "output_tokens": 243,
+      "cached_tokens": 0,
+      "latency_ms": 2203,
+      "output": {
+        "error": "No document provided",
+        "message": "Cannot extract licensed user counts and license types without a document to process",
+        "required_inputs": [
+          "SAM documentation file",
+          "license database export",
+          "consumption facts data",
+          "Microsoft licensing records"
+        ],
+        "expected_output_schema": {
+          "licenses": [
+            {
+              "sku": null,
+              "license_type": null,
+              "quantity_licensed": null,
+              "quantity_assigned": null,
+              "active_users": null,
+              "provisioning_status": null
+            }
+          ],
+          "reconciliation": {
+            "total_licensed_users": null,
+            "total_active_users": null,
+            "over_provisioned_count": null,
+            "under_provisioned_count": null,
+            "variance_percentage": null
+          },
+          "document_source": null,
+          "extraction_date": null
+        }
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_consumption_facts",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 477,
+      "output_tokens": 201,
+      "cached_tokens": 0,
+      "latency_ms": 1480,
+      "output": {
+        "sql": "SELECT consumption_facts.product, consumption_facts.license_id, COUNT(DISTINCT consumption_facts.user_id) AS active_user_count, SUM(consumption_facts.daily_active_seats) AS total_active_seats, SUM(consumption_facts.amount_usd) AS total_consumption_usd, consumption_facts.fiscal_year, consumption_facts.fiscal_quarter FROM consumption_facts WHERE consumption_facts.publisher = 'Microsoft' AND consumption_facts.event_date >= '2024-01-01' GROUP BY consumption_facts.product, consumption_facts.license_id, consumption_facts.fiscal_year, consumption_facts.fiscal_quarter ORDER BY consumption_facts.product, consumption_facts.license_id, consumption_facts.fiscal_year, consumption_facts.fiscal_quarter"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_classify",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 678,
+      "output_tokens": 541,
+      "cached_tokens": 0,
+      "latency_ms": 4096,
+      "output": {
+        "reconciled": [],
+        "reconciliation_summary": {
+          "status": "incomplete",
+          "reason": "upstream_dependency_failure",
+          "missing_data": {
+            "mongodb_source": "extract_sam_licenses returned error - No document provided",
+            "sql_source": "query_consumption_facts executed but no result data provided",
+            "root_cause": "SAM documentation file and license database export required but not supplied"
+          },
+          "required_to_proceed": [
+            "SAM licensing document with SKU, license_type, quantity_licensed, quantity_assigned",
+            "MongoDB result set from extract_sam_licenses query",
+            "SQL result set from query_consumption_facts with product, license_id, active_user_count, total_active_seats, total_consumption_usd"
+          ],
+          "expected_output_structure_on_success": {
+            "reconciled": [
+              {
+                "entity_key": "product_sku_license_id",
+                "sku": "string",
+                "license_type": "string",
+                "quantity_licensed": "number",
+                "quantity_assigned": "number",
+                "mongo_active_users": "number",
+                "sql_active_users": "number",
+                "sql_total_seats": "number",
+                "sql_consumption_usd": "number",
+                "provisioning_variance_pct": "number",
+                "variance_abs": "number",
+                "classification": "over_provisioned|under_provisioned|optimally_provisioned",
+                "compliance_risk": "high|medium|low|none",
+                "annual_savings_opportunity_usd": "number",
+                "recommendation": "string"
+              }
+            ],
+            "reconciliation_summary": {
+              "total_skus_analyzed": "number",
+              "over_provisioned_count": "number",
+              "under_provisioned_count": "number",
+              "optimal_provisioned_count": "number",
+              "total_variance_pct": "number",
+              "total_annual_savings_potential_usd": "number",
+              "total_compliance_risk_users": "number"
+            }
+          }
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0063360000000000005,
+  "total_latency_ms": 7779,
+  "cumulative_spend_usd": 2.7219860000000007,
+  "evaluator_reason": "no_mongo_node"
+}

@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "sink_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_1",
+        "description": "Query SQL warehouse for publishers with declining quarterly revenue/spend trends in 2024. Calculate QoQ change and identify those with negative trend across quarters.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_1",
+        "description": "Reconcile publisher spend trends with contract status (MongoDB) and historical growth patterns (SQL), then classify renewal posture and generate hold/expand/reduce recommendations based on trend severity, contract value, and vendor risk.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_1"
+        ]
+      }
+    ],
+    "cost_rationale": "2 subtasks: (1) sql_gen to fetch declining trend data across 4 quarters in 2024 with QoQ calculations \u2014 requires mid-tier for multi-quarter aggregation and trend analysis; (2) cross_recon to synthesize SQL trends with contract data and generate recommendations \u2014 mid-tier because it reconciles two sources (SQL + MongoDB state) and applies classification logic. The recommendation generation is built into cross_recon's reconciliation output, not a separate policy_action, since no explicit compliance/governance policy is being evaluated. This is minimal: a single SQL fetch + single reconciliation produces all recommendations without unnecessary intermediate steps."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 470,
+      "output_tokens": 420,
+      "cached_tokens": 0,
+      "latency_ms": 2870,
+      "output": {
+        "sql": "WITH quarterly_revenue AS (SELECT publisher, fiscal_quarter, SUM(amount_usd) as quarterly_revenue FROM consumption_facts WHERE event_date >= '2024-01-01' AND event_date <= '2024-12-31' GROUP BY publisher, fiscal_quarter), qoq_change AS (SELECT publisher, fiscal_quarter, quarterly_revenue, LAG(quarterly_revenue) OVER (PARTITION BY publisher ORDER BY fiscal_quarter) as prev_quarter_revenue, ROUND(((quarterly_revenue - LAG(quarterly_revenue) OVER (PARTITION BY publisher ORDER BY fiscal_quarter)) / LAG(quarterly_revenue) OVER (PARTITION BY publisher ORDER BY fiscal_quarter) * 100)::NUMERIC, 2) as qoq_percent_change FROM quarterly_revenue), declining_publishers AS (SELECT publisher, COUNT(CASE WHEN qoq_percent_change < 0 THEN 1 END) as negative_quarters, ROUND(AVG(qoq_percent_change)::NUMERIC, 2) as avg_qoq_change FROM qoq_change WHERE qoq_percent_change IS NOT NULL GROUP BY publisher HAVING COUNT(CASE WHEN qoq_percent_change < 0 THEN 1 END) >= 2) SELECT declining_publishers.publisher, declining_publishers.negative_quarters, declining_publishers.avg_qoq_change, CASE WHEN declining_publishers.avg_qoq_change < -20 THEN 'reduce' WHEN declining_publishers.avg_qoq_change < -10 THEN 'hold' ELSE 'expand' END as renewal_recommendation FROM declining_publishers ORDER BY declining_publishers.avg_qoq_change ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_1",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1142,
+      "output_tokens": 184,
+      "cached_tokens": 0,
+      "latency_ms": 6354,
+      "output": {
+        "raw_output": "{\"reconciled\":[{\"entity_key\":\"publisher\",\"mongo_value\":null,\"sql_value\":null,\"classification\":\"no_data\"}]}\n\nNote: The task description references MongoDB data for contract status, but no MongoDB upstream output was provided. Without the MongoDB primary source, proper LEFT JOIN reconciliation cannot be performed. Returning SQL-only fallback would violate the rule that MongoDB is the primary source.\n\nReformatted strictly per schema using SQL data as the only available signal:\n\n{\"reconciled\":[]}"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.012879999999999999,
+  "total_latency_ms": 9224,
+  "cumulative_spend_usd": 1.1935589999999998,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

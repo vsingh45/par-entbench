@@ -1,0 +1,87 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "iam_roles_extract",
+        "description": "Extract all IAM roles with elevated permissions (e.g., admin, power-user, or specific privilege escalation policies) and their granted permission sets from the IAM policy store.",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "iam_exercised_query",
+        "description": "Query CloudTrail/audit logs to identify actually exercised (invoked) IAM permissions by role across the last 180 days. Return sets of permissions with timestamps and invocation counts.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "permission_reconciliation",
+        "description": "Reconcile granted permissions (from iam_roles_extract) against exercised permissions (from iam_exercised_query). Identify permission gaps and flag granted-but-never-used permissions as revocation candidates. Classify each role by usage posture (fully-utilized, partially-utilized, unused). Produce a report with revocation recommendations prioritized by blast radius.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "iam_roles_extract",
+          "iam_exercised_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) extract to pull granted IAM role permissions from the policy store; (2) sql_gen (mid tier) to query the audit log warehouse for actual permission exercises over 180 days with aggregation logic; (3) cross_recon (frontier tier) to reconcile two distinct sources (static IAM policy state vs. dynamic audit log telemetry), classify roles by usage posture, identify unused permissions, and generate prioritized revocation recommendations. The cross_recon subtask handles classification and recommendation generation as part of reconciliation, avoiding a separate step. Frontier tier is justified because reconciliation requires complex comparison logic, posture classification, and multi-signal reasoning to weight revocation risk."
+  },
+  "node_results": [
+    {
+      "subtask_id": "iam_roles_extract",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 272,
+      "output_tokens": 156,
+      "cached_tokens": 0,
+      "latency_ms": 1983,
+      "output": {
+        "raw_output": "{\n  \"elevated_iam_roles\": null,\n  \"permission_sets\": null,\n  \"role_permission_mappings\": null,\n  \"granted_permissions\": null,\n  \"exercised_permissions_180_days\": null,\n  \"unused_permission_candidates\": null,\n  \"reconciliation_analysis\": null\n}\n```\n\n**Note:** No document was provided to extract IAM role and permission data from. To complete this extraction task, please provide:\n- IAM policy documents\n- Role definitions and permission sets\n- CloudTrail logs or equivalent audit trail (last 180 days)\n- Policy configuration files (JSON/YAML format)"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "iam_exercised_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 495,
+      "output_tokens": 692,
+      "cached_tokens": 0,
+      "latency_ms": 9761,
+      "output": {
+        "sql": "SELECT\n    alf.permission,\n    alf.user_id AS iam_role,\n    alf.resource,\n    COUNT(*) FILTER (WHERE alf.result = 'ALLOW') AS successful_invocations,\n    COUNT(*) FILTER (WHERE alf.result = 'DENY') AS denied_invocations,\n    COUNT(*) AS total_invocations,\n    MIN(alf.access_time) AS first_invocation,\n    MAX(alf.access_time) AS last_invocation,\n    ARRAY_AGG(DISTINCT alf.action ORDER BY alf.action) AS actions_performed,\n    CASE\n        WHEN COUNT(*) FILTER (WHERE alf.result = 'ALLOW') = 0 THEN 'NEVER_EXERCISED_CANDIDATE_FOR_REVOCATION'\n        WHEN MAX(alf.access_time) < NOW() - INTERVAL '90 days' THEN 'STALE_NOT_USED_IN_90_DAYS'\n        WHEN MAX(alf.access_time) < NOW() - INTERVAL '30 days' THEN 'LOW_USAGE_NOT_USED_IN_30_DAYS'\n        ELSE 'ACTIVELY_USED'\n    END AS usage_status,\n    ROUND(\n        COUNT(*) FILTER (WHERE alf.result = 'ALLOW')::NUMERIC /\n        NULLIF(COUNT(*), 0) * 100, 2\n    ) AS success_rate_pct,\n    NOW() - MAX(alf.access_time) AS time_since_last_use\nFROM access_log_facts alf\nWHERE\n    alf.access_time >= NOW() - INTERVAL '180 days'\n    AND alf.user_id IN (\n        SELECT DISTINCT user_id\n        FROM access_log_facts\n        WHERE access_time >= NOW() - INTERVAL '180 days'\n          AND permission IN (\n              SELECT DISTINCT permission\n              FROM access_log_facts\n              WHERE result = 'ALLOW'\n                AND action IN ('AssumeRole','PassRole','CreateRole','AttachRolePolicy',\n                               'PutRolePolicy','CreateUser','CreateAccessKey',\n                               'AdminAccess','FullAccess','PowerUser')\n          )\n    )\nGROUP BY\n    alf.user_id,\n    alf.permission,\n    alf.resource\nHAVING\n    COUNT(*) > 0\nORDER BY\n    usage_status DESC,\n    alf.user_id,\n    total_invocations ASC,\n    alf.permission"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "permission_reconciliation",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1740,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 900,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.021967,
+  "total_latency_ms": 12644,
+  "cumulative_spend_usd": 2.8914160000000018,
+  "evaluator_reason": "no_mongo_node"
+}

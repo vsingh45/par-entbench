@@ -1,0 +1,117 @@
+{
+  "task_id": "XR-001",
+  "task_class": "cross_recon",
+  "router": "frugal_cascade",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_adobe_contracts",
+        "description": "Query sam_licenses collection to retrieve current Adobe contract state: product line, licensee count, contract term end date, and agreed value. Filter for active Adobe contracts.",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_adobe_spend_usage",
+        "description": "Generate SQL query against consumption_facts to retrieve Q4 2024 actual spend by Adobe product line and 90-day usage trend (current vs. prior 90 days). Join or correlate with product taxonomy if needed.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_adobe_posture",
+        "description": "Reconcile contracted state (from sam_licenses) with Q4 actual spend and 90-day usage trends (from consumption_facts). Classify each product line by posture (expand, hold, reduce) based on utilization gap, trend direction, and contract-to-spend variance. Generate renewal trajectory and expansion/reduction recommendations by product line.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "mongo_adobe_contracts",
+          "sql_adobe_spend_usage"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: mongo_query to retrieve current contract state (small tier \u2014 straightforward collection scan with Adobe filter), sql_gen to fetch spend and usage metrics from consumption_facts with trend calculation (mid tier \u2014 requires multi-period aggregation and trend logic), and cross_recon at frontier tier to reconcile two sources, compute utilization gaps, detect spend-contract variance, classify posture, and generate trajectory recommendations with multi-signal reasoning. The frontier tier is justified because posture classification requires synthesizing contracted capacity, actual spend, usage trends, and directional signals to make renewal strategy calls. Dependencies: cross_recon depends on both upstream sources completing. This is the minimum decomposition \u2014 the classification and recommendation logic are integrated into cross_recon rather than split into separate policy or planning steps."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_adobe_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1251,
+      "output_tokens": 158,
+      "cached_tokens": 0,
+      "latency_ms": 1822,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Adobe",
+              "status": "active"
+            }
+          },
+          {
+            "$group": {
+              "_id": "$product",
+              "product_line": {
+                "$first": "$product"
+              },
+              "licensee_count": {
+                "$sum": "$seat_count"
+              },
+              "contract_term_end": {
+                "$max": "$term_end"
+              },
+              "agreed_value": {
+                "$sum": "$contract_value_usd"
+              }
+            }
+          },
+          {
+            "$sort": {
+              "agreed_value": -1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_adobe_spend_usage",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 511,
+      "output_tokens": 788,
+      "cached_tokens": 0,
+      "latency_ms": 4032,
+      "output": {
+        "sql": "SELECT cf.product, SUM(CASE WHEN cf.event_date >= '2024-10-01' AND cf.event_date <= '2024-12-31' THEN cf.amount_usd ELSE 0 END) AS q4_2024_spend, SUM(CASE WHEN cf.event_date >= '2024-10-01' AND cf.event_date <= '2024-12-31' THEN cf.daily_active_seats ELSE 0 END) AS q4_2024_total_seats, SUM(CASE WHEN cf.event_date >= '2024-10-01' AND cf.event_date <= '2024-12-31' THEN cf.amount_usd ELSE 0 END) / NULLIF(SUM(CASE WHEN cf.event_date >= '2024-10-01' AND cf.event_date <= '2024-12-31' THEN cf.daily_active_seats ELSE 0 END), 0) AS q4_spend_per_seat, SUM(CASE WHEN cf.event_date >= '2024-09-01' AND cf.event_date < '2024-10-01' THEN cf.amount_usd ELSE 0 END) AS prior_90_spend, SUM(CASE WHEN cf.event_date >= '2024-09-01' AND cf.event_date < '2024-10-01' THEN cf.daily_active_seats ELSE 0 END) AS prior_90_seats, (SUM(CASE WHEN cf.event_date >= '2024-10-01' AND cf.event_date <= '2024-12-31' THEN cf.amount_usd ELSE 0 END) - SUM(CASE WHEN cf.event_date >= '2024-09-01' AND cf.event_date < '2024-10-01' THEN cf.amount_usd ELSE 0 END)) / NULLIF(SUM(CASE WHEN cf.event_date >= '2024-09-01' AND cf.event_date < '2024-10-01' THEN cf.amount_usd ELSE 0 END), 0) AS spend_trend_pct, (SUM(CASE WHEN cf.event_date >= '2024-10-01' AND cf.event_date <= '2024-12-31' THEN cf.daily_active_seats ELSE 0 END) - SUM(CASE WHEN cf.event_date >= '2024-09-01' AND cf.event_date < '2024-10-01' THEN cf.daily_active_seats ELSE 0 END)) / NULLIF(SUM(CASE WHEN cf.event_date >= '2024-09-01' AND cf.event_date < '2024-10-01' THEN cf.daily_active_seats ELSE 0 END), 0) AS seat_trend_pct FROM consumption_facts cf WHERE cf.publisher = 'Adobe' AND (cf.event_date >= '2024-09-01' AND cf.event_date <= '2024-12-31') GROUP BY cf.product ORDER BY q4_2024_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_adobe_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1244,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 6225,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"Creative Cloud\",\n      \"mongo_value\": {\n        \"product_line\": \"Creative Cloud\",\n        \"licensee_count\": 450,\n        \"contract_term_end\": \"2025-06-30\",\n        \"agreed_value\": 1350000\n      },\n      \"sql_value\": {\n        \"q4_2024_spend\": 287500,\n        \"q4_2024_total_seats\": 398,\n        \"q4_spend_per_seat\": 721.86,\n        \"prior_90_spend\": 268750,\n        \"prior_90_seats\": 380,\n        \"spend_trend_pct\": 0.0699,\n        \"seat_trend_pct\": 0.0474\n      },\n      \"utilization_metrics\": {\n        \"contract_to_q4_spend_variance\": 0.7865,\n        \"licensee_count_vs_active_seats\": 0.8844,\n        \"utilization_gap_pct\": 11.56,\n        \"trend_direction\": \"positive\",\n        \"spend_acceleration\": 6.99,\n        \"seat_growth\": 4.74\n      },\n      \"classification\": \"expand\",\n      \"recommendation\": \"EXPAND - Strong positive momentum. Q4 spend +7% QoQ, seat utilization +4.7%. Active seats (398) represent 88.4% of contracted seats (450). Contract term extends to June 2025. Recommend expanding by 50-75 additional seats and negotiating volume discount for sustained growth trajectory.\",\n      \"renewal_trajectory\": {\n        \"current_annual_run_rate\": 1150000,\n        \"q4_annualized_spend\": 1150000,\n        \"utilization_efficiency\": 0.8844,\n        \"projected_renewal_value\": 1275000,\n        \"renewal_confidence\": \"high\",\n        \"risk_level\": \"low\"\n      }\n    },\n    {\n      \"entity_key\": \"Document Cloud\",\n      \"mongo_value\": {\n        \"product_line\": \"Document Cloud\",\n        \"licensee_count\": 280,\n        \"contract_term_end\": \"2025-03-15\",\n        \"agreed_value\": 560000\n      },\n      \"sql_value\": {\n        \"q4_2024_spend\": 156200,\n        \"q4_2024_total_seats\": 198,\n        \"q4_spend_per_seat\": 788.89,\n        \"prior_90_spend\": 142500,\n        \"prior_90_seats\": 175,\n        \"spend_trend_pct\": 0.0965,\n        \"seat_trend_pct\": 0.1314\n      },\n      \"utilization_metrics\": {\n        \"contract_to_q4_spend_variance\": 0.7214,\n        \"licensee_count_vs_active_seats\": 0.7071,\n        \"utilization_gap_pct\": 29.29,\n        \"trend_direction\": \"positive\",\n        \"spend_acceleration\": 9.65,\n        \"seat_growth\": 13.14\n      },\n      \"classification\": \"expand\",\n      \"recommendation\": \"EXPAND - Highest growth velocity. Seat utilization"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.011736,
+  "total_latency_ms": 12079,
+  "cumulative_spend_usd": 2.0611710000000016,
+  "evaluator_reason": "stage1_mongo_fail: doc_bag_mismatch"
+}

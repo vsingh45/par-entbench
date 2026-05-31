@@ -1,0 +1,52 @@
+{
+  "task_id": "PAC-006",
+  "task_class": "policy_action",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "An infrastructure engineer proposes rolling out Docker image changes to all microservices in production without prior staging validation.",
+        "specialist": "policy_action",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task — Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 501,
+      "output_tokens": 243,
+      "cached_tokens": 0,
+      "latency_ms": 2497,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-601": "fail",
+          "POL-602": "fail",
+          "POL-603": "fail"
+        },
+        "reason": "Proposed action violates three critical policies: (1) POL-601 requires 48-hour staging validation before production rollout, which is bypassed entirely; (2) POL-602 mandates change board approval and monitoring setup, with no evidence of either; (3) POL-603 requires rollback capability and traffic monitoring as preconditions, which have not been configured.",
+        "applied_constraints": [
+          "Staging validation required for minimum 48 hours before production deployment",
+          "Change board approval must be obtained prior to rollout",
+          "Post-deployment monitoring infrastructure must be configured",
+          "Automated rollback capability must be verified and tested",
+          "Traffic monitoring and alerting must be active before image deployment begins"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001716,
+  "total_latency_ms": 2497,
+  "cumulative_spend_usd": 8.529029000000003
+}

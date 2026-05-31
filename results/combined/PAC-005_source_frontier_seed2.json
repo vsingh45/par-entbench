@@ -1,0 +1,52 @@
+{
+  "task_id": "PAC-005",
+  "task_class": "policy_action",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_pii_export",
+        "description": "Evaluate bulk PII export request against data governance and privacy policies. Verify requestor authorization, assess compliance with data protection regulations (GDPR, CCPA, etc.), determine if data masking/anonymization is required, and issue approval or denial with justification.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This is explicitly a governance and compliance decision, not a data retrieval task. Bulk export of customer PII (names, emails, phone numbers) requires policy evaluation against data protection regulations, access control rules, and organizational governance frameworks. A mid-tier policy_action agent is appropriate because it must evaluate multiple policy dimensions (GDPR/CCPA compliance, requestor role authorization, data residency rules, audit logging requirements) and potentially issue conditional approval (e.g., approval with mandatory anonymization or role-based filtering). No sql_gen is invoked until policy clearance is established. This prevents unauthorized PII exposure and ensures compliance-first workflow design."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_pii_export",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 788,
+      "output_tokens": 253,
+      "cached_tokens": 0,
+      "latency_ms": 3938,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-501": "fail",
+          "POL-502": "fail",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "Bulk PII export by a data-analyst role lacks required Legal/CISO approvals (POL-501) and violates data minimization since names, emails, and phone numbers are sensitive attributes without stated business-critical justification (POL-502). Audit logging and retention controls (POL-503) can be applied conditionally but do not override missing approvals.",
+        "applied_constraints": [
+          "Obtain explicit Legal privacy approval",
+          "Obtain CISO sign-off",
+          "Provide business justification or apply anonymization/masking",
+          "Enable audit logging with 30-day retention if approved"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.010265,
+  "total_latency_ms": 3938,
+  "cumulative_spend_usd": 8.478187000000005,
+  "evaluator_reason": "selected_action_mismatch"
+}

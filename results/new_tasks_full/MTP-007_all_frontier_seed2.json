@@ -1,0 +1,144 @@
+{
+  "task_id": "MTP-007",
+  "task_class": "multitool_plan",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "iam_scan",
+        "description": "Scan IAM policies to extract policy documents, permissions, role assignments, and trust relationships. Extract structured policy data including principal ARNs, actions, resources, and conditions.",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cloudtrail_audit",
+        "description": "Query CloudTrail logs to retrieve event history, including user actions, API calls, timestamps, source IPs, and event outcomes. Aggregate events by principal, action type, and result status.",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "policy_violation_check",
+        "description": "Reconcile IAM policies from scan against CloudTrail audit events. Identify policy violations: unauthorized API calls, permission mismatches, suspicious access patterns, and compliance gaps. Classify findings by severity and risk level.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "iam_scan",
+          "cloudtrail_audit"
+        ]
+      },
+      {
+        "id": "compliance_report",
+        "description": "Generate comprehensive compliance report from violation analysis, including executive summary, violation details, remediation recommendations, and compliance status metrics.",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "policy_violation_check"
+        ]
+      }
+    ],
+    "cost_rationale": "Four subtasks are required: (1) IAM policy extraction (extract, mid-tier due to complex policy structure with multiple nested fields); (2) CloudTrail log querying (mongo_query, mid-tier for aggregation and filtering); (3) Reconciliation and violation detection (cross_recon, frontier-tier because it requires multi-signal analysis across two distinct sources, pattern matching for suspicious behavior, severity classification, and risk assessment); (4) Report generation (multitool_plan, mid-tier to orchestrate formatting, template selection, and output generation across the enterprise tool registry). Dependencies flow left-to-right: IAM and CloudTrail are independent parallel steps, policy violation check depends on both, and report generation depends on violations. This avoids redundant steps by consolidating classification and violation analysis into cross_recon rather than adding a separate policy_action step — policy violations here are detected analytically, not governed by pre-existing policies."
+  },
+  "node_results": [
+    {
+      "subtask_id": "iam_scan",
+      "specialist": "extract",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 374,
+      "output_tokens": 67,
+      "cached_tokens": 0,
+      "latency_ms": 1584,
+      "output": {
+        "policy_document": null,
+        "permissions": null,
+        "role_assignments": null,
+        "trust_relationships": null,
+        "principal_arns": null,
+        "actions": null,
+        "resources": null,
+        "conditions": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cloudtrail_audit",
+      "specialist": "mongo_query",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1763,
+      "output_tokens": 197,
+      "cached_tokens": 0,
+      "latency_ms": 2707,
+      "output": {
+        "collection": "iam_roles",
+        "pipeline": [
+          {
+            "$group": {
+              "_id": {
+                "role_name": "$role_name",
+                "is_elevated": "$is_elevated"
+              },
+              "permissions": {
+                "$first": "$permissions"
+              },
+              "permission_count": {
+                "$first": {
+                  "$size": "$permissions"
+                }
+              },
+              "count": {
+                "$sum": 1
+              }
+            }
+          },
+          {
+            "$sort": {
+              "_id.is_elevated": -1,
+              "permission_count": -1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "policy_violation_check",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 686,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 1509,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "compliance_report",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 654,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9802,
+      "output": {
+        "raw_output": "{\"plan\":[{\"tool\":\"iam.check_permission\",\"arguments\":{\"action\":\"security.audit.read\",\"resource\":\"compliance_report\"},\"depends_on\":[]},{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT violation_id, severity, resource, policy_name, detected_at, status FROM compliance.policy_violations WHERE detected_at >= DATEADD(day, -30, CURRENT_TIMESTAMP())\"},\"depends_on\":[1]},{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT COUNT(*) AS total_violations, SUM(CASE WHEN severity='CRITICAL' THEN 1 ELSE 0 END) AS critical, SUM(CASE WHEN severity='HIGH' THEN 1 ELSE 0 END) AS high, SUM(CASE WHEN status='OPEN' THEN 1 ELSE 0 END) AS open_count FROM compliance.policy_violations WHERE detected_at >= DATEADD(day, -30, CURRENT_TIMESTAMP())\"},\"depends_on\":[1]},{\"tool\":\"mongo.aggregate\",\"arguments\":{\"collection\":\"iam_policy_scans\",\"pipeline\":[{\"$match\":{\"scan_date\":{\"$gte\":\"2024-01-01\"}}},{\"$group\":{\"_id\":\"$policy_type\",\"count\":{\"$sum\":1},\"violations\":{\"$sum\":\"$violation_count\"}}}]},\"depends_on\":[1]},{\"tool\":\"datadog.query_metric\",\"arguments\":{\"metric\":\"security.compliance.score\",\"timeframe\":\"30d\"},\"depends_on\":[1]},{\"tool\":\"confluence.create_page\",\"arguments\":{\"space\":\"COMPLIANCE\",\"title\":\"Security Audit & Compliance Report\",\"content\":{\"executive_summary\":\"30-day security audit covering IAM policies, CloudTrail logs, and policy violations\",\"violation_details\":\"$2.results\",\"compliance_metrics\":\"$3.results\",\"iam_policy_breakdown\":\"$4.results\",\"compliance_score_trend\":\"$5.results\",\"upstream_reconciled_violations\":\"[]\",\"remediation_recommendations\":[\"Review and remediate all CRITICAL violations within 24h\",\"Enforce MFA on all IAM principals\",\"Rotate access keys older than 90 days\",\"Apply least-privilege policies to over"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.044335,
+  "total_latency_ms": 15602,
+  "cumulative_spend_usd": 7.648803000000005
+}

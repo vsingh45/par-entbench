@@ -1,0 +1,94 @@
+{
+  "task_id": "XR-002",
+  "task_class": "cross_recon",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_active_contracts",
+        "description": "Retrieve all active billing contracts with contracted annual value from contract management system (assumed MongoDB-based)",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_2024_invoices",
+        "description": "Query SQL invoice warehouse for all invoices issued in 2024, aggregated by contract with total issued amount",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_flag",
+        "description": "Reconcile contracted annual value against 2024 actual invoices, calculate variance percentage, and flag contracts with >10% material variance. Classify variance drivers and prioritize flagged contracts.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "fetch_active_contracts",
+          "fetch_2024_invoices"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks are necessary: (1) mongo_query to retrieve active contracts with contract values from the contracts collection (small tier\u2014simple filtered retrieval); (2) sql_gen to aggregate 2024 invoices by contract ID and sum amounts (small tier\u2014straightforward single-table aggregation with date filter); (3) cross_recon at mid tier to join both datasets, compute variance percentages, flag >10% outliers, and generate classification/prioritization insights. The cross_recon tier is mid rather than small because it must handle two-source reconciliation, variance calculation across potentially hundreds of contracts, and intelligently flag/classify results rather than just mechanically compare values."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_active_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1220,
+      "output_tokens": 64,
+      "cached_tokens": 0,
+      "latency_ms": 986,
+      "output": {
+        "collection": "billing_contracts",
+        "pipeline": [
+          {
+            "$match": {
+              "status": "active"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_2024_invoices",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 469,
+      "output_tokens": 114,
+      "cached_tokens": 0,
+      "latency_ms": 1225,
+      "output": {
+        "sql": "SELECT contract_id, SUM(amount_usd) AS total_issued_amount, COUNT(*) AS invoice_count, MIN(invoice_date) AS first_invoice_date, MAX(invoice_date) AS last_invoice_date FROM invoice_facts WHERE invoice_date >= '2024-01-01' AND invoice_date < '2025-01-01' GROUP BY contract_id ORDER BY total_issued_amount DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_flag",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 425,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 6228,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"contract_id\",\n      \"mongo_field\": \"contracted_annual_value\",\n      \"sql_field\": \"total_issued_amount\",\n      \"reconciliation_logic\": \"LEFT JOIN on contract_id\",\n      \"variance_calculation\": \"((total_issued_amount - contracted_annual_value) / contracted_annual_value) * 100\",\n      \"materiality_threshold_percent\": 10,\n      \"classification_rules\": {\n        \"flagged_variance_gt_10pct\": \"variance_abs > 10\",\n        \"positive_variance\": \"variance > 10 \u2192 'overperform' | variance between -10 and 10 \u2192 'on_track'\",\n        \"negative_variance\": \"variance < -10 \u2192 'underperform'\",\n        \"no_2024_activity\": \"total_issued_amount is null \u2192 'no_recent_activity'\",\n        \"at_risk\": \"negative_variance < -10 AND last_invoice_date > 60 days ago \u2192 'at_risk'\",\n        \"growth_signal\": \"positive_variance > 10 AND invoice_count increasing \u2192 'growing'\"\n      },\n      \"output_schema\": {\n        \"entity_key\": \"string (contract_id)\",\n        \"contracted_annual_value_usd\": \"number (from MongoDB)\",\n        \"total_issued_2024_usd\": \"number (from SQL, null if no invoices)\",\n        \"variance_usd\": \"number\",\n        \"variance_percent\": \"number\",\n        \"invoice_count\": \"integer\",\n        \"first_invoice_date_2024\": \"string (ISO format, null if no invoices)\",\n        \"last_invoice_date_2024\": \"string (ISO format, null if no invoices)\",\n        \"classification\": \"string\",\n        \"flagged\": \"boolean (true if |variance_percent| > 10)\",\n        \"priority_rank\": \"integer (1=highest, null if not flagged)\"\n      },\n      \"processing_steps\": [\n        \"1. Match MongoDB contracts (status='active') to SQL invoice facts on contract_id\",\n        \"2. Calculate variance_usd = total_issued_2024_usd - contracted_annual_value_usd\",\n        \"3. Calculate variance_percent = (variance_usd / contracted_annual_value_usd) * 100\",\n        \"4. Set flagged=true where |variance_percent| > 10\",\n        \"5. Assign classification based on variance direction, recency, and activity signals\",\n        \"6. Rank flagged contracts by |variance_percent| descending (priority_rank)\",\n        \"7. Include all MongoDB records (LEFT JOIN semantics)\"\n      ],\n      \"materiality_flags\": [\n        {\n          \"condition\": \"variance_percent > 10\",\n          \"classification\": \"overperform\",\n          \"driver\": \"Over-billing or scope expansion\",\n          \"action\": \"Review contract terms and actual scope delivered\"\n        },\n        {\n          \"condition\": \"variance_percent < -10\",\n          \"classification\": \"underperform\",\n          \"driver\": \"Under-billing, reduced scope, or slow ramp\",\n          \"action\": \"Investigate billing delays or contract delivery issues\"\n        },\n        {\n          \"condition\": \"total_issued_"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.007004,
+  "total_latency_ms": 8439,
+  "cumulative_spend_usd": 2.5033980000000007,
+  "evaluator_reason": "ok"
+}

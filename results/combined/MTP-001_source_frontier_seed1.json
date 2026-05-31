@@ -1,0 +1,170 @@
+{
+  "task_id": "MTP-001",
+  "task_class": "multitool_plan",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_ms_licenses",
+        "description": "Query MongoDB to count total Microsoft licenses and retrieve license details (product, quantity, status)",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_ms_spend",
+        "description": "Query Snowflake for last month's Microsoft software spend by product category and total",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "email_sam_team",
+        "description": "Compose and send email summary to SAM team with license count from Mongo and spend from Snowflake, including month, totals, and key metrics",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "mongo_ms_licenses",
+          "sql_ms_spend"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: (1) mongo_query for Microsoft license inventory count is straightforward aggregation on a single collection, small tier sufficient. (2) sql_gen for last month's spend is a simple filtered aggregate query against transaction history, small tier. (3) multitool_plan required because the final step explicitly asks to email the summary\u2014this involves tool registry lookup (email service) and composition, warranting multitool_plan orchestration. All three tiers are small because each task is simple and explicit with no complex joins, pipelines, or inference. Dependencies: email task depends on both data-gathering tasks completing first."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_ms_licenses",
+      "specialist": "mongo_query",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1742,
+      "output_tokens": 91,
+      "cached_tokens": 0,
+      "latency_ms": 1495,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Microsoft"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_ms_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 704,
+      "output_tokens": 151,
+      "cached_tokens": 0,
+      "latency_ms": 2186,
+      "output": {
+        "sql": "SELECT product, SUM(amount_usd) AS total_spend_usd FROM consumption_facts WHERE publisher = 'Microsoft' AND event_date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND event_date < date_trunc('month', CURRENT_DATE) GROUP BY ROLLUP(product) ORDER BY product NULLS LAST"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "email_sam_team",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 589,
+      "output_tokens": 705,
+      "cached_tokens": 0,
+      "latency_ms": 4306,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "resource": "sam_licenses",
+              "action": "read"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "mongo.aggregate",
+            "arguments": {
+              "collection": "sam_licenses",
+              "pipeline": [
+                {
+                  "$match": {
+                    "publisher": "Microsoft"
+                  }
+                },
+                {
+                  "$group": {
+                    "_id": null,
+                    "total_licenses": {
+                      "$sum": 1
+                    },
+                    "licenses_by_product": {
+                      "$push": {
+                        "product": "$product",
+                        "quantity": "$quantity"
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "sql.snowflake.query",
+            "arguments": {
+              "query": "SELECT product, SUM(amount_usd) AS total_spend_usd FROM consumption_facts WHERE publisher = 'Microsoft' AND event_date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND event_date < date_trunc('month', CURRENT_DATE) GROUP BY ROLLUP(product) ORDER BY product NULLS LAST"
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "email.send",
+            "arguments": {
+              "to": "sam-team@company.com",
+              "subject": "Microsoft License & Spend Summary Report",
+              "body": "SAM Team,\n\nMonthly Microsoft Summary Report\n\n=== LICENSE INVENTORY ===\nTotal Microsoft Licenses: $2.0.total_licenses\n\nBreakdown by Product:\n$2.0.licenses_by_product\n\n=== SPEND ANALYSIS (Last Month) ===\nTotal Microsoft Spend (USD): $3.results\n\nBreakdown by Product:\n$3.results\n\nPlease review the attached summary and contact the SAM team with any questions.\n\nBest regards,\nSAM Reporting System"
+            },
+            "depends_on": [
+              2,
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "EMAIL_SENT",
+              "resource": "sam_email_summary",
+              "details": {
+                "recipient": "sam-team@company.com",
+                "report_type": "microsoft_monthly_summary",
+                "license_count_source": "mongo_sam_licenses",
+                "spend_source": "snowflake_consumption_facts"
+              }
+            },
+            "depends_on": [
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.022394,
+  "total_latency_ms": 7987,
+  "cumulative_spend_usd": 3.8835170000000048,
+  "evaluator_reason": "missing_tools: {'mongo.find'}"
+}

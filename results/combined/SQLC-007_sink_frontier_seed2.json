@@ -1,0 +1,71 @@
+{
+  "task_id": "SQLC-007",
+  "task_class": "sql_compose",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "get_publisher_spend",
+        "description": "Query SQL warehouse to identify top spending publishers and their spending metrics (total spend, spend by product category/type). Return sorted list with publisher names, total spend, and product mix breakdown.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "assess_negotiation_leverage",
+        "description": "Analyze top publishers' spending patterns and product mix to assess negotiation leverage for each. Evaluate concentration of spend within publisher, contract renewal dates, contract terms, market alternatives, and volume-based leverage. Produce leverage assessment (high/medium/low) with rationale for each publisher.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "get_publisher_spend"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid tier) to retrieve top publishers and product mix from the spend warehouse with aggregation across product categories; (2) cross_recon (mid tier) to reconcile spend data with contract terms and market factors to assess negotiation leverage for each publisher. Mid tier is appropriate for both because the SQL requires multi-table joins across spend and product dimensions, and the leverage assessment requires moderate cross-signal reasoning (spend concentration, contract lifecycle, alternatives) but not frontier-level complexity. No policy_action is needed\u2014leverage assessment is a business analysis task, not a governance/compliance decision. No multitool_plan is needed\u2014both subtasks use standard data sources."
+  },
+  "node_results": [
+    {
+      "subtask_id": "get_publisher_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 468,
+      "output_tokens": 128,
+      "cached_tokens": 0,
+      "latency_ms": 1480,
+      "output": {
+        "sql": "SELECT publisher, SUM(amount_usd) as total_spend, COUNT(DISTINCT product) as product_count, STRING_AGG(DISTINCT product, ', ' ORDER BY product) as product_mix, SUM(amount_usd)::NUMERIC / NULLIF(SUM(SUM(amount_usd)) OVER (), 0) * 100 as spend_percentage FROM consumption_facts WHERE amount_usd > 0 GROUP BY publisher ORDER BY total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "assess_negotiation_leverage",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 658,
+      "output_tokens": 71,
+      "cached_tokens": 0,
+      "latency_ms": 1668,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "publisher_spend_analysis",
+            "mongo_value": null,
+            "sql_value": "upstream_sql_pending",
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.006173,
+  "total_latency_ms": 3148,
+  "cumulative_spend_usd": 1.2960240000000005,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

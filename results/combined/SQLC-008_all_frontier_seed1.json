@@ -1,0 +1,71 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "all_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "budget_analysis_sql",
+        "description": "Query budget allocation by product category with YoY/QoQ trends, cost variance analysis, and category-level metrics (total spend, growth rate, variance %)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reallocation_recommendation",
+        "description": "Analyze budget trends output to classify categories by efficiency/growth, identify reallocation opportunities, and generate prioritized reallocation strategy with justification",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "budget_analysis_sql"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks are the minimum needed: (1) sql_gen to aggregate budget and cost trend data across product categories with time-series metrics \u2014 this is a mid-tier task requiring multi-table joins and window functions for trend analysis; (2) cross_recon to synthesize the budget data into strategic reallocation recommendations with classification of categories by performance and financial impact \u2014 mid tier because it involves multi-signal analysis (spend, growth, variance) and decision generation. No policy_action is included because the query asks for strategy recommendation, not governance/compliance approval. No separate extraction or multitool steps are needed; the sql_gen covers all data retrieval in one complex query, and cross_recon handles the analytical reasoning as part of its core function."
+  },
+  "node_results": [
+    {
+      "subtask_id": "budget_analysis_sql",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 710,
+      "output_tokens": 622,
+      "cached_tokens": 0,
+      "latency_ms": 6640,
+      "output": {
+        "sql": "WITH quarterly AS (SELECT product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS spend FROM consumption_facts WHERE event_date >= '2023-01-01' GROUP BY product, fiscal_year, fiscal_quarter), with_trends AS (SELECT product, fiscal_year, fiscal_quarter, spend, LAG(spend, 4) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter) AS spend_yoy, LAG(spend, 1) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter) AS spend_qoq, AVG(spend) OVER (PARTITION BY product) AS avg_spend, STDDEV(spend) OVER (PARTITION BY product) AS stddev_spend FROM quarterly) SELECT product, fiscal_year, fiscal_quarter, spend AS total_spend, spend_yoy, spend_qoq, CASE WHEN spend_yoy > 0 THEN ROUND(((spend - spend_yoy) / spend_yoy) * 100, 2) END AS yoy_growth_pct, CASE WHEN spend_qoq > 0 THEN ROUND(((spend - spend_qoq) / spend_qoq) * 100, 2) END AS qoq_growth_pct, ROUND(avg_spend, 2) AS avg_quarterly_spend, CASE WHEN avg_spend > 0 THEN ROUND(((spend - avg_spend) / avg_spend) * 100, 2) END AS variance_pct, ROUND(stddev_spend, 2) AS spend_volatility FROM with_trends ORDER BY product, fiscal_year, fiscal_quarter"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reallocation_recommendation",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1043,
+      "output_tokens": 72,
+      "cached_tokens": 0,
+      "latency_ms": 1655,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "budget_analysis_sql",
+            "mongo_value": null,
+            "sql_value": "quarterly_trends_per_product",
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.026115000000000003,
+  "total_latency_ms": 8295,
+  "cumulative_spend_usd": 1.5180510000000007,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

@@ -1,0 +1,100 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_iam_roles",
+        "description": "Query IAM repository to retrieve all roles with elevated permission flags, including their granted permissions (policy documents, inline policies, and attached managed policies).",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_exercised_permissions",
+        "description": "Query CloudTrail/audit logs to extract all permission actions exercised by each IAM role in the last 180 days, aggregated by action type.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_flag",
+        "description": "Reconcile granted permissions (from role policies) against exercised permissions (from audit logs). Identify permissions granted but never used in 180 days, classify by risk level (unused admin actions vs. unused read-only), and flag as revocation candidates with justification.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "fetch_iam_roles",
+          "fetch_exercised_permissions"
+        ]
+      }
+    ],
+    "cost_rationale": "This query requires three subtasks: (1) fetch elevated IAM roles and their permissions from the IAM database (mid tier\u2014multi-table join across role, policy, and permission tables); (2) fetch exercised permissions from CloudTrail logs over 180 days (mid tier\u2014filtering and aggregating large audit logs); (3) reconcile the two sources to identify unused permissions, classify risk, and generate revocation recommendations (frontier tier\u2014complex multi-signal reconciliation with permission string parsing, policy analysis, and contextual risk classification). The reconciliation is non-trivial because it must normalize permission strings from policies against observed API calls, handle permission wildcards, and apply risk-aware filtering. No policy_action is added here because the flagging is a recommendation, not a compliance decision requiring policy evaluation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_iam_roles",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 484,
+      "output_tokens": 252,
+      "cached_tokens": 0,
+      "latency_ms": 3392,
+      "output": {
+        "raw_output": "{\n  \"sql\": \"SELECT 'IAM role query not applicable to EntBench schema' AS error, 'The EntBench Postgres warehouse does not contain IAM role tables. Available tables are: consumption_facts, invoice_facts, access_log_facts, customer, orders, lineitem. IAM permission management requires AWS IAM service queries, not warehouse tables.' AS details\"\n}\n```\n\n**Explanation:** The query requests IAM role and permission data from an AWS IAM repository, but the EntBench Postgres warehouse contains only business data tables (consumption, invoicing, access logs, and TPC-H derived tables). IAM roles, policies, and permission flags are managed in AWS Identity and Access Management service, not in this warehouse.\n\nTo accomplish this task, you would need to:\n1. Query AWS IAM API (`list-roles`, `list-attached-role-policies`, `get-role-policy`, `list-role-policies`)\n2. Query CloudTrail or access logs for actual permission usage\n3. Compare granted vs. exercised permissions\n\nThis cannot be accomplished with warehouse SQL queries alone."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_exercised_permissions",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 487,
+      "output_tokens": 111,
+      "cached_tokens": 0,
+      "latency_ms": 1437,
+      "output": {
+        "sql": "SELECT a.permission, a.action, COUNT(*) as action_count, COUNT(DISTINCT a.user_id) as unique_users, MAX(a.access_time) as last_used FROM access_log_facts a WHERE a.access_time >= CURRENT_DATE - INTERVAL '180 days' GROUP BY a.permission, a.action ORDER BY action_count DESC, a.permission, a.action"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_flag",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 687,
+      "output_tokens": 317,
+      "cached_tokens": 0,
+      "latency_ms": 3684,
+      "output": {
+        "error": "DATA_SOURCE_MISMATCH",
+        "details": "Cannot reconcile IAM permissions: MongoDB operational state (granted permissions) is unavailable. The IAM roles query returned an error indicating that IAM permission data does not exist in the EntBench Postgres warehouse. AWS IAM roles, policies, and permission grants are managed in AWS Identity and Access Management service, not in the data warehouse.",
+        "root_cause": [
+          "No MongoDB/operational data source for granted permissions (IAM roles and attached policies)",
+          "EntBench warehouse contains only business transaction data, not IAM service data",
+          "Task requires AWS IAM API queries, not warehouse SQL queries"
+        ],
+        "available_partial_data": {
+          "source": "SQL (access_log_facts)",
+          "coverage": "Exercised permissions only (180-day window)",
+          "limitations": "Cannot classify by risk level or identify unused permissions without grant baseline"
+        },
+        "reconciled": [],
+        "recommendation": "This reconciliation task requires integration with AWS IAM service APIs. To proceed, configure queries against: (1) AWS IAM list-roles and get-role-policy for granted permissions baseline, and (2) CloudTrail or warehouse access_log_facts for exercised permissions. Current setup supports only the exercised permissions leg of the reconciliation."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.005058,
+  "total_latency_ms": 8513,
+  "cumulative_spend_usd": 3.0203310000000023,
+  "evaluator_reason": "no_mongo_node"
+}

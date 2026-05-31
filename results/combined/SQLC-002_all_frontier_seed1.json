@@ -1,0 +1,100 @@
+{
+  "task_id": "SQLC-002",
+  "task_class": "sql_compose",
+  "router": "all_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top10_customers",
+        "description": "Query TPC-H schema to identify top 10 customers by lifetime value (total order amount) in the BUILDING market segment. Return customer ID, name, nation, and lifetime value.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_order_patterns",
+        "description": "Query TPC-H schema to retrieve detailed order patterns for the top 10 customers: order frequency, average order size, order recency, product mix, and payment status. Aggregate by customer ID.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_retention_narratives",
+        "description": "Reconcile top 10 customer list with their order patterns. For each customer, synthesize a personalized retention narrative that references their specific order frequency, recency, average transaction size, product preferences, and payment behavior. Generate strategic retention messaging tailored to each customer's profile.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_top10_customers",
+          "sql_order_patterns"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks with minimal decomposition: (1) sql_gen (mid) for top-10 ranking\u2014multi-table join across Customer, Orders, LineItem filtered by BUILDING segment with aggregation. (2) sql_gen (mid) for order patterns\u2014separate query for detailed metrics (frequency, recency, mix) across same tables, grouped by customer. These are separate because they have distinct aggregation logic and result shapes. (3) cross_recon (frontier) to synthesize narratives\u2014requires reconciling two result sets, inferring customer relationship context, and generating personalized strategic text that references specific patterns. Frontier tier justified because narrative generation demands contextual reasoning and pattern interpretation across multiple signals. If split into separate tasks, would require 4-5 subtasks; consolidated here to 3."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top10_customers",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 746,
+      "output_tokens": 162,
+      "cached_tokens": 0,
+      "latency_ms": 2160,
+      "output": {
+        "sql": "SELECT c.c_custkey, c.c_name, c.c_nationkey, SUM(o.o_totalprice) AS lifetime_value FROM customer c JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name, c.c_nationkey ORDER BY lifetime_value DESC LIMIT 10"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_order_patterns",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 749,
+      "output_tokens": 606,
+      "cached_tokens": 0,
+      "latency_ms": 6450,
+      "output": {
+        "sql": "WITH top_customers AS (SELECT c.c_custkey, c.c_name, c.c_acctbal, SUM(o.o_totalprice) AS lifetime_value FROM customer c JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name, c.c_acctbal ORDER BY lifetime_value DESC LIMIT 10) SELECT tc.c_custkey, tc.c_name, tc.c_acctbal, tc.lifetime_value, COUNT(DISTINCT o.o_orderkey) AS order_frequency, AVG(o.o_totalprice) AS avg_order_size, MAX(o.o_orderdate) AS most_recent_order, MIN(o.o_orderdate) AS first_order, SUM(l.l_quantity) AS total_quantity, COUNT(DISTINCT l.l_linenumber) AS distinct_line_items, SUM(l.l_extendedprice * (1 - l.l_discount)) AS net_revenue, COUNT(DISTINCT o.o_orderstatus) AS status_variety, STRING_AGG(DISTINCT o.o_orderstatus, ',') AS order_statuses, STRING_AGG(DISTINCT o.o_orderpriority, ',') AS order_priorities FROM top_customers tc JOIN orders o ON tc.c_custkey = o.o_custkey JOIN lineitem l ON o.o_orderkey = l.l_orderkey GROUP BY tc.c_custkey, tc.c_name, tc.c_acctbal, tc.lifetime_value ORDER BY tc.lifetime_value DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_retention_narratives",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1261,
+      "output_tokens": 155,
+      "cached_tokens": 0,
+      "latency_ms": 2957,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sql_top10_customers",
+            "mongo_value": null,
+            "sql_value": "SELECT query for top 10 BUILDING segment customers by lifetime value",
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "sql_order_patterns",
+            "mongo_value": null,
+            "sql_value": "CTE-based SELECT for detailed order patterns of top 10 customers",
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.036855000000000006,
+  "total_latency_ms": 11567,
+  "cumulative_spend_usd": 0.7213329999999997,
+  "evaluator_reason": "step2_consumer_narrative_check_failed"
+}

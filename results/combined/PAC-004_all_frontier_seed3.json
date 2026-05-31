@@ -1,0 +1,49 @@
+{
+  "task_id": "PAC-004",
+  "task_class": "policy_action",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_prod_access",
+        "description": "Evaluate whether the developer's access request to the production database meets security and governance policies. Check policies governing production access, authentication requirements, approval workflows, and audit logging for live debugging scenarios.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This is a single governance decision requiring policy evaluation. The policy_action specialist is appropriate because the query explicitly concerns access control and policy compliance for a sensitive production environment. A mid tier is warranted because production access policies typically involve multiple applicable rules (authentication, role-based access, approval chain, compliance requirements) and contextual factors (debugging purpose, developer role, audit trail requirements) that need coordinated reasoning. No cross-recon is needed\u2014this is purely a policy evaluation gate, not a reconciliation task."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_prod_access",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 701,
+      "output_tokens": 156,
+      "cached_tokens": 0,
+      "latency_ms": 3248,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-401": "fail",
+          "POL-402": "fail"
+        },
+        "reason": "Developer dev-alice lacks Manager approval and on-call role required for production access (POL-401), and debugging activities must be performed in the designated staging environment per POL-402.",
+        "applied_constraints": [
+          "Redirect debugging activity to staging environment",
+          "Require Manager approval and on-call role assignment before any future production access request"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.007405,
+  "total_latency_ms": 3248,
+  "cumulative_spend_usd": 8.29641,
+  "evaluator_reason": "ok"
+}

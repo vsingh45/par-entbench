@@ -1,0 +1,71 @@
+{
+  "task_id": "SQLC-001",
+  "task_class": "sql_compose",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top5_publishers",
+        "description": "Generate SQL query to fetch top 5 publishers by spend in Q4 2024 (October 1 - December 31, 2024), ordered by total spend descending",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_risk_assessment",
+        "description": "Analyze the top 5 publishers spend data to identify at-risk publishers based on spend concentration, contract status, renewal dates, and market position. Generate a risk-based summary for the SAM team with recommendations.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_top5_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks are minimal and necessary: (1) sql_gen to retrieve the Q4 2024 top 5 publishers by spend is a straightforward single aggregation query assigned to small tier; (2) cross_recon to analyze the retrieved data for risk signals (e.g., spend concentration, renewal risk, compliance posture) and synthesize insights for the SAM team is assigned to mid tier because it requires multi-signal analysis and business reasoning. The risk assessment is classification/posture analysis which is within cross_recon's scope, not a separate policy_action. No additional subtasks are needed; the plan is minimal and focused."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top5_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 736,
+      "output_tokens": 106,
+      "cached_tokens": 0,
+      "latency_ms": 1680,
+      "output": {
+        "sql": "SELECT publisher, SUM(amount_usd) AS total_spend FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date <= '2024-12-31' GROUP BY publisher ORDER BY total_spend DESC LIMIT 5"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_risk_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 570,
+      "output_tokens": 155,
+      "cached_tokens": 0,
+      "latency_ms": 2520,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sql_top5_publishers",
+            "mongo_value": null,
+            "sql_value": "SELECT publisher, SUM(amount_usd) AS total_spend FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date <= '2024-12-31' GROUP BY publisher ORDER BY total_spend DESC LIMIT 5",
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.013055,
+  "total_latency_ms": 4200,
+  "cumulative_spend_usd": 0.4574009999999999,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

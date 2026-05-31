@@ -1,0 +1,63 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "router": "frugal_cascade",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "ddg_usage_metrics",
+        "description": "Query SQL warehouse to retrieve Datadog license allocations, actual usage metrics (compute units, hosts monitored, custom metrics), and monthly growth trends across all service tiers",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "ddg_allocation_usage_reconciliation",
+        "description": "Reconcile allocated vs. actual usage, calculate utilization rates, identify over/under-provisioning by tier, trend growth patterns, and classify utilization posture (optimal, overprovisioned, underprovisioned) with recommendations",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "ddg_usage_metrics"
+        ]
+      }
+    ],
+    "cost_rationale": "Two-subtask plan: (1) sql_gen (mid-tier) to fetch allocations and usage metrics with growth calculations—multi-table join likely needed across license, usage, and historical tables; (2) cross_recon (frontier-tier) to perform full reconciliation of allocated vs. actual, compute utilization ratios, identify provisioning gaps, classify posture, and synthesize growth pattern analysis with recommendations. Cross_recon is frontier because it requires multi-signal analysis (allocation, usage, growth) with inference and classification, not simply a join. No policy_action needed—analysis is informational. No additional extract/mongo needed—data is in SQL warehouse. Minimal decomposition: all reconciliation logic handled in one cross_recon call rather than separate subtasks."
+  },
+  "node_results": [
+    {
+      "subtask_id": "ddg_usage_metrics",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 469,
+      "output_tokens": 275,
+      "cached_tokens": 0,
+      "latency_ms": 2217,
+      "output": {
+        "sql": "SELECT consumption_facts.license_id, consumption_facts.publisher, consumption_facts.product, consumption_facts.fiscal_year, consumption_facts.fiscal_quarter, DATE_TRUNC('month', consumption_facts.event_date)::DATE AS month, consumption_facts.event_type, SUM(consumption_facts.amount_usd) AS total_amount_usd, SUM(consumption_facts.daily_active_seats) AS total_active_seats, COUNT(DISTINCT consumption_facts.user_id) AS unique_users, COUNT(DISTINCT consumption_facts.event_date) AS active_days FROM consumption_facts WHERE consumption_facts.publisher = 'Datadog' AND consumption_facts.event_date >= '2024-01-01' GROUP BY consumption_facts.license_id, consumption_facts.publisher, consumption_facts.product, consumption_facts.fiscal_year, consumption_facts.fiscal_quarter, DATE_TRUNC('month', consumption_facts.event_date)::DATE, consumption_facts.event_type ORDER BY consumption_facts.license_id, month DESC, consumption_facts.event_type"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "ddg_allocation_usage_reconciliation",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 550,
+      "output_tokens": 338,
+      "cached_tokens": 0,
+      "latency_ms": 3276,
+      "output": {
+        "raw_output": "{\n  \"error\": \"insufficient_data\",\n  \"message\": \"MongoDB query output not provided. Reconciliation requires both MongoDB (operational state) and SQL (historical data) query results.\",\n  \"expected_inputs\": {\n    \"mongo_data\": \"Operational license allocation data from MongoDB\",\n    \"sql_data\": \"Historical consumption facts from SQL (provided)\",\n    \"required_fields\": {\n      \"mongo\": [\"license_id\", \"allocated_seats\", \"allocated_budget\", \"product\", \"tier\"],\n      \"sql\": [\"license_id\", \"total_active_seats\", \"total_amount_usd\", \"unique_users\", \"month\"]\n    }\n  },\n  \"reconciliation_ready\": false\n}\n```\n\n**ACTION REQUIRED:**\nPlease provide the MongoDB query output containing:\n- License allocation metadata (allocated_seats, allocated_budget per license_id)\n- Current provisioning tier/level\n- Any allocation_date or last_modified timestamps\n\nOnce provided, the reconciliation will output:\n```json\n{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"license_id\",\n      \"mongo_allocated\": null,\n      \"sql_actual_usage\": null,\n      \"utilization_rate\": null,\n      \"provision_status\": \"overprovisioned|underprovisioned|optimal\",\n      \"growth_trend\": null,\n      \"recommendation\": null\n    }\n  ]\n}"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.004084,
+  "total_latency_ms": 5493,
+  "cumulative_spend_usd": 5.049970000000002
+}

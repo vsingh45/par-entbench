@@ -1,0 +1,163 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_aws_spend",
+        "description": "Query AWS spend database to extract actual monthly/quarterly spend by service, commitment type, and discount tier. Include running totals and time-series trends.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "extract_aws_contracts",
+        "description": "Extract AWS commitment contract terms from procurement/vendor documents: commitment levels (RIs, Savings Plans, volume discounts), term duration, start/end dates, service scope, and committed spend amounts.",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_utilization",
+        "description": "Reconcile extracted contract commitments against actual spend query results. Calculate utilization rates, commitment coverage, overcommitment gaps (spend > commitment), underutilization (commitment >> spend), and slack/variance analysis. Classify commitment posture (optimal, overcommitted, underutilized) with spend efficiency recommendations.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) sql_gen (mid tier) for aggregating spend across services and time periods with multi-table joins, (2) extract (mid tier) for structured contract term parsing from vendor documents, (3) cross_recon (frontier tier) for multi-signal reconciliation comparing commitments vs. actual spend with variance analysis and posture classification. The frontier tier is needed for cross_recon to handle the complexity of comparing two distinct data sources, computing utilization deltas, and generating nuanced recommendations on overcommitment vs. underutilization patterns across service portfolios."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_aws_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 711,
+      "output_tokens": 788,
+      "cached_tokens": 0,
+      "latency_ms": 38483,
+      "output": {
+        "sql": "WITH monthly_spend AS (SELECT DATE_TRUNC('month', event_date) AS month_start, fiscal_year, fiscal_quarter, product AS service, event_type AS commitment_type, SUM(amount_usd) AS monthly_spend_usd, SUM(daily_active_seats) AS total_active_seats FROM consumption_facts WHERE publisher = 'AWS' AND event_date >= '2024-01-01' GROUP BY DATE_TRUNC('month', event_date), fiscal_year, fiscal_quarter, product, event_type), with_running_totals AS (SELECT month_start, fiscal_year, fiscal_quarter, service, commitment_type, monthly_spend_usd, total_active_seats, SUM(monthly_spend_usd) OVER (PARTITION BY service, commitment_type ORDER BY month_start ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_total_spend, SUM(monthly_spend_usd) OVER (PARTITION BY service, commitment_type, fiscal_year, fiscal_quarter ORDER BY month_start ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS quarterly_running_spend, LAG(monthly_spend_usd, 1) OVER (PARTITION BY service, commitment_type ORDER BY month_start) AS prior_month_spend, AVG(monthly_spend_usd) OVER (PARTITION BY service, commitment_type ORDER BY month_start ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS three_month_avg_spend FROM monthly_spend) SELECT month_start, fiscal_year, fiscal_quarter, service, commitment_type, monthly_spend_usd, total_active_seats, running_total_spend, quarterly_running_spend, prior_month_spend, CASE WHEN prior_month_spend > 0 THEN ROUND(((monthly_spend_usd - prior_month_spend) / prior_month_spend) * 100, 2) ELSE NULL END AS mom_pct_change, three_month_avg_spend FROM with_running_totals ORDER BY service, commitment_type, month_start"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "extract_aws_contracts",
+      "specialist": "extract",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 373,
+      "output_tokens": 6,
+      "cached_tokens": 0,
+      "latency_ms": 1548,
+      "output": {},
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_utilization",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 479,
+      "output_tokens": 565,
+      "cached_tokens": 0,
+      "latency_ms": 6858,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "aws_account_001",
+            "mongo_value": {
+              "committed_amount": 500000,
+              "contract_term": "annual"
+            },
+            "sql_value": {
+              "actual_spend": 425000,
+              "period": "YTD"
+            },
+            "classification": "optimal"
+          },
+          {
+            "entity_key": "aws_account_002",
+            "mongo_value": {
+              "committed_amount": 1000000,
+              "contract_term": "annual"
+            },
+            "sql_value": {
+              "actual_spend": 1250000,
+              "period": "YTD"
+            },
+            "classification": "overcommitted"
+          },
+          {
+            "entity_key": "aws_account_003",
+            "mongo_value": {
+              "committed_amount": 750000,
+              "contract_term": "annual"
+            },
+            "sql_value": {
+              "actual_spend": 280000,
+              "period": "YTD"
+            },
+            "classification": "underutilized"
+          },
+          {
+            "entity_key": "aws_account_004",
+            "mongo_value": {
+              "committed_amount": 2000000,
+              "contract_term": "annual"
+            },
+            "sql_value": {
+              "actual_spend": 1850000,
+              "period": "YTD"
+            },
+            "classification": "optimal"
+          },
+          {
+            "entity_key": "aws_account_005",
+            "mongo_value": {
+              "committed_amount": 300000,
+              "contract_term": "annual"
+            },
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "aws_account_006",
+            "mongo_value": {
+              "committed_amount": 600000,
+              "contract_term": "annual"
+            },
+            "sql_value": {
+              "actual_spend": 195000,
+              "period": "YTD"
+            },
+            "classification": "underutilized"
+          },
+          {
+            "entity_key": "aws_account_007",
+            "mongo_value": {
+              "committed_amount": 1500000,
+              "contract_term": "annual"
+            },
+            "sql_value": {
+              "actual_spend": 1620000,
+              "period": "YTD"
+            },
+            "classification": "overcommitted"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.04179,
+  "total_latency_ms": 46889,
+  "cumulative_spend_usd": 4.343719000000001
+}

@@ -1,0 +1,138 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_sf_seats",
+        "description": "Extract Salesforce licensed seat count from contract/license document (total seats purchased, license type, validity period)",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_sf_assignments",
+        "description": "Query SQL warehouse to count actual seat assignments by license type, including active assignments, pending assignments, and disabled accounts in Salesforce",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_utilization",
+        "description": "Reconcile extracted licensed seats with SQL seat assignment counts by license type. Identify unutilized licenses (gap = licensed - assigned). Classify utilization posture (high, medium, low) and generate optimization recommendations",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "extract_sf_seats",
+          "query_sf_assignments"
+        ]
+      }
+    ],
+    "cost_rationale": "3 subtasks required: (1) extract_sf_seats (small) — simple document field extraction of license counts, (2) query_sf_assignments (small) — straightforward aggregation query grouped by license type, (3) reconcile_utilization (mid) — compares two sources (contract vs assignments), calculates gaps, classifies utilization posture, and generates recommendations (reconciliation + classification logic warrants mid tier). This avoids unnecessary splits; all related metrics from SQL are captured in one query, and downstream analysis is handled as part of the reconciliation step, not as separate policy or planning subtasks."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_sf_seats",
+      "specialist": "extract",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 348,
+      "output_tokens": 38,
+      "cached_tokens": 0,
+      "latency_ms": 1193,
+      "output": {
+        "licensed_seats": null,
+        "license_type": null,
+        "validity_start": null,
+        "validity_end": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_sf_assignments",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 719,
+      "output_tokens": 134,
+      "cached_tokens": 0,
+      "latency_ms": 2317,
+      "output": {
+        "sql": "SELECT product, event_type, COUNT(*) AS assignment_count, SUM(daily_active_seats) AS total_seats FROM consumption_facts WHERE publisher = 'Salesforce' AND event_type IN ('active_assignment', 'pending_assignment', 'disabled_account') GROUP BY product, event_type ORDER BY product, event_type"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_utilization",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 403,
+      "output_tokens": 462,
+      "cached_tokens": 0,
+      "latency_ms": 4510,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "salesforce_seats_utilization",
+            "mongo_value": {
+              "licensed_seats": null,
+              "license_type": null,
+              "validity_start": null,
+              "validity_end": null,
+              "status": "extraction_failed"
+            },
+            "sql_value": {
+              "assignment_count": 0,
+              "total_seats": 0,
+              "event_types": [
+                "active_assignment",
+                "pending_assignment",
+                "disabled_account"
+              ],
+              "status": "no_data_returned"
+            },
+            "classification": "no_data_available",
+            "gap_analysis": {
+              "licensed_seats": null,
+              "assigned_seats": 0,
+              "utilization_gap": null,
+              "utilization_rate": null
+            },
+            "posture": "unknown",
+            "recommendations": [
+              "Verify MongoDB extraction query - licensed_seats field returned null",
+              "Confirm SQL query executed successfully - check consumption_facts table availability",
+              "Validate Salesforce publisher data exists in source systems",
+              "Review data pipeline connectivity for both MongoDB and SQL sources",
+              "Establish baseline metrics before utilization analysis can proceed"
+            ]
+          }
+        ],
+        "reconciliation_status": "incomplete",
+        "data_quality_issues": [
+          "MongoDB extraction returned all null values",
+          "SQL query executed but no result set provided for comparison",
+          "Unable to calculate utilization metrics without source data",
+          "Cannot classify posture or generate optimization recommendations"
+        ],
+        "next_steps": [
+          "Troubleshoot MongoDB extraction - verify collection and field names",
+          "Execute SQL query directly to validate data availability",
+          "Confirm Salesforce data sync to both backends",
+          "Re-run reconciliation once both data sources return valid results"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.012348,
+  "total_latency_ms": 8020,
+  "cumulative_spend_usd": 3.179918000000002
+}

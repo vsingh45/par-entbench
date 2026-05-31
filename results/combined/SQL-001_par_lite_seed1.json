@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-001",
+  "task_class": "sql_gen",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "What is the total Adobe spend across all products in Q4 2024?",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 446,
+      "output_tokens": 64,
+      "cached_tokens": 0,
+      "latency_ms": 985,
+      "output": {
+        "sql": "SELECT SUM(cf.amount_usd) as total_adobe_spend FROM consumption_facts cf WHERE cf.publisher = 'Adobe' AND cf.fiscal_year = 2024 AND cf.fiscal_quarter = 4"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.000766,
+  "total_latency_ms": 985,
+  "cumulative_spend_usd": 0.05822500000000002,
+  "evaluator_reason": "ok"
+}

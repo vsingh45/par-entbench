@@ -1,0 +1,94 @@
+{
+  "task_id": "XR-002",
+  "task_class": "cross_recon",
+  "router": "par_lite",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_contracts",
+        "description": "Query MongoDB contracts collection to retrieve all active billing contracts with contracted annual value, status, and contract dates",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_invoices_2024",
+        "description": "Query SQL billing system to sum actual invoices issued in 2024 by contract ID, calculating total invoice value per contract",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_flag",
+        "description": "Reconcile contracted annual values from MongoDB against actual 2024 invoice totals from SQL, calculate variance percentage, and flag contracts with >10% variance. Include classification of variance direction (under/over) and summary statistics.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "fetch_contracts",
+          "fetch_invoices_2024"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: (1) mongo_query (small) to fetch active contracts with annual value from MongoDB\u2014straightforward collection scan with status filter; (2) sql_gen (small) to aggregate 2024 invoices by contract ID from SQL billing tables\u2014simple GROUP BY with date filter; (3) cross_recon (mid) to reconcile both datasets, calculate variance percentages, identify contracts exceeding the 10% threshold, and classify variance patterns\u2014requires joining two distinct sources, computing derived metrics (variance %), and flagging logic. Mid tier is warranted here because reconciliation involves threshold-based decision logic and requires coherent classification across potentially hundreds of contracts. Total count minimized: single query per source system plus one reconciliation pass rather than separate extract/aggregate steps."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1221,
+      "output_tokens": 64,
+      "cached_tokens": 0,
+      "latency_ms": 767,
+      "output": {
+        "collection": "billing_contracts",
+        "pipeline": [
+          {
+            "$match": {
+              "status": "active"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_invoices_2024",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 472,
+      "output_tokens": 133,
+      "cached_tokens": 0,
+      "latency_ms": 1742,
+      "output": {
+        "sql": "SELECT i.contract_id, SUM(i.amount_usd) as total_invoiced_2024, COUNT(i.invoice_id) as invoice_count, i.vendor_name FROM invoice_facts i WHERE i.invoice_date >= '2024-01-01' AND i.invoice_date < '2025-01-01' AND i.status IN ('paid', 'issued', 'pending') GROUP BY i.contract_id, i.vendor_name ORDER BY i.contract_id"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_flag",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 450,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8872,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"CONTRACT-001\",\n      \"mongo_value\": {\n        \"contract_id\": \"CONTRACT-001\",\n        \"status\": \"active\",\n        \"vendor_name\": \"Acme Corp\",\n        \"contracted_annual_value_usd\": 120000,\n        \"contract_start\": \"2024-01-01\",\n        \"contract_end\": \"2024-12-31\"\n      },\n      \"sql_value\": {\n        \"total_invoiced_2024\": 132000,\n        \"invoice_count\": 12,\n        \"vendor_name\": \"Acme Corp\"\n      },\n      \"variance_usd\": 12000,\n      \"variance_pct\": 10.0,\n      \"variance_direction\": \"over\",\n      \"flagged\": false,\n      \"classification\": \"stable\"\n    },\n    {\n      \"entity_key\": \"CONTRACT-002\",\n      \"mongo_value\": {\n        \"contract_id\": \"CONTRACT-002\",\n        \"status\": \"active\",\n        \"vendor_name\": \"Beta Solutions\",\n        \"contracted_annual_value_usd\": 250000,\n        \"contract_start\": \"2024-03-01\",\n        \"contract_end\": \"2025-02-28\"\n      },\n      \"sql_value\": {\n        \"total_invoiced_2024\": 198000,\n        \"invoice_count\": 8,\n        \"vendor_name\": \"Beta Solutions\"\n      },\n      \"variance_usd\": -52000,\n      \"variance_pct\": -20.8,\n      \"variance_direction\": \"under\",\n      \"flagged\": true,\n      \"classification\": \"at_risk\"\n    },\n    {\n      \"entity_key\": \"CONTRACT-003\",\n      \"mongo_value\": {\n        \"contract_id\": \"CONTRACT-003\",\n        \"status\": \"active\",\n        \"vendor_name\": \"Gamma Logistics\",\n        \"contracted_annual_value_usd\": 75000,\n        \"contract_start\": \"2024-01-01\",\n        \"contract_end\": \"2024-12-31\"\n      },\n      \"sql_value\": {\n        \"total_invoiced_2024\": 91500,\n        \"invoice_count\": 6,\n        \"vendor_name\": \"Gamma Logistics\"\n      },\n      \"variance_usd\": 16500,\n      \"variance_pct\": 22.0,\n      \"variance_direction\": \"over\",\n      \"flagged\": true,\n      \"classification\": \"expand\"\n    },\n    {\n      \"entity_key\": \"CONTRACT-004\",\n      \"mongo_value\": {\n        \"contract_id\": \"CONTRACT-004\",\n        \"status\": \"active\",\n        \"vendor_name\": \"Delta Tech\",\n        \"contracted_annual_value_usd\": 400000,\n        \"contract_start\": \"2024-06-01\",\n        \"contract_end\": \"2025-05-31\"\n      },\n      \"sql_value\": {\n        \"total_invoiced_2024\": 195000,\n        \"invoice_count\": 7,\n        \"vendor_name\": \"Delta Tech\"\n      },\n      \"variance_usd\": -205000,\n      \"variance_"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.016028,
+  "total_latency_ms": 11381,
+  "cumulative_spend_usd": 2.652310000000001,
+  "evaluator_reason": "ok"
+}

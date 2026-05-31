@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-005",
+  "task_class": "sql_gen",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_1",
+        "description": "Generate SQL query to calculate average cost per active seat by product for Q4 2024, sorted in descending order. Q4 2024 includes October, November, December 2024. Query should return product name, average cost per active seat, and related metrics.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single SQL query required to aggregate cost and seat data across one or more tables for Q4 2024. This is a mid-tier task because it requires joining multiple tables (products, costs/pricing, seat/license data), filtering by date range, aggregating by product, and sorting\u2014typical multi-table join with aggregation. No reconciliation across sources, no complex CTEs with window functions, and no policy logic needed. One subtask is sufficient; there is no need to split cost calculation from seat counting as they are part of the same analytical query.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 493,
+      "output_tokens": 253,
+      "cached_tokens": 0,
+      "latency_ms": 4307,
+      "output": {
+        "sql": "SELECT\n  product,\n  SUM(amount_usd) AS total_amount_usd,\n  SUM(daily_active_seats) AS total_active_seats,\n  AVG(daily_active_seats) AS avg_daily_active_seats,\n  COUNT(event_id) AS event_count,\n  CASE\n    WHEN SUM(daily_active_seats) > 0\n    THEN SUM(amount_usd) / SUM(daily_active_seats)\n    ELSE NULL\n  END AS avg_cost_per_active_seat\nFROM consumption_facts\nWHERE event_date >= '2024-10-01'\n  AND event_date < '2025-01-01'\n  AND fiscal_quarter = 4\n  AND fiscal_year = 2024\n  AND daily_active_seats > 0\nGROUP BY product\nORDER BY avg_cost_per_active_seat DESC NULLS LAST"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.005274,
+  "total_latency_ms": 4307,
+  "cumulative_spend_usd": 0.006079,
+  "evaluator_reason": "result_bag_mismatch"
+}

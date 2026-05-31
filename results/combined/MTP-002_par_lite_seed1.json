@@ -1,0 +1,178 @@
+{
+  "task_id": "MTP-002",
+  "task_class": "multitool_plan",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_update_perms",
+        "description": "Check access control policy to verify user has permission to update contract records for vendor 'TechFlow Solutions' and extend contract terms",
+        "specialist": "policy_action",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "mongo_find_techflow_contract",
+        "description": "Query MongoDB to locate the current contract record for vendor 'TechFlow Solutions' and retrieve its current term end date and all contract fields needed for the update",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": [
+          "policy_check_update_perms"
+        ]
+      },
+      {
+        "id": "cross_recon_update_and_notify",
+        "description": "Reconcile the permission check and contract retrieval, execute the contract term extension (adding 12 months to the term end date), and generate a notification payload for the procurement team with updated contract details",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "policy_check_update_perms",
+          "mongo_find_techflow_contract"
+        ]
+      }
+    ],
+    "cost_rationale": "The query requires a three-step workflow: (1) Policy check to verify update permissions (policy_action, small tier\u2014straightforward permission verification against a single policy rule), (2) Retrieve the current contract record from MongoDB (mongo_query, small tier\u2014direct vendor lookup is simple), and (3) Cross-reconciliation that confirms permissions were granted, executes the term extension, and orchestrates the procurement team notification (cross_recon, mid tier\u2014this step requires reconciling the permission result with the contract data, performing the logical update, and generating a communication payload). The cross_recon tier is mid rather than small because it coordinates the permission enforcement, contract modification logic, and notification generation together. The plan is minimal: a multi-step workflow that cannot be further collapsed without losing the necessary gating (permissions before write) and communication (notification after update)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_update_perms",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 385,
+      "output_tokens": 256,
+      "cached_tokens": 0,
+      "latency_ms": 2688,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-VENDOR-UPDATE": "pass_conditional",
+          "POL-CONTRACT-MODIFICATION": "pass_conditional",
+          "POL-TERM-EXTENSION": "pending_review",
+          "POL-PROCUREMENT-NOTIFICATION": "pass",
+          "POL-AUDIT-LOGGING": "pass"
+        },
+        "reason": "Contract term extension requires approval from procurement authority and vendor management review. User role/permissions not provided in context. Standard contract modifications require conditional approval based on extension duration (12 months) and vendor risk classification.",
+        "applied_constraints": [
+          "Require procurement manager approval before contract term extension",
+          "Require vendor risk assessment verification for TechFlow Solutions",
+          "Require contract amendment document review",
+          "Enforce audit logging of all contract modifications",
+          "Notify procurement team post-approval (not pre-approval)",
+          "Verify user has contract_update permission in their role"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "mongo_find_techflow_contract",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1456,
+      "output_tokens": 69,
+      "cached_tokens": 0,
+      "latency_ms": 1042,
+      "output": {
+        "collection": "billing_contracts",
+        "pipeline": [
+          {
+            "$match": {
+              "vendor_name": "TechFlow Solutions"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_update_and_notify",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 549,
+      "output_tokens": 584,
+      "cached_tokens": 0,
+      "latency_ms": 10421,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "TechFlow_Solutions_contract_term_extension",
+            "mongo_value": {
+              "collection": "billing_contracts",
+              "pipeline": [
+                {
+                  "$match": {
+                    "vendor_name": "TechFlow Solutions"
+                  }
+                }
+              ],
+              "retrieval_status": "query_defined_not_executed",
+              "contract_data": null,
+              "term_end_date_current": null,
+              "term_end_date_extended": null,
+              "extension_months": 12
+            },
+            "sql_value": {
+              "policy_compliance": {
+                "POL-VENDOR-UPDATE": "pass_conditional",
+                "POL-CONTRACT-MODIFICATION": "pass_conditional",
+                "POL-TERM-EXTENSION": "pending_review",
+                "POL-PROCUREMENT-NOTIFICATION": "pass",
+                "POL-AUDIT-LOGGING": "pass"
+              },
+              "selected_action": "deny_pending_approvals",
+              "blocking_policies": [
+                "POL-TERM-EXTENSION"
+              ],
+              "conditional_policies": [
+                "POL-VENDOR-UPDATE",
+                "POL-CONTRACT-MODIFICATION"
+              ],
+              "unresolved_constraints": [
+                "procurement_manager_approval_missing",
+                "vendor_risk_assessment_unverified",
+                "contract_amendment_document_not_reviewed",
+                "user_contract_update_permission_unverified"
+              ]
+            },
+            "classification": "at_risk",
+            "reconciliation_summary": {
+              "update_executable": false,
+              "block_reason": "POL-TERM-EXTENSION is pending_review and selected_action is deny_pending_approvals. Contract term extension for TechFlow Solutions cannot proceed until procurement authority approval and vendor management review are completed.",
+              "contract_retrieval_status": "mongo_query_staged_not_executed",
+              "term_extension_status": "blocked",
+              "notification_payload": {
+                "recipient_team": "procurement",
+                "notification_type": "approval_request_required",
+                "vendor_name": "TechFlow Solutions",
+                "requested_extension_months": 12,
+                "current_term_end_date": null,
+                "proposed_term_end_date": null,
+                "note": "Notification to procurement team is permitted per POL-PROCUREMENT-NOTIFICATION but must be sent post-approval, not pre-approval. Term end date cannot be calculated until contract record is retrieved and update is approved.",
+                "required_actions": [
+                  "Obtain procurement manager approval",
+                  "Complete vendor risk assessment for TechFlow Solutions",
+                  "Submit contract amendment document for review",
+                  "Verify requesting user holds contract_update permission"
+                ]
+              },
+              "audit_log_required": true,
+              "next_state": "awaiting_approvals"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.013873,
+  "total_latency_ms": 14151,
+  "cumulative_spend_usd": 4.288300000000003,
+  "evaluator_reason": "no_plan_in_output"
+}

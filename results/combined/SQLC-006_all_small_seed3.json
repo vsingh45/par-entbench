@@ -1,0 +1,93 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_analysis",
+        "description": "Query spend data to calculate current month spend and 3-month rolling average by vendor/category, then compute variance and deviation metrics for anomaly detection",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_classify_anomalies",
+        "description": "Reconcile current spend against 3-month baseline, identify variance outliers, and classify each anomaly as normal_variance (within expected bounds), concerning (elevated but manageable), or critical (severe deviation requiring immediate action)",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_spend_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks, minimal decomposition: (1) sql_gen (mid-tier) fetches spend metrics with rolling averages and variance calculations\u2014requires multi-column aggregation and window functions across time periods, but is fundamentally a single query. (2) cross_recon (mid-tier) takes SQL output and performs classification logic (normal_variance vs concerning vs critical) by applying deviation thresholds and business rules. Classification is a reconciliation/interpretation task, not a separate policy_action, since no explicit policy approval or governance gate is required\u2014this is anomaly detection and posture assignment. Both mid-tier tasks are adequate: sql_gen handles standard aggregation; cross_recon handles threshold-based multi-class categorization without needing frontier reasoning. No multitool_plan or policy_action needed."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 476,
+      "output_tokens": 702,
+      "cached_tokens": 0,
+      "latency_ms": 4023,
+      "output": {
+        "sql": "WITH monthly_spend AS (SELECT vendor_name, DATE_TRUNC('month', invoice_date)::DATE AS month_start, SUM(amount_usd) AS monthly_total FROM invoice_facts WHERE invoice_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months' GROUP BY vendor_name, DATE_TRUNC('month', invoice_date)), rolling_avg AS (SELECT vendor_name, month_start, monthly_total, AVG(monthly_total) OVER (PARTITION BY vendor_name ORDER BY month_start ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS rolling_3m_avg FROM monthly_spend), current_month_data AS (SELECT vendor_name, month_start, monthly_total, rolling_3m_avg, CASE WHEN LAG(month_start) OVER (PARTITION BY vendor_name ORDER BY month_start) = month_start - INTERVAL '1 month' THEN TRUE ELSE FALSE END AS is_complete_history FROM rolling_avg WHERE month_start >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months'), variance_metrics AS (SELECT vendor_name, month_start, monthly_total, rolling_3m_avg, ROUND(((monthly_total - rolling_3m_avg) / NULLIF(rolling_3m_avg, 0) * 100)::NUMERIC, 2) AS variance_pct, ROUND(ABS(monthly_total - rolling_3m_avg)::NUMERIC, 2) AS absolute_deviation, STDDEV_POP(monthly_total) OVER (PARTITION BY vendor_name ORDER BY month_start ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS stddev_3m FROM current_month_data WHERE is_complete_history = TRUE), anomaly_classification AS (SELECT vendor_name, month_start, monthly_total, rolling_3m_avg, variance_pct, absolute_deviation, stddev_3m, CASE WHEN ABS(variance_pct) <= 10 THEN 'normal_variance' WHEN ABS(variance_pct) > 10 AND ABS(variance_pct) <= 25 THEN 'concerning' WHEN ABS(variance_pct) > 25 THEN 'critical' ELSE 'unknown' END AS anomaly_classification FROM variance_metrics) SELECT vendor_name, month_start, ROUND(monthly_total::NUMERIC, 2) AS current_month_spend, ROUND(rolling_3m_avg::NUMERIC, 2) AS rolling_3m_average, variance_pct, absolute_deviation, ROUND(stddev_3m::NUMERIC, 2) AS stddev_3m, anomaly_classification FROM anomaly_classification WHERE month_start = DATE_TRUNC('month', CURRENT_DATE)::DATE ORDER BY absolute_deviation DESC, vendor_name"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_classify_anomalies",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 985,
+      "output_tokens": 380,
+      "cached_tokens": 0,
+      "latency_ms": 3243,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sql_spend_analysis",
+            "mongo_value": null,
+            "sql_value": {
+              "query_type": "spend_variance_analysis",
+              "analysis_period": "current_month_vs_3month_rolling_avg",
+              "classification_logic": {
+                "normal_variance": "variance_pct between -10 and +10",
+                "concerning": "variance_pct between -25 and -10 OR between +10 and +25",
+                "critical": "variance_pct < -25 OR variance_pct > +25"
+              },
+              "output_structure": [
+                {
+                  "vendor_name": "string",
+                  "month_start": "date",
+                  "current_month_spend": "numeric",
+                  "rolling_3m_average": "numeric",
+                  "variance_pct": "numeric",
+                  "absolute_deviation": "numeric",
+                  "stddev_3m": "numeric",
+                  "anomaly_classification": "normal_variance|concerning|critical|unknown"
+                }
+              ],
+              "data_quality_notes": "Only includes vendors with complete 3-month history (no gaps), ordered by absolute deviation descending"
+            },
+            "classification": "pending_execution"
+          }
+        ],
+        "note": "SQL query provided but no actual result set returned. To complete reconciliation, please execute the query and provide the result set. The framework expects vendor spend records with variance metrics classified according to deviation thresholds."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.006871,
+  "total_latency_ms": 7266,
+  "cumulative_spend_usd": 0.9970850000000001,
+  "evaluator_reason": "step2_consumer_classification_missing"
+}

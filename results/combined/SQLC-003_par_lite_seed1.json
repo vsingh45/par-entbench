@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_declining_publishers",
+        "description": "Query SQL warehouse to identify publishers with declining quarterly revenue/spend trends in 2024. Calculate YoY or QoQ decline metrics (Q1\u2192Q4) and rank by severity of decline.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal_rec",
+        "description": "Reconcile publisher decline data with historical contract performance, spend patterns, and market benchmarks. For each publisher, classify renewal posture (hold/expand/reduce) and generate renewal recommendation with rationale.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_declining_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid-tier) to fetch 2024 quarterly trends and identify declining publishers \u2014 requires multi-quarter aggregation and YoY/QoQ comparison across the year, suitable for mid-tier SQL capability. (2) cross_recon (frontier-tier) to reconcile SQL results with historical contract data, performance signals, and market context to generate nuanced renewal recommendations \u2014 classification and recommendation logic are part of cross_recon's reconciliation scope, not a separate policy_action, because the query asks for business-driven recommendations, not compliance/governance approval. Frontier tier is assigned because cross_recon must synthesize multiple signals (trend severity, historical performance, spend volatility) and apply judgment to assign hold/expand/reduce postures. Do not split into multiple specialist subtasks; this is the minimal plan."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_declining_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 485,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8875,
+      "output": {
+        "raw_output": "{\"sql\": \"SELECT\\n  publisher,\\n  SUM(CASE WHEN fiscal_quarter = 1 THEN amount_usd ELSE 0 END) AS q1_spend,\\n  SUM(CASE WHEN fiscal_quarter = 2 THEN amount_usd ELSE 0 END) AS q2_spend,\\n  SUM(CASE WHEN fiscal_quarter = 3 THEN amount_usd ELSE 0 END) AS q3_spend,\\n  SUM(CASE WHEN fiscal_quarter = 4 THEN amount_usd ELSE 0 END) AS q4_spend,\\n  SUM(amount_usd) AS total_2024_spend,\\n  ROUND(\\n    SUM(CASE WHEN fiscal_quarter = 4 THEN amount_usd ELSE 0 END)\\n    - SUM(CASE WHEN fiscal_quarter = 1 THEN amount_usd ELSE 0 END),\\n    2\\n  ) AS q1_to_q4_absolute_change,\\n  ROUND(\\n    CASE\\n      WHEN SUM(CASE WHEN fiscal_quarter = 1 THEN amount_usd ELSE 0 END) = 0 THEN NULL\\n      ELSE (\\n        SUM(CASE WHEN fiscal_quarter = 4 THEN amount_usd ELSE 0 END)\\n        - SUM(CASE WHEN fiscal_quarter = 1 THEN amount_usd ELSE 0 END)\\n      ) / SUM(CASE WHEN fiscal_quarter = 1 THEN amount_usd ELSE 0 END) * 100\\n    END,\\n    2\\n  ) AS q1_to_q4_pct_change,\\n  ROUND(\\n    CASE\\n      WHEN SUM(CASE WHEN fiscal_quarter = 3 THEN amount_usd ELSE 0 END) = 0 THEN NULL\\n      ELSE (\\n        SUM(CASE WHEN fiscal_quarter = 4 THEN amount_usd ELSE 0 END)\\n        - SUM(CASE WHEN fiscal_quarter = 3 THEN amount_usd ELSE 0 END)\\n      ) / SUM(CASE WHEN fiscal_quarter = 3 THEN amount_usd ELSE 0 END) * 100\\n    END,\\n    2\\n  ) AS q3_to_q4_pct_change,\\n  AVG(daily_active_seats) AS avg_daily_active_seats,\\n  CASE\\n    WHEN (\\n      SUM(CASE WHEN fiscal_quarter = 1 THEN amount_usd ELSE 0 END) = 0\\n      OR (\\n        SUM(CASE WHEN fiscal_quarter = 4 THEN amount_usd ELSE 0 END)\\n        - SUM(CASE WHEN fiscal_quarter = 1 THEN amount_usd ELSE 0 END)\\n      ) / SUM(CASE WHEN fiscal_quarter = 1 THEN amount_usd ELSE 0 END) * 100 < -20\\n    ) THEN 'reduce'\\n    WHEN (\\n      SUM("
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal_rec",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1631,
+      "output_tokens": 13,
+      "cached_tokens": 0,
+      "latency_ms": 952,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.021935000000000003,
+  "total_latency_ms": 9827,
+  "cumulative_spend_usd": 1.3105339999999996,
+  "evaluator_reason": "step1_sql_fail: no_sql_in_output"
+}

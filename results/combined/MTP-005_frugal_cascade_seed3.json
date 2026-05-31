@@ -1,0 +1,355 @@
+{
+  "task_id": "MTP-005",
+  "task_class": "multitool_plan",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "check_iam_role",
+        "description": "Retrieve user's current IAM role and active permissions from the identity management system",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_manager_approval",
+        "description": "Fetch pending manager approval status and authorization metadata from the workflow system for the provisioning request",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "update_iam_perms",
+        "description": "Execute IAM permission update operation based on approved provisioning request and current role state",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "check_iam_role",
+          "fetch_manager_approval"
+        ]
+      },
+      {
+        "id": "send_confirmation_email",
+        "description": "Trigger email confirmation notification to user and manager with new IAM permissions and change summary",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "update_iam_perms"
+        ]
+      }
+    ],
+    "cost_rationale": "Four distinct operational steps required: (1) Check current IAM state (sql_gen, small\u2014simple role lookup); (2) Fetch approval from workflow system (multitool_plan, small\u2014single tool call to retrieve approval); (3) Update IAM permissions (multitool_plan, mid\u2014depends on previous outputs and requires conditional logic to apply the approved changes safely); (4) Send confirmation email (multitool_plan, small\u2014standard notification). Each step represents a distinct tool invocation. No cross_recon or policy_action needed because the query does not ask for compliance evaluation or data reconciliation\u2014it describes an operational workflow. Tier escalations: update_iam_perms is mid because it depends on two upstream outputs and must safely orchestrate permission changes."
+  },
+  "node_results": [
+    {
+      "subtask_id": "check_iam_role",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 461,
+      "output_tokens": 57,
+      "cached_tokens": 0,
+      "latency_ms": 1634,
+      "output": {
+        "sql": "SELECT user_id, permission, resource, action, result, access_time FROM access_log_facts WHERE user_id IS NOT NULL ORDER BY access_time DESC LIMIT 100"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_manager_approval",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 442,
+      "output_tokens": 388,
+      "cached_tokens": 0,
+      "latency_ms": 2436,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "resource": "provisioning_workflow",
+              "action": "read"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "provisioning_requests",
+              "filter": {
+                "status": "pending_manager_approval"
+              }
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "workflow_approvals",
+              "filter": {
+                "request_id": "$2.results[0]._id"
+              }
+            },
+            "depends_on": [
+              2
+            ]
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "iam_metadata",
+              "filter": {
+                "user_id": "$2.results[0].user_id"
+              }
+            },
+            "depends_on": [
+              2
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "FETCH_PROVISIONING_WORKFLOW",
+              "resource": "provisioning_requests",
+              "details": {
+                "approval_status": "$3.results",
+                "iam_metadata": "$4.results"
+              }
+            },
+            "depends_on": [
+              3,
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "update_iam_perms",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 753,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 4239,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "resource": "iam_role_management",
+              "action": "write"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "provisioning_requests",
+              "filter": {
+                "status": "pending_manager_approval"
+              }
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "workflow_approvals",
+              "filter": {
+                "request_id": "$2.results[0]._id",
+                "status": "approved"
+              }
+            },
+            "depends_on": [
+              2
+            ]
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "iam_metadata",
+              "filter": {
+                "user_id": "$2.results[0].user_id"
+              }
+            },
+            "depends_on": [
+              2
+            ]
+          },
+          {
+            "tool": "iam.grant_role",
+            "arguments": {
+              "user_id": "$2.results[0].user_id",
+              "role": "$2.results[0].requested_role",
+              "resource": "$2.results[0].resource_scope",
+              "duration": "$2.results[0].duration"
+            },
+            "depends_on": [
+              1,
+              3,
+              4
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "IAM_ROLE_GRANTED",
+              "resource": "iam_role_management",
+              "user_id": "$2.results[0].user_id",
+              "details": {
+                "role": "$2.results[0].requested_role",
+                "resource_scope": "$2.results[0].resource_scope",
+                "approval_id": "$3.results[0]._id",
+                "previous_roles": "$4.results[0].current_roles"
+              }
+            },
+            "depends_on": [
+              5
+            ]
+          },
+          {
+            "tool": "email.send",
+            "arguments": {
+              "to": "$2.results[0].user_email",
+              "subject": "IAM Access Provisioning Approved",
+              "body": "Your access request for role '$2.results[0].requested_role' on resource '$2.results[0].resource_scope' has been approved and provisioned. Access effective immediately."
+            },
+            "depends_on": [
+              6
+            ]
+          },
+          {
+            "tool": "mongo.update",
+            "arguments": {
+              "collection": "provisioning_requests",
+              "filter": {
+                "_id": "$2.results[0]._id"
+              },
+              "update": {
+                "$set": {
+                  "status": "completed",
+                  "completion_time": "now()",
+                  "granted_role": "$2.results[0].requested_role"
+                }
+              }
+            },
+            "depends_on": [
+              7
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "send_confirmation_email",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1030,
+      "output_tokens": 719,
+      "cached_tokens": 0,
+      "latency_ms": 4387,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "resource": "iam_role_management",
+              "action": "write"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "provisioning_requests",
+              "filter": {
+                "_id": "$2.results[0]._id"
+              }
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "users",
+              "filter": {
+                "user_id": "$2.results[0].user_id"
+              }
+            },
+            "depends_on": [
+              2
+            ]
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "users",
+              "filter": {
+                "user_id": "$2.results[0].manager_id"
+              }
+            },
+            "depends_on": [
+              2
+            ]
+          },
+          {
+            "tool": "email.send",
+            "arguments": {
+              "to": "$3.results[0].email",
+              "cc": "$4.results[0].email",
+              "subject": "IAM Access Provisioning Approved - Permission Change Summary",
+              "body": "Your access request has been approved.\n\nUser: $3.results[0].name ($3.results[0].user_id)\nRole Granted: $2.results[0].requested_role\nResource Scope: $2.results[0].resource_scope\nDuration: $2.results[0].duration\nApproved By: $4.results[0].name\nEffective Date: Now\n\nPrevious Roles: [See attached summary]\nNew Roles: $2.results[0].requested_role\n\nIf you did not request this access or have questions, please contact your manager or IT Security."
+            },
+            "depends_on": [
+              3,
+              4
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "NOTIFICATION_SENT",
+              "resource": "iam_provisioning_notification",
+              "user_id": "$2.results[0].user_id",
+              "details": {
+                "notification_type": "email_confirmation",
+                "recipient_user": "$3.results[0].email",
+                "recipient_manager": "$4.results[0].email",
+                "role_granted": "$2.results[0].requested_role",
+                "resource_scope": "$2.results[0].resource_scope",
+                "provisioning_request_id": "$2.results[0]._id"
+              }
+            },
+            "depends_on": [
+              5
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.012506,
+  "total_latency_ms": 12696,
+  "cumulative_spend_usd": 6.772024000000007,
+  "evaluator_reason": "missing_tools: {'iam.roles.attach', 'workflow.approvals.check', 'email.send', 'iam.user.get'}"
+}

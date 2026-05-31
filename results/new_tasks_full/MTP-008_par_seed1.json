@@ -1,0 +1,39 @@
+{
+  "task_id": "MTP-008",
+  "task_class": "multitool_plan",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "orchestrate_collab_tools",
+        "description": "Generate a multi-tool orchestration plan to: (1) retrieve project requirements from Jira API, (2) check team availability from calendar API, (3) schedule standup meeting via calendar, and (4) share agenda via Slack. Returns ordered tool-call sequence with parameters and dependency graph.",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This query explicitly asks for multi-tool orchestration across four distinct enterprise systems (Jira, Calendar API, Meeting Scheduler, Slack). A single multitool_plan subtask at mid tier is appropriate because: (1) it requires sequencing tool calls with clear dependencies (requirements → availability check → schedule → notify), (2) the logic is moderately complex but does not involve data reconciliation or policy evaluation, and (3) mid-tier capability is sufficient to generate a coherent multi-step tool-call plan with parameter mapping. We do NOT add separate subtasks for each tool — the multitool_plan agent generates the entire orchestration plan in one call. No cross_recon is needed (no reconciliation across disparate data sources), and no policy_action is needed (no compliance or governance evaluation requested)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "orchestrate_collab_tools",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 492,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 12393,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"step\": 1,\n      \"tool\": \"jira.list_tickets\",\n      \"arguments\": {\n        \"project\": \"CROSS-TEAM\",\n        \"status\": [\"Open\", \"In Progress\", \"To Do\"],\n        \"fields\": [\"summary\", \"description\", \"priority\", \"assignee\", \"labels\", \"acceptance_criteria\"],\n        \"max_results\": 50\n      },\n      \"depends_on\": [],\n      \"description\": \"Retrieve all active project requirements and stories from Jira\"\n    },\n    {\n      \"step\": 2,\n      \"tool\": \"calendar.list_events\",\n      \"arguments\": {\n        \"calendar_ids\": [\"team-alpha@company.com\", \"team-beta@company.com\", \"team-gamma@company.com\"],\n        \"time_min\": \"2025-01-27T08:00:00Z\",\n        \"time_max\": \"2025-01-31T18:00:00Z\",\n        \"show_deleted\": false,\n        \"single_events\": true,\n        \"order_by\": \"startTime\"\n      },\n      \"depends_on\": [],\n      \"description\": \"Check calendar availability for all team members across the upcoming week\"\n    },\n    {\n      \"step\": 3,\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"principal\": \"orchestrator-service-account\",\n        \"resource\": \"calendar:events:write\",\n        \"action\": \"create\",\n        \"context\": {\n          \"calendar_ids\": [\"team-alpha@company.com\", \"team-beta@company.com\", \"team-gamma@company.com\"]\n        }\n      },\n      \"depends_on\": [2],\n      \"description\": \"Verify orchestrator has permission to create calendar events before scheduling\"\n    },\n    {\n      \"step\": 4,\n      \"tool\": \"calendar.create_event\",\n      \"arguments\": {\n        \"title\": \"Cross-Team Standup: Sprint Planning & Requirements Review\",\n        \"description\": \"Agenda:\\n1. Project Requirements Overview (from Jira: $1.tickets)\\n2. Blocker Review & Priority Alignment\\n3. Sprint Goal Confirmation\\n4. Action Items & Owner Assignment\",\n        \"attendees\": [\"team-alpha@company.com\", \"team-beta@company.com\", \"team-gamma@company.com\"],\n        \"start_time\": \"$2.first_available_slot.start\",\n        \"end_time\": \"$2.first_available_slot.end\",\n        \"duration_minutes\": 30,\n        \"recurrence\": \"RRULE:FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR\",\n        \"location\": \"Zoom Meeting Room / Conf Room A\",\n        \"reminders\": [\n          {\"method\": \"popup\", \"minutes\": 10},\n          {\"method\": \"email\", \"minutes\": 60}\n        ],\n        \"availability_windows\": \"$2.available_slots\",\n        \"permission_check\": \"$3.allowed\"\n      },\n      \"depends_on\": [1, 2, 3],\n      \"description\": \"Schedule the standup meeting using the first common availability slot found, incorporating Jira requirements into the agenda\"\n    },\n    {\n      \"step"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.013476,
+  "total_latency_ms": 12393,
+  "cumulative_spend_usd": 7.9764770000000045
+}

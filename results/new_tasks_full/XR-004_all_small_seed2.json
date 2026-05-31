@@ -1,0 +1,86 @@
+{
+  "task_id": "XR-004",
+  "task_class": "cross_recon",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sam_licensed_query",
+        "description": "Query SAM database for licensed Microsoft users and their entitlements (count by product, license type, and assigned user)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "consumption_spend_query",
+        "description": "Query consumption facts warehouse for active Microsoft users and their actual usage metrics (count by product, monthly active users, spend by product line)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_posture",
+        "description": "Reconcile SAM licensed user counts against consumption active users; calculate licensing gaps (under-provisioned) and excess capacity (over-provisioned) by product; classify posture (compliant, at-risk, over-licensed) and provide optimization recommendations",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sam_licensed_query",
+          "consumption_spend_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: two mid-tier SQL queries (one for SAM entitlements, one for consumption actuals—separate sources require separate queries but are independent and can run in parallel), plus one frontier-tier cross_recon to reconcile both datasets, calculate delta metrics (under/over-provisioning gaps), classify licensing posture, and generate optimization recommendations. The frontier tier is justified because reconciliation requires multi-signal analysis (licensed count vs active user count vs spend trends), delta calculation, posture classification, and actionable recommendation generation—all part of the cross_recon output. No separate policy_action is needed; compliance reasoning is embedded in cross_recon classification. The plan minimizes subtasks by consolidating all metrics into two query calls and one intelligent reconciliation step."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sam_licensed_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 468,
+      "output_tokens": 157,
+      "cached_tokens": 0,
+      "latency_ms": 1429,
+      "output": {
+        "sql": "SELECT c.publisher, c.product, COUNT(DISTINCT c.license_id) as license_count, COUNT(DISTINCT c.user_id) as active_users, c.event_type as license_type, SUM(c.amount_usd) as total_spend_usd, COUNT(DISTINCT c.daily_active_seats) as seat_utilization FROM consumption_facts c WHERE c.publisher = 'Microsoft' AND c.event_date >= '2024-01-01' GROUP BY c.publisher, c.product, c.event_type ORDER BY c.product, c.event_type"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "consumption_spend_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 470,
+      "output_tokens": 147,
+      "cached_tokens": 0,
+      "latency_ms": 1531,
+      "output": {
+        "sql": "SELECT p.product, COUNT(DISTINCT c.user_id) as active_users, COUNT(DISTINCT DATE_TRUNC('month', c.event_date)) as active_months, COUNT(*) as event_count, SUM(c.amount_usd) as total_spend_usd, SUM(c.daily_active_seats) as total_active_seats FROM consumption_facts c WHERE c.publisher = 'Microsoft' AND c.event_date >= '2024-01-01' GROUP BY c.product ORDER BY total_spend_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 587,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 5429,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"Microsoft_Office365\",\n      \"mongo_value\": null,\n      \"sql_licensed_users\": null,\n      \"sql_active_users\": null,\n      \"sql_spend_usd\": null,\n      \"sql_seat_utilization\": null,\n      \"licensing_gap\": null,\n      \"gap_type\": \"unknown\",\n      \"utilization_rate\": null,\n      \"classification\": \"no_data\",\n      \"recommendation\": \"Execute SAM licensed query to retrieve baseline licensing data for Microsoft Office365\"\n    },\n    {\n      \"entity_key\": \"Microsoft_Windows\",\n      \"mongo_value\": null,\n      \"sql_licensed_users\": null,\n      \"sql_active_users\": null,\n      \"sql_spend_usd\": null,\n      \"sql_seat_utilization\": null,\n      \"licensing_gap\": null,\n      \"gap_type\": \"unknown\",\n      \"utilization_rate\": null,\n      \"classification\": \"no_data\",\n      \"recommendation\": \"Execute SAM licensed query to retrieve baseline licensing data for Microsoft Windows\"\n    },\n    {\n      \"entity_key\": \"Microsoft_SQL_Server\",\n      \"mongo_value\": null,\n      \"sql_licensed_users\": null,\n      \"sql_active_users\": null,\n      \"sql_spend_usd\": null,\n      \"sql_seat_utilization\": null,\n      \"licensing_gap\": null,\n      \"gap_type\": \"unknown\",\n      \"utilization_rate\": null,\n      \"classification\": \"no_data\",\n      \"recommendation\": \"Execute SAM licensed query to retrieve baseline licensing data for Microsoft SQL Server\"\n    }\n  ],\n  \"reconciliation_summary\": {\n    \"total_entities\": 0,\n    \"compliant\": 0,\n    \"at_risk\": 0,\n    \"over_licensed\": 0,\n    \"under_licensed\": 0,\n    \"total_licensing_gap_usd\": 0,\n    \"total_excess_capacity_usd\": 0,\n    \"data_quality_issues\": [\n      \"No MongoDB operational state provided - cannot perform LEFT JOIN reconciliation\",\n      \"SAM licensed query requires execution to populate license_count and license_type baseline\",\n      \"Consumption spend query requires execution to populate active_users and event data\",\n      \"Missing comparative data for gap analysis\"\n    ]\n  },\n  \"optimization_opportunities\": [\n    {\n      \"priority\": \"critical\",\n      \"action\": \"Execute provided SAM licensed query to obtain Microsoft publisher licensing baseline\",\n      \"impact\": \"Enable license count vs active user comparison\"\n    },\n    {\n      \"priority\": \"critical\",\n      \"action\": \"Execute provided consumption spend query to obtain Microsoft active user consumption metrics\",\n      \"impact\": \"Calculate utilization rates and identify over/under-provisioning\"\n    },\n    {\n      \"priority\": \"high\",\n      \"action\": \"Join results on (publisher, product) to reconcile licensed_count against active_users\",\n      \"impact\": \"Identify licensing gaps and excess capacity by product line\"\n    },\n    {\n      \"priority\": \"high\",\n      \"action\": \"Calculate utilization_rate = active_users / license_count for each product\",\n      \"impact\": \"Classify posture: <0.8 = over_licensed"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007045,
+  "total_latency_ms": 8389,
+  "cumulative_spend_usd": 2.5659640000000006
+}

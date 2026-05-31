@@ -1,0 +1,49 @@
+{
+  "task_id": "PAC-004",
+  "task_class": "policy_action",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_prod_access",
+        "description": "Evaluate the developer's access request against production database access policies, including justification validation, approval chain requirements, and governance rules for live debugging.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single subtask required: This is an explicit policy evaluation query with no need for data retrieval or reconciliation. A policy_action agent evaluates governance and compliance rules. Mid tier assigned because policy evaluation for production database access involves multiple considerations (approval chain, justification strength, user role, audit requirements) and may require reasoning across multiple applicable policies rather than a single simple rule check."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_prod_access",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 681,
+      "output_tokens": 145,
+      "cached_tokens": 0,
+      "latency_ms": 2797,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-401": "fail",
+          "POL-402": "fail"
+        },
+        "reason": "Developer lacks Manager approval and on-call role required for prod DB access (POL-401). Debug activities must be performed in staging per POL-402.",
+        "applied_constraints": [
+          "Redirect debugging to staging environment",
+          "Require Manager approval and on-call assignment for any future prod access"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.007030000000000001,
+  "total_latency_ms": 2797,
+  "cumulative_spend_usd": 8.32239,
+  "evaluator_reason": "ok"
+}

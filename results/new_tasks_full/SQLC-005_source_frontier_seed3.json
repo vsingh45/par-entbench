@@ -1,0 +1,99 @@
+{
+  "task_id": "SQLC-005",
+  "task_class": "sql_compose",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_licenses_6m",
+        "description": "Query Postgres to retrieve all licenses expiring within the next 6 months, including license ID, name, vendor, expiration date, cost, and any other relevant renewal metadata",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "gen_renewal_recs",
+        "description": "Generate renewal recommendations for each license based on expiration urgency, cost, usage patterns, and business criticality. Classify renewal posture (renew, renegotiate, replace, discontinue) for each license",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_licenses_6m"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (small) for a single straightforward SQL query filtering by expiration date range — this is explicit and requires no complex joins or window functions. (2) cross_recon (mid) to process the SQL results and generate recommendations with posture classification. Cross_recon is appropriate here because it includes decision-making and recommendation generation as part of its reconciliation capability. The mid tier is assigned because generating nuanced renewal recommendations requires moderate reasoning (weighing cost, criticality, vendor lock-in) across multiple records. A single unified plan avoids unnecessary handoffs — the recommendations flow directly from the query results."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_licenses_6m",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 723,
+      "output_tokens": 231,
+      "cached_tokens": 0,
+      "latency_ms": 3756,
+      "output": {
+        "sql": "SELECT license_id, publisher AS vendor, product AS license_name, MAX(event_date) AS last_event_date, SUM(amount_usd) AS total_cost_usd, SUM(daily_active_seats) AS total_seats, MAX(fiscal_year) AS fiscal_year, MAX(fiscal_quarter) AS fiscal_quarter FROM consumption_facts WHERE event_type = 'license_expiration' AND event_date >= CURRENT_DATE AND event_date < CURRENT_DATE + INTERVAL '6 months' GROUP BY license_id, publisher, product ORDER BY last_event_date ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "gen_renewal_recs",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 431,
+      "output_tokens": 335,
+      "cached_tokens": 0,
+      "latency_ms": 3430,
+      "output": {
+        "reconciled": [],
+        "note": "Cannot reconcile: MongoDB operational state not provided. SQL query result from Postgres shows licenses expiring in next 6 months, but no MongoDB data available for LEFT JOIN reconciliation. Please provide MongoDB query output to proceed with cross-backend reconciliation and renewal recommendations.",
+        "expected_input_format": {
+          "mongo_licenses": {
+            "collection": "licenses",
+            "query_filter": {
+              "expiration_date": {
+                "$gte": "current_date",
+                "$lt": "current_date+6months"
+              },
+              "status": {
+                "$in": [
+                  "active",
+                  "expiring"
+                ]
+              }
+            },
+            "fields": [
+              "license_id",
+              "vendor",
+              "product_name",
+              "expiration_date",
+              "annual_cost_usd",
+              "seat_count",
+              "business_criticality",
+              "usage_score"
+            ]
+          }
+        },
+        "reconciliation_strategy": "Once MongoDB data provided, will execute LEFT JOIN on license_id with SQL results to:",
+        "steps": [
+          "Match licenses from MongoDB (primary) to SQL expiration records",
+          "Calculate days_to_expiration from expiration_date",
+          "Compute usage_efficiency = total_seats / annual_cost_usd",
+          "Generate classification: renew | renegotiate | replace | discontinue",
+          "Output complete reconciled record with both sources"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.011496000000000001,
+  "total_latency_ms": 7186,
+  "cumulative_spend_usd": 0.783647
+}

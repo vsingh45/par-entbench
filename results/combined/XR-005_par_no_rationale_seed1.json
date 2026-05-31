@@ -1,0 +1,176 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "router": "par_no_rationale",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "1_extract_salesforce",
+        "description": "Extract Salesforce licensed seat inventory and license types from Salesforce org",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "2_extract_assignments",
+        "description": "Extract actual seat assignments and active user records from Salesforce",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "3_query_license_data",
+        "description": "Query Salesforce database to retrieve license counts, user types, and assignment details",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": [
+          "1_extract_salesforce"
+        ]
+      },
+      {
+        "id": "4_calculate_utilization",
+        "description": "Calculate seat utilization metrics by comparing licensed seats vs assigned seats, identifying gaps and unused licenses",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "2_extract_assignments",
+          "3_query_license_data"
+        ]
+      },
+      {
+        "id": "5_cross_recon",
+        "description": "Perform cross-reconciliation between license inventory, active assignments, and user status to identify unutilized and orphaned licenses",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "4_calculate_utilization"
+        ]
+      },
+      {
+        "id": "6_generate_report",
+        "description": "Generate comprehensive seat utilization report with visualizations, unutilized licenses, cost optimization opportunities, and recommendations",
+        "specialist": "multitool_plan",
+        "tier": "frontier",
+        "depends_on": [
+          "5_cross_recon"
+        ]
+      }
+    ],
+    "cost_rationale": "Multiple steps required to extract Salesforce license data, compare against actual assignments, perform cross-reconciliation, and generate actionable insights. Frontier tier needed for final comprehensive analysis and report generation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "1_extract_salesforce",
+      "specialist": "extract",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 233,
+      "output_tokens": 154,
+      "cached_tokens": 0,
+      "latency_ms": 3726,
+      "output": {
+        "licensed_seats": null,
+        "assigned_seats": null,
+        "unutilized_seats": null,
+        "license_types": null,
+        "utilization_rate_percent": null,
+        "data_source": null,
+        "extraction_date": null,
+        "notes": "No Salesforce org data, API response, or document was provided in the task input. All upstream_outputs are empty. Cannot extract seat inventory, license types, or utilization metrics without access to Salesforce org data (e.g., UserLicense, PermissionSetLicense, or Company Information query results)."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "2_extract_assignments",
+      "specialist": "extract",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 230,
+      "output_tokens": 145,
+      "cached_tokens": 0,
+      "latency_ms": 3046,
+      "output": {
+        "effective_date": null,
+        "expiration_date": null,
+        "total_contract_value_usd": null,
+        "licensed_seats": null,
+        "assigned_seats": null,
+        "active_users": null,
+        "unutilized_licenses": null,
+        "utilization_rate_pct": null,
+        "data_source": null,
+        "extraction_date": null,
+        "notes": "No document provided. Upstream outputs are empty. Cannot extract Salesforce seat assignment or active user records without actual data input."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "3_query_license_data",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 588,
+      "output_tokens": 185,
+      "cached_tokens": 0,
+      "latency_ms": 3135,
+      "output": {
+        "sql": "SELECT cf.publisher, cf.product, cf.license_id, SUM(cf.daily_active_seats) AS total_active_seats, COUNT(DISTINCT cf.user_id) AS distinct_users, SUM(cf.amount_usd) AS total_spend_usd, AVG(cf.daily_active_seats) AS avg_daily_active_seats, MAX(cf.daily_active_seats) AS max_daily_active_seats, MIN(cf.daily_active_seats) AS min_daily_active_seats, COUNT(cf.event_id) AS event_count FROM consumption_facts cf WHERE cf.publisher ILIKE '%salesforce%' GROUP BY cf.publisher, cf.product, cf.license_id ORDER BY total_spend_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "4_calculate_utilization",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 745,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9159,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"resource\": \"license_utilization_metrics\",\n        \"action\": \"read\",\n        \"context\": \"SAM seat utilization analysis for Salesforce\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT cf.publisher, cf.product, cf.license_id, SUM(cf.daily_active_seats) AS total_active_seats, COUNT(DISTINCT cf.user_id) AS distinct_users, SUM(cf.amount_usd) AS total_spend_usd, AVG(cf.daily_active_seats) AS avg_daily_active_seats, MAX(cf.daily_active_seats) AS max_daily_active_seats, MIN(cf.daily_active_seats) AS min_daily_active_seats, COUNT(cf.event_id) AS event_count FROM consumption_facts cf WHERE cf.publisher ILIKE '%salesforce%' GROUP BY cf.publisher, cf.product, cf.license_id ORDER BY total_spend_usd DESC\"\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT lc.license_id, lc.product, lc.publisher, lc.licensed_seats, lc.assigned_seats, lc.contract_start_date, lc.contract_end_date, lc.annual_cost_usd, lc.cost_per_seat_usd, (lc.licensed_seats - lc.assigned_seats) AS unassigned_seats, ROUND((lc.assigned_seats::FLOAT / NULLIF(lc.licensed_seats, 0)) * 100, 2) AS assignment_rate_pct FROM license_contracts lc WHERE lc.publisher ILIKE '%salesforce%' AND lc.contract_end_date >= CURRENT_DATE ORDER BY lc.annual_cost_usd DESC\"\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"sql.postgres.query\",\n      \"arguments\": {\n        \"query\": \"SELECT ua.license_id, ua.product, COUNT(DISTINCT ua.user_id) AS total_assigned_users, COUNT(DISTINCT CASE WHEN ua.last_login_date >= CURRENT_DATE - INTERVAL '30 days' THEN ua.user_id END) AS active_users_30d, COUNT(DISTINCT CASE WHEN ua.last_login_date >= CURRENT_DATE - INTERVAL '90 days' THEN ua.user_id END) AS active_users_90d, COUNT(DISTINCT CASE WHEN ua.last_login_date < CURRENT_DATE - INTERVAL '90 days' OR ua.last_login_date IS NULL THEN ua.user_id END) AS inactive_users, COUNT(DISTINCT CASE WHEN ua.last_login_date IS NULL THEN ua.user_id END) AS never_logged_in FROM user_assignments ua JOIN license_contracts lc ON ua.license_id = lc.license_id WHERE lc.publisher ILIKE '%salesforce%' AND"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "5_cross_recon",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1121,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 13749,
+      "output": {
+        "raw_output": "{\"reconciled\": [{\"entity_key\": \"salesforce_license_utilization_summary\", \"mongo_value\": {\"source\": \"license_inventory_operational_state\", \"data\": null, \"note\": \"MongoDB operational state not returned in upstream output; treating as primary source placeholder\"}, \"sql_value\": {\"snowflake_consumption\": {\"publisher\": \"Salesforce\", \"total_active_seats\": null, \"distinct_users\": null, \"total_spend_usd\": null, \"avg_daily_active_seats\": null, \"max_daily_active_seats\": null, \"min_daily_active_seats\": null, \"event_count\": null, \"note\": \"Snowflake consumption_facts query result not returned in upstream payload\"}, \"snowflake_contracts\": {\"license_id\": null, \"product\": null, \"licensed_seats\": null, \"assigned_seats\": null, \"contract_start_date\": null, \"contract_end_date\": null, \"annual_cost_usd\": null, \"cost_per_seat_usd\": null, \"unassigned_seats\": null, \"assignment_rate_pct\": null, \"note\": \"Snowflake license_contracts query result not returned in upstream payload\"}, \"postgres_assignments\": {\"total_assigned_users\": null, \"active_users_30d\": null, \"active_users_90d\": null, \"inactive_users\": null, \"never_logged_in\": null, \"note\": \"Postgres user_assignments query result truncated/incomplete in upstream payload\"}}, \"classification\": \"at_risk\", \"reconciliation_notes\": {\"left_join_status\": \"mongo_primary_no_match\", \"reason\": \"All three SQL queries (Snowflake consumption facts, Snowflake license contracts, Postgres user assignments) returned null or incomplete results in the upstream payload. MongoDB operational state was also absent. Cannot compute utilization rate, assignment rate, or orphan count.\", \"unutilized_licenses\": null, \"orphaned_licenses\": null, \"recommended_action\": \"Re-execute all three downstream SQL queries and re-ingest MongoDB operational snapshot before reclassifying. Flag for manual SAM review until data is available.\", \"data_quality_flags\": [\"snowflake_consumption_facts_missing\", \"snowflake_license_contracts_missing\", \"postgres_user_assignments_truncated\", \"mongodb_operational_state_absent\"], \"iam_permission_check\": \"dependency_0_unresolved\"}}, {\"entity_key\": \"salesforce_orphaned_seat_detection\", \"mongo_value\": {\"active_assignments\": null, \"user_status\": null, \"note\": \"No MongoDB document returned for active assignment or user status collection\"}, \"sql_value\": {\"inactive_users_90d\": null, \"never_logged_in_users\": null, \"unassigned_seats\": null, \"note\": \"Postgres query was cut off before execution result; orphan detection incomplete\"}, \"classification\": \"no_recent_activity\", \"reconciliation_notes\": {\"left_join_status\": \"mongo_primary_no_match\", \"orphan_candidates\": null, \"unutilized_seat_cost_exposure_usd\": null, \"recommended_action\": \"Treat all Salesforce seats as unverified pending full query execution. Escalate to license admin for manual audit.\", \"data_quality_flags\": [\"postgres_query_truncated\", \"orphan_detection_blocked\"]}}, {\"entity_key\": \"salesforce_seat_cost_efficiency\","
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "6_generate_report",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1934,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8677,
+      "output": {
+        "raw_output": "{\"plan\":[{\"tool\":\"iam.check_permission\",\"arguments\":{\"resource\":\"sam.license_reports\",\"action\":\"generate\",\"scope\":\"salesforce\"},\"depends_on\":[]},{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT publisher, COUNT(DISTINCT user_id) AS distinct_users, SUM(active_seats) AS total_active_seats, AVG(daily_active_seats) AS avg_daily_active_seats, MAX(daily_active_seats) AS max_daily_active_seats, MIN(daily_active_seats) AS min_daily_active_seats, SUM(spend_usd) AS total_spend_usd, COUNT(*) AS event_count FROM consumption_facts WHERE publisher='Salesforce' AND event_date >= DATEADD(day,-90,CURRENT_DATE()) GROUP BY publisher\"},\"depends_on\":[1]},{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT license_id, product, licensed_seats, assigned_seats, (licensed_seats-assigned_seats) AS unassigned_seats, ROUND(assigned_seats*100.0/NULLIF(licensed_seats,0),2) AS assignment_rate_pct, annual_cost_usd, ROUND(annual_cost_usd/NULLIF(licensed_seats,0),2) AS cost_per_seat_usd, contract_start_date, contract_end_date FROM license_contracts WHERE publisher='Salesforce' AND contract_end_date >= CURRENT_DATE()\"},\"depends_on\":[1]},{\"tool\":\"sql.postgres.query\",\"arguments\":{\"query\":\"SELECT COUNT(*) AS total_assigned_users, COUNT(*) FILTER (WHERE last_login_at >= NOW() - INTERVAL '30 days') AS active_users_30d, COUNT(*) FILTER (WHERE last_login_at >= NOW() - INTERVAL '90 days') AS active_users_90d, COUNT(*) FILTER (WHERE last_login_at < NOW() - INTERVAL '90 days') AS inactive_users, COUNT(*) FILTER (WHERE last_login_at IS NULL) AS never_logged_in FROM user_assignments WHERE product='Salesforce'\"},\"dep"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.06968099999999999,
+  "total_latency_ms": 41492,
+  "cumulative_spend_usd": 0.21525299999999997,
+  "evaluator_reason": "no_mongo_node"
+}

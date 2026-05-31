@@ -1,0 +1,116 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sf_seats_query",
+        "description": "Query Salesforce data warehouse to retrieve licensed seat count, actual seat assignments, and utilization metrics (login frequency, last login date) by user/role/department",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "unutilized_analysis",
+        "description": "Analyze seat utilization results to identify inactive/unutilized licenses, calculate utilization rates, and classify seats by activity level (active, dormant, unused). Generate recommendations for license optimization",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sf_seats_query"
+        ]
+      }
+    ],
+    "cost_rationale": "2 subtasks required. First, sql_gen (mid tier) to aggregate licensed seat counts vs actual assignments with activity metrics from Salesforce warehouse\u2014mid tier needed for multi-table joins across user licenses, assignment history, and login audit tables. Second, cross_recon (mid tier) to reconcile licensed vs assigned counts, classify utilization status, and produce actionable recommendations. Not marked as frontier because standard join/aggregation patterns and straightforward activity classification suffice. No separate policy_action needed\u2014utilization analysis and optimization recommendations are part of the reconciliation workflow."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sf_seats_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 471,
+      "output_tokens": 263,
+      "cached_tokens": 0,
+      "latency_ms": 2355,
+      "output": {
+        "sql": "SELECT c.c_custkey, c.c_name, c.c_mktsegment as department, COUNT(DISTINCT cf.user_id) as actual_seat_assignments, SUM(cf.daily_active_seats) as licensed_seat_count, ROUND(100.0 * COUNT(DISTINCT cf.user_id) / NULLIF(SUM(cf.daily_active_seats), 0), 2) as utilization_percentage, MAX(alf.access_time) as last_login_date, COUNT(DISTINCT alf.log_id) as login_frequency FROM customer c LEFT JOIN consumption_facts cf ON c.c_custkey = cf.license_id LEFT JOIN access_log_facts alf ON cf.user_id = alf.user_id WHERE cf.event_date >= '2024-01-01' OR alf.access_time >= '2024-01-01'::timestamp GROUP BY c.c_custkey, c.c_name, c.c_mktsegment ORDER BY utilization_percentage ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "unutilized_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 530,
+      "output_tokens": 543,
+      "cached_tokens": 0,
+      "latency_ms": 5075,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "seat_utilization_analysis",
+            "analysis_type": "cross_backend_reconciliation",
+            "status": "awaiting_mongodb_results",
+            "sql_foundation": {
+              "query_type": "seat_utilization_facts",
+              "metrics_available": [
+                "actual_seat_assignments",
+                "licensed_seat_count",
+                "utilization_percentage",
+                "last_login_date",
+                "login_frequency"
+              ],
+              "time_window": "2024-01-01_onwards",
+              "grouping_dimensions": [
+                "customer_key",
+                "customer_name",
+                "department"
+              ]
+            },
+            "mongodb_required_fields": [
+              "customer_id",
+              "seat_license_id",
+              "user_id",
+              "last_activity_timestamp",
+              "activity_count_30d",
+              "activity_count_90d",
+              "seat_status",
+              "assignment_date"
+            ],
+            "classification_framework": {
+              "active": {
+                "criteria": "utilization >= 75% AND login_frequency > 0 AND last_login_date within 7 days",
+                "action": "hold"
+              },
+              "dormant": {
+                "criteria": "utilization 25-74% OR (last_login_date 8-90 days ago AND activity_count_30d = 0)",
+                "action": "monitor_reduce"
+              },
+              "unused": {
+                "criteria": "utilization < 25% OR last_login_date > 90 days ago OR login_frequency = 0",
+                "action": "reduce"
+              },
+              "no_recent_activity": {
+                "criteria": "licensed_seat assigned but no login_frequency in observation period",
+                "action": "reduce"
+              }
+            },
+            "reconciliation_status": "pending_mongodb_query",
+            "message": "SQL query provides historical seat assignment and login metrics. Awaiting MongoDB operational state (real-time seat allocation and recent activity logs) to perform LEFT JOIN reconciliation with MongoDB as primary source."
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.005031000000000001,
+  "total_latency_ms": 7430,
+  "cumulative_spend_usd": 3.139348000000002,
+  "evaluator_reason": "no_mongo_node"
+}

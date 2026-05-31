@@ -1,0 +1,74 @@
+{
+  "task_id": "PAC-005",
+  "task_class": "policy_action",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_pii_export",
+        "description": "Evaluate bulk PII export request against data governance and privacy policies. Assess whether the analyst has authorization to access customer names, emails, and phone numbers in bulk form, and verify compliance with data protection regulations (GDPR, CCPA, internal data classification).",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_gen_pii_export",
+        "description": "Generate SQL query to extract customer PII (names, emails, phone numbers) from the customer database. Only execute if policy_check_pii_export returns authorization approval.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": [
+          "policy_check_pii_export"
+        ]
+      }
+    ],
+    "cost_rationale": "This request involves PII export, which is a governance-sensitive operation requiring explicit policy evaluation before data extraction. The plan includes two subtasks: (1) policy_action (mid tier) to evaluate access control, authorization scope, and compliance with privacy regulations—this is not a simple single-rule check because PII bulk export involves multiple governance signals (data classification, regulatory obligations, analyst role/department). (2) sql_gen (small tier) to produce the extraction query, kept simple because once policy approval is confirmed, the query itself is straightforward single-table selection. The dependency ensures PII is only exported after governance clearance. No cross_recon is needed; this is a single-source extraction with policy gating, not a reconciliation task.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_pii_export",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 789,
+      "output_tokens": 288,
+      "cached_tokens": 0,
+      "latency_ms": 4359,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-501": "fail",
+          "POL-502": "fail",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "Bulk PII export by a data-analyst role lacks required Legal/CISO approvals (POL-501) and violates data minimization since names, emails, and phone numbers are sensitive attributes exported in bulk without documented business-critical justification (POL-502). Audit logging and retention controls (POL-503) can be satisfied but do not override the missing approvals.",
+        "applied_constraints": [
+          "Obtain explicit Legal privacy approval and CISO sign-off before re-submission",
+          "Provide business-critical justification or reduce scope to non-sensitive/aggregated attributes (data minimization)",
+          "If approved, enforce audit logging and 30-day retention limit on exported dataset"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_gen_pii_export",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 819,
+      "output_tokens": 155,
+      "cached_tokens": 0,
+      "latency_ms": 1945,
+      "output": {
+        "sql": "-- QUERY DENIED: PII export request rejected due to policy violations\n-- Policy Check Result: deny_pending_approvals\n-- Failed Policies: POL-501 (missing Legal/CISO approvals), POL-502 (data minimization violation)\n-- Required Actions Before Re-submission:\n--   1. Obtain explicit Legal privacy approval\n--   2. Obtain CISO sign-off\n--   3. Provide business-critical justification or reduce scope to non-sensitive attributes\n-- No SQL query will be executed until policy compliance is achieved\nSELECT NULL WHERE FALSE;"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.012739000000000002,
+  "total_latency_ms": 6304,
+  "cumulative_spend_usd": 8.467922000000005
+}

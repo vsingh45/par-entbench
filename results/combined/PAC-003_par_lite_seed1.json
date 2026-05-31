@@ -1,0 +1,55 @@
+{
+  "task_id": "PAC-003",
+  "task_class": "policy_action",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_emergency_access",
+        "description": "Evaluate emergency access request for user u_9981 (senior-engineer role) to production database db-payments-primary against access control and incident response policies. Verify on-call status, P1 incident justification, and determine authorization decision.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask at mid tier because the decision requires multi-signal reasoning: role verification (senior-engineer qualifies), incident severity classification (P1 justifies emergency access), on-call status validation, and policy exception handling (emergency access policies typically have specific conditions). This is not a simple single-rule check (small), but involves multiple policy conditions and context that mid-tier capability handles well. No additional subtasks needed\u2014this is a direct governance evaluation without requiring data fetching (those would be ad-hoc follow-ups if the policy decision is YES)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_emergency_access",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 559,
+      "output_tokens": 397,
+      "cached_tokens": 0,
+      "latency_ms": 8794,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-501": "pass",
+          "POL-502": "pass_conditional",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "User u_9981 (senior-engineer) has an active P1 incident ticket INC-20241215-0042, satisfying POL-501's incident ticket requirement. POL-502's dual-approval requirement is waived under the declared P1 incident exception. POL-503 requires mandatory post-access audit logging and review within 24 hours as a binding constraint on this grant.",
+        "applied_constraints": [
+          "Access is strictly scoped to investigation activities related to incident INC-20241215-0042 only.",
+          "All read/write operations on db-payments-primary must be fully logged with timestamps and query details for the duration of this session.",
+          "Emergency access grant expires automatically after 4 hours or upon P1 incident closure, whichever comes first.",
+          "A post-access review must be completed within 24 hours of session termination per POL-503; reviewer must be DBA lead or security officer.",
+          "On-call status of u_9981 must be verifiable in the on-call roster at time of access; any discrepancy triggers immediate session revocation and escalation.",
+          "No bulk data exports, schema modifications, or destructive writes are permitted under this emergency grant.",
+          "Incident ticket INC-20241215-0042 must remain in active/open status for the duration of access; auto-revoke on ticket closure."
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007632,
+  "total_latency_ms": 8794,
+  "cumulative_spend_usd": 5.091817000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

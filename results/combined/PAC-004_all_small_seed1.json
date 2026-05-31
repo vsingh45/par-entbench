@@ -1,0 +1,46 @@
+{
+  "task_id": "PAC-004",
+  "task_class": "policy_action",
+  "router": "all_small",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "A developer attempts to access the production database for live debugging purposes.",
+        "specialist": "policy_action",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 444,
+      "output_tokens": 113,
+      "cached_tokens": 0,
+      "latency_ms": 1114,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-401": "fail",
+          "POL-402": "fail"
+        },
+        "reason": "Developer access to production database denied. POL-401 requires Manager approval and on-call role status (not evidenced). POL-402 explicitly restricts debug access to staging environment only.",
+        "applied_constraints": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.0010090000000000001,
+  "total_latency_ms": 1114,
+  "cumulative_spend_usd": 8.297419,
+  "evaluator_reason": "ok"
+}

@@ -1,0 +1,60 @@
+{
+  "task_id": "EXT-007",
+  "task_class": "extract",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "Extract company details, primary contact information, and banking details from this vendor onboarding form.",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "extract",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 601,
+      "output_tokens": 250,
+      "cached_tokens": 0,
+      "latency_ms": 3485,
+      "output": {
+        "company_details": {
+          "company_name": "TechVendor Solutions Inc.",
+          "registration_number": "NV-987654",
+          "business_type": "Software Development Services",
+          "country_of_operation": "United States",
+          "headquarters": "999 Tech Lane, Austin, TX 78701"
+        },
+        "primary_contact": {
+          "name": "Sarah Johnson",
+          "title": "VP of Sales",
+          "email": "sarah.johnson@techvendor.com",
+          "phone": "(512) 555-0123"
+        },
+        "banking_details": {
+          "bank_name": "Chase Bank",
+          "account_holder": "TechVendor Solutions Inc.",
+          "account_number": "4567890123",
+          "routing_number": "021000021",
+          "account_type": "Business Checking",
+          "currency": "USD"
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009255000000000001,
+  "total_latency_ms": 3485,
+  "cumulative_spend_usd": 5.619616000000008,
+  "evaluator_reason": "f1=0.267_below_0.85"
+}

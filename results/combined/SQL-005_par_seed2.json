@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-005",
+  "task_class": "sql_gen",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_gen_q4_seats",
+        "description": "Generate SQL query to calculate average cost per active seat by product for Q4 2024, with results sorted descending by cost per seat. Query should retrieve product names, total costs, active seat counts, and calculated cost-per-seat metrics.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single SQL subtask required to compute Q4 2024 metrics with aggregation and sorting. Assigned 'mid' tier because the query requires multi-table joins (likely products, costs/spend, and seat/license tables), GROUP BY aggregation, and calculated fields (cost per seat). This is more complex than a simple single-table query but does not require advanced window functions or CTEs, making mid-tier appropriate and cost-efficient.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_gen_q4_seats",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 487,
+      "output_tokens": 130,
+      "cached_tokens": 0,
+      "latency_ms": 2950,
+      "output": {
+        "sql": "SELECT product, SUM(amount_usd) AS total_cost, SUM(daily_active_seats) AS total_active_seats, CASE WHEN SUM(daily_active_seats) = 0 THEN NULL ELSE ROUND(SUM(amount_usd) / SUM(daily_active_seats), 4) END AS cost_per_seat FROM consumption_facts WHERE fiscal_year = 2024 AND fiscal_quarter = 4 GROUP BY product ORDER BY cost_per_seat DESC NULLS LAST"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.003411,
+  "total_latency_ms": 2950,
+  "cumulative_spend_usd": 0.070769,
+  "evaluator_reason": "result_bag_mismatch"
+}

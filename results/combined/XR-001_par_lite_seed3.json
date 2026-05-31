@@ -1,0 +1,202 @@
+{
+  "task_id": "XR-001",
+  "task_class": "cross_recon",
+  "router": "par_lite",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_adobe_state",
+        "description": "Query sam_licenses collection to retrieve current Adobe contracted state by product line, including license count, contract term, renewal date, and current tier/SKU details.",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_adobe_spend_usage",
+        "description": "Generate SQL query against consumption_facts to compute Q4 2024 actual spend and 90-day usage trend by Adobe product line, including spend_amount, usage_volume, and trend slope.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_adobe_posture",
+        "description": "Reconcile sam_licenses contracted state with consumption_facts spend and usage trends. Classify each product line into expand/hold/reduce posture. Generate renewal trajectory and rationale based on utilization gap, cost per unit trend, and business momentum signals.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "mongo_adobe_state",
+          "sql_adobe_spend_usage"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: (1) mongo_query on sam_licenses is small-tier; explicit retrieval of current licensed state. (2) sql_gen on consumption_facts is mid-tier; requires joining spend and usage tables with time-window aggregations and trend calculation (90-day slope), moderately complex but standard SQL. (3) cross_recon is frontier-tier; requires multi-signal reconciliation (contract state vs spend vs usage trend), classification logic (expand/hold/reduce), and narrative posture generation. Frontier tier needed to handle the reasoning complexity and potential exceptions (e.g., contract end dates near renewal, strategic investments, licensing discounts masking real usage). The plan does not split this into separate policy_action because renewal strategy classification is a reconciliation output, not a governance policy check."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_adobe_state",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1250,
+      "output_tokens": 237,
+      "cached_tokens": 0,
+      "latency_ms": 1642,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Adobe"
+            }
+          },
+          {
+            "$group": {
+              "_id": "$product",
+              "license_count": {
+                "$sum": "$seat_count"
+              },
+              "total_contract_value": {
+                "$sum": "$contract_value_usd"
+              },
+              "cost_per_seat": {
+                "$avg": "$cost_per_seat_usd"
+              },
+              "term_starts": {
+                "$push": "$term_start"
+              },
+              "term_ends": {
+                "$push": "$term_end"
+              },
+              "renewal_terms": {
+                "$push": "$renewal_terms"
+              },
+              "statuses": {
+                "$push": "$status"
+              },
+              "criticality_tiers": {
+                "$push": "$criticality_tier"
+              },
+              "assigned_teams": {
+                "$push": "$assigned_team"
+              }
+            }
+          },
+          {
+            "$sort": {
+              "total_contract_value": -1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_adobe_spend_usage",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 506,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10367,
+      "output": {
+        "raw_output": "{\"sql\": \"WITH q4_spend AS (\\n    SELECT\\n        product,\\n        SUM(amount_usd) AS spend_amount,\\n        SUM(daily_active_seats) AS usage_volume,\\n        COUNT(DISTINCT user_id) AS distinct_users,\\n        COUNT(event_id) AS event_count\\n    FROM consumption_facts\\n    WHERE publisher = 'Adobe'\\n      AND event_date >= '2024-10-01'\\n      AND event_date < '2025-01-01'\\n      AND fiscal_quarter = 4\\n      AND fiscal_year = 2024\\n    GROUP BY product\\n),\\ntrend_base AS (\\n    SELECT\\n        product,\\n        event_date,\\n        SUM(amount_usd) AS daily_spend,\\n        SUM(daily_active_seats) AS daily_seats\\n    FROM consumption_facts\\n    WHERE publisher = 'Adobe'\\n      AND event_date >= (CURRENT_DATE - INTERVAL '90 days')\\n      AND event_date < CURRENT_DATE\\n    GROUP BY product, event_date\\n),\\ntrend_calc AS (\\n    SELECT\\n        product,\\n        COUNT(*) AS n,\\n        SUM(EXTRACT(EPOCH FROM event_date::TIMESTAMP) / 86400.0) AS sum_x,\\n        SUM(daily_seats) AS sum_y,\\n        SUM(EXTRACT(EPOCH FROM event_date::TIMESTAMP) / 86400.0 * daily_seats) AS sum_xy,\\n        SUM(POWER(EXTRACT(EPOCH FROM event_date::TIMESTAMP) / 86400.0, 2)) AS sum_x2\\n    FROM trend_base\\n    GROUP BY product\\n),\\ntrend_slope AS (\\n    SELECT\\n        product,\\n        CASE\\n            WHEN (n * sum_x2 - POWER(sum_x, 2)) = 0 THEN 0\\n            ELSE ROUND(\\n                CAST((n * sum_xy - sum_x * sum_y) / (n * sum_x2 - POWER(sum_x, 2)) AS NUMERIC),\\n                6\\n            )\\n        END AS usage_trend_slope,\\n        CASE\\n            WHEN (n * sum_x2 - POWER(sum_x, 2)) = 0 THEN 'FLAT'\\n            WHEN (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - POWER(sum_x, 2)) > 0.05 THEN 'GROWING'\\n            WHEN (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - POWER(sum_x, 2)) < -0.05 THEN 'DECLINING'\\n            ELSE 'FLAT'\\n        END AS trend_direction\\n    FROM trend_calc\\n),\\nrecommendation AS (\\n    SELECT\\n        ts.product,\\n        ts.usage_trend_slope,\\n        ts.trend_direction,\\n        qs.spend_amount,\\n        qs.usage_volume,\\n        qs.distinct"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_adobe_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1984,
+      "output_tokens": 561,
+      "cached_tokens": 0,
+      "latency_ms": 6964,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "Adobe Creative Cloud",
+            "mongo_value": {
+              "license_count": 500,
+              "total_contract_value": 420000,
+              "cost_per_seat": 840
+            },
+            "sql_value": {
+              "spend_amount": 105000,
+              "usage_volume": 410,
+              "trend_direction": "GROWING",
+              "usage_trend_slope": 0.42
+            },
+            "classification": "expand"
+          },
+          {
+            "entity_key": "Adobe Acrobat Pro",
+            "mongo_value": {
+              "license_count": 1200,
+              "total_contract_value": 216000,
+              "cost_per_seat": 180
+            },
+            "sql_value": {
+              "spend_amount": 54000,
+              "usage_volume": 640,
+              "trend_direction": "DECLINING",
+              "usage_trend_slope": -0.18
+            },
+            "classification": "reduce"
+          },
+          {
+            "entity_key": "Adobe Substance 3D",
+            "mongo_value": {
+              "license_count": 75,
+              "total_contract_value": 67500,
+              "cost_per_seat": 900
+            },
+            "sql_value": {
+              "spend_amount": 16800,
+              "usage_volume": 70,
+              "trend_direction": "GROWING",
+              "usage_trend_slope": 0.11
+            },
+            "classification": "expand"
+          },
+          {
+            "entity_key": "Adobe Sign Enterprise",
+            "mongo_value": {
+              "license_count": 300,
+              "total_contract_value": 54000,
+              "cost_per_seat": 180
+            },
+            "sql_value": {
+              "spend_amount": 13500,
+              "usage_volume": 285,
+              "trend_direction": "FLAT",
+              "usage_trend_slope": 0.01
+            },
+            "classification": "hold"
+          },
+          {
+            "entity_key": "Adobe Stock",
+            "mongo_value": {
+              "license_count": 40,
+              "total_contract_value": 12000,
+              "cost_per_seat": 300
+            },
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.039898,
+  "total_latency_ms": 18973,
+  "cumulative_spend_usd": 2.1891410000000016,
+  "evaluator_reason": "stage1_mongo_fail: doc_bag_mismatch"
+}

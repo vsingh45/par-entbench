@@ -1,0 +1,76 @@
+{
+  "task_id": "SQLC-002",
+  "task_class": "sql_compose",
+  "router": "par_lite",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top10_customers",
+        "description": "Query TPC-H database to identify top 10 customers by lifetime value (total revenue) filtered to BUILDING market segment, returning custkey, name, and aggregate metrics (total spend, order count, recency)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_narrative",
+        "description": "For each of the top 10 customers from sql_top10_customers, reconcile their lifetime order pattern (order frequency, volume trends, product category preferences) with their segment positioning, then generate a personalized retention narrative referencing their specific order behavior and value contribution",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_top10_customers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks, minimum necessary decomposition: (1) sql_gen (mid-tier) to aggregate TPC-H with multi-table join (customer, orders, lineitem) and market segment filter\u2014moderate complexity warranting mid-tier. (2) cross_recon (frontier-tier) takes the 10 customer profiles and must synthesize order pattern data (frequency, recency, category affinity) with personalization logic to generate individualized retention narratives\u2014this inference and multi-signal narrative generation requires frontier capability. The reconciliation step naturally combines customer behavior analysis with narrative generation, avoiding unnecessary subtask splitting."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top10_customers",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 498,
+      "output_tokens": 160,
+      "cached_tokens": 0,
+      "latency_ms": 2661,
+      "output": {
+        "sql": "SELECT c.c_custkey, c.c_name, c.c_mktsegment, SUM(o.o_totalprice) AS total_spend, COUNT(o.o_orderkey) AS order_count, MAX(o.o_orderdate) AS last_order_date, MIN(o.o_orderdate) AS first_order_date FROM customer c JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name, c.c_mktsegment ORDER BY total_spend DESC LIMIT 10"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_narrative",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 703,
+      "output_tokens": 93,
+      "cached_tokens": 0,
+      "latency_ms": 1824,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "customer_1",
+            "mongo_value": null,
+            "sql_value": {
+              "c_custkey": 1,
+              "c_name": "Customer#000000001",
+              "total_spend": null,
+              "order_count": null
+            },
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009734000000000001,
+  "total_latency_ms": 4485,
+  "cumulative_spend_usd": 0.9823589999999998,
+  "evaluator_reason": "step2_consumer_narrative_check_failed"
+}

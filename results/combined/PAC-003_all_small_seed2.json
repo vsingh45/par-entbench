@@ -1,0 +1,54 @@
+{
+  "task_id": "PAC-003",
+  "task_class": "policy_action",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_eval_emergency_access",
+        "description": "Evaluate emergency database access request (u_9981, role: senior-engineer) to 'db-payments-primary' against access control and incident governance policies. Determine if the request meets emergency access criteria, required approval chain, and time-bound access parameters.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask at mid tier because: (1) This is an explicit governance/access control decision requiring policy evaluation against a registry; (2) Mid tier needed to reason through multiple policy conditions (emergency escalation criteria, role-based access rules, incident severity context, approval chain requirements, time-bound access constraints); (3) No decomposition into multiple steps\u2014the policy agent handles the entire access decision in one evaluation. The query explicitly asks for a policy decision, not data retrieval or reconciliation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_eval_emergency_access",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 561,
+      "output_tokens": 281,
+      "cached_tokens": 0,
+      "latency_ms": 2986,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-501": "pass",
+          "POL-502": "pass_conditional",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "Emergency database access request meets incident criteria (P1 severity with valid ticket INC-20241215-0042). POL-501 satisfied via active incident ticket. POL-502 dual approval requirement waived for declared P1 incidents. POL-503 requires mandatory logging and 24-hour review completion.",
+        "applied_constraints": [
+          "access_duration: limited to 4 hours from grant time",
+          "action_logging: all queries must be logged with full audit trail",
+          "mandatory_review: access grant must be reviewed by DBA and incident commander within 24 hours",
+          "escalation_trigger: if access extends beyond 4 hours, requires explicit DBA approval renewal",
+          "incident_tie: access revoked immediately upon incident resolution or P1 downgrade",
+          "audit_requirement: post-incident access report required within 48 hours"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0019660000000000003,
+  "total_latency_ms": 2986,
+  "cumulative_spend_usd": 5.012003000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

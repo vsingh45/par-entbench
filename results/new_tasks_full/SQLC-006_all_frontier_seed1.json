@@ -1,0 +1,63 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "all_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_gen_1",
+        "description": "Generate SQL to calculate current month spend and 3-month rolling average by vendor/category. Include variance percentage and absolute difference for anomaly detection.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_1",
+        "description": "Reconcile spend results with historical patterns. Classify each anomaly as normal_variance, concerning, or critical based on variance thresholds and business context rules.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_gen_1"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid-tier) to compute current spend vs. 3-month average with variance calculations—requires window functions and conditional logic across time periods; (2) cross_recon (mid-tier) to classify anomalies against variance thresholds and business rules. The classification logic (normal_variance/concerning/critical) is part of the reconciliation agent's decision-making, not a separate policy check. Mid-tier suffices for both as the SQL is moderately complex (rolling average + variance) and the classification uses standard heuristics without extreme inference needs."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_gen_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 725,
+      "output_tokens": 656,
+      "cached_tokens": 0,
+      "latency_ms": 7782,
+      "output": {
+        "sql": "WITH monthly_spend AS (SELECT vendor_name, DATE_TRUNC('month', invoice_date) AS month, SUM(amount_usd) AS monthly_total FROM invoice_facts WHERE invoice_date >= (CURRENT_DATE - INTERVAL '4 months') GROUP BY vendor_name, DATE_TRUNC('month', invoice_date)), with_rolling AS (SELECT vendor_name, month, monthly_total, AVG(monthly_total) OVER (PARTITION BY vendor_name ORDER BY month ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING) AS rolling_3mo_avg FROM monthly_spend), current_vs_avg AS (SELECT vendor_name, month AS current_month, monthly_total AS current_spend, rolling_3mo_avg, (monthly_total - rolling_3mo_avg) AS abs_difference, CASE WHEN rolling_3mo_avg IS NULL OR rolling_3mo_avg = 0 THEN NULL ELSE ROUND(((monthly_total - rolling_3mo_avg) / rolling_3mo_avg) * 100, 2) END AS variance_pct FROM with_rolling WHERE month = DATE_TRUNC('month', CURRENT_DATE)) SELECT vendor_name, current_month, current_spend, rolling_3mo_avg, abs_difference, variance_pct, CASE WHEN variance_pct IS NULL THEN 'insufficient_history' WHEN ABS(variance_pct) <= 20 THEN 'normal_variance' WHEN ABS(variance_pct) <= 50 THEN 'concerning' ELSE 'critical' END AS anomaly_classification FROM current_vs_avg ORDER BY ABS(COALESCE(variance_pct, 0)) DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_1",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1090,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10329,
+      "output": {
+        "raw_output": "{\"reconciled\":[{\"entity_key\":\"NorthStar Logistics\",\"mongo_value\":null,\"sql_value\":{\"current_spend\":182450.00,\"rolling_3mo_avg\":61200.50,\"abs_difference\":121249.50,\"variance_pct\":198.12},\"classification\":\"critical\"},{\"entity_key\":\"Apex Cloud Services\",\"mongo_value\":null,\"sql_value\":{\"current_spend\":94300.00,\"rolling_3mo_avg\":142800.75,\"abs_difference\":-48500.75,\"variance_pct\":-33.96},\"classification\":\"concerning\"},{\"entity_key\":\"Bluefin Consulting\",\"mongo_value\":null,\"sql_value\":{\"current_spend\":56700.00,\"rolling_3mo_avg\":38400.25,\"abs_difference\":18299.75,\"variance_pct\":47.65},\"classification\":\"concerning\"},{\"entity_key\":\"Ironclad Security\",\"mongo_value\":null,\"sql_value\":{\"current_spend\":22150.00,\"rolling_3mo_avg\":21800.00,\"abs_difference\":350.00,\"variance_pct\":1.61},\"classification\":\"normal_variance\"},{\"entity_key\":\"Helix Marketing Group\",\"mongo_value\":null,\"sql_value\":{\"current_spend\":17800.00,\"rolling_3mo_avg\":15900.50,\"abs_difference\":1899.50,\"variance_pct\":11.95},\"classification\":\"normal_variance\"},{\"entity_key\":\"Quartz Office Supply\",\"mongo_value\":null,\"sql_value\":{\"current_spend\":4250.00,\"rolling_3mo_avg\":4100.00,\"abs_difference\":150.00,\"variance_pct\":3.66},\"classification\":\"normal_variance\"},{\"entity_key\":\"Vertex Manufacturing\",\"mongo_value\":null,\"sql_value\":{\"current_spend\":312800.00,\"rolling_3mo_avg\":98450.00,\"abs_difference\":214350.00,\"variance_pct\":217.73},\"classification\":\"critical\"},{\"entity_key\":\"Coastal Freight Co\",\"mongo_value\":null,\"sql_value\":{\"current_spend\":8900.00,\"rolling_3mo_avg\":34200.00,\"abs_difference\":-25300.00,\"variance_pct\":-73.98},\"classification\":\"critical\"},{\"entity_key\":\"Solstice Software\",\"mongo_value\":null,\"sql_value\":{\"current_spend\":"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.045475,
+  "total_latency_ms": 18111,
+  "cumulative_spend_usd": 0.9302269999999999
+}

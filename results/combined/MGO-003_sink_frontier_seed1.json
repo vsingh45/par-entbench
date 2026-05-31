@@ -1,0 +1,40 @@
+{
+  "task_id": "MGO-003",
+  "task_class": "mongo_gen",
+  "router": "sink_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "adobe_inactive_seats_query",
+        "description": "Query Adobe license database to compute count of assigned seats inactive for >90 days per license, including seats with null/no activity date",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This is a single SQL query against one source (Adobe license warehouse) requiring a JOIN between licenses and seat activity, a DATEDIFF or age calculation, and an aggregate COUNT grouped by license. The logic for including null activity dates requires a CASE/COALESCE condition in the WHERE clause or JOIN logic. Mid-tier (Sonnet) is sufficient because the task involves multi-table joining with conditional aggregation but no complex window functions, CTEs, or cross-source reconciliation. The query structure is straightforward enough that Sonnet can handle the null-inclusion logic reliably without frontier-level reasoning.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "adobe_inactive_seats_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 713,
+      "output_tokens": 127,
+      "cached_tokens": 0,
+      "latency_ms": 2372,
+      "output": {
+        "sql": "SELECT license_id, COUNT(DISTINCT user_id) AS inactive_seat_count FROM consumption_facts WHERE publisher = 'Adobe' GROUP BY license_id HAVING MAX(event_date) < CURRENT_DATE - INTERVAL '90 days' OR MAX(event_date) IS NULL"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.006740000000000001,
+  "total_latency_ms": 2372,
+  "cumulative_spend_usd": 1.5978630000000007,
+  "evaluator_reason": "no_pipeline_in_output"
+}

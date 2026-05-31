@@ -1,0 +1,63 @@
+{
+  "task_id": "SQLC-004",
+  "task_class": "sql_compose",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "query_vendor_reliability",
+        "description": "Query vendor reliability data including incident history, uptime metrics, and security compliance scores from SQL warehouse to generate vendor risk scores",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "classify_vendor_risk",
+        "description": "Classify each vendor into low_risk, medium_risk, or high_risk categories based on incident history, reliability scores, and risk metrics; apply thresholds to generate risk classifications",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "query_vendor_reliability"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen at mid tier to query multi-table vendor reliability data with aggregation of incident history and reliability metrics; (2) cross_recon at mid tier to apply classification logic against the reliability data (treating the SQL output as the single source, cross_recon is the appropriate specialist for decision logic and classification). Both mid tier due to moderate complexity—multiple metrics aggregation and threshold-based risk classification logic. Not frontier-tier as no complex window functions or multi-signal ML inference is implied. Not small-tier as the reliability query involves multiple related fields and the classification requires reasoned thresholds across multiple risk signals."
+  },
+  "node_results": [
+    {
+      "subtask_id": "query_vendor_reliability",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 472,
+      "output_tokens": 467,
+      "cached_tokens": 0,
+      "latency_ms": 6384,
+      "output": {
+        "sql": "SELECT vendor_name, COUNT(invoice_id) AS total_invoices, SUM(CASE WHEN status = 'overdue' THEN 1 ELSE 0 END) AS overdue_invoices, SUM(CASE WHEN status = 'unpaid' THEN 1 ELSE 0 END) AS unpaid_invoices, SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) AS paid_invoices, ROUND(SUM(CASE WHEN status IN ('overdue', 'unpaid') THEN 1 ELSE 0 END)::NUMERIC / NULLIF(COUNT(invoice_id), 0) * 100, 2) AS incident_rate_pct, AVG(CASE WHEN paid_date IS NOT NULL THEN (paid_date - due_date) ELSE NULL END) AS avg_days_late, SUM(amount_usd) AS total_invoice_amount_usd, SUM(CASE WHEN status IN ('overdue', 'unpaid') THEN amount_usd ELSE 0 END) AS at_risk_amount_usd, CASE WHEN ROUND(SUM(CASE WHEN status IN ('overdue', 'unpaid') THEN 1 ELSE 0 END)::NUMERIC / NULLIF(COUNT(invoice_id), 0) * 100, 2) >= 40 THEN 'high_risk' WHEN ROUND(SUM(CASE WHEN status IN ('overdue', 'unpaid') THEN 1 ELSE 0 END)::NUMERIC / NULLIF(COUNT(invoice_id), 0) * 100, 2) >= 15 THEN 'medium_risk' ELSE 'low_risk' END AS risk_classification FROM invoice_facts GROUP BY vendor_name ORDER BY incident_rate_pct DESC, at_risk_amount_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "classify_vendor_risk",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 754,
+      "output_tokens": 462,
+      "cached_tokens": 0,
+      "latency_ms": 9936,
+      "output": {
+        "raw_output": "I need to reconcile MongoDB (operational state) and SQL (historical data) outputs. However, I notice that only SQL results are referenced here, with no actual MongoDB query output provided. I'll treat the SQL result as the historical source and apply LEFT JOIN semantics — but since no MongoDB operational data was provided, I must work with what's available.\n\nBased on the SQL query structure and the task description, I'll reconcile using the SQL output as the data source and note missing MongoDB signals with nulls, while deriving classifications from the SQL thresholds defined in the query logic.\n\nSince no actual row-level data was returned (only the query definition was provided), I'll produce a structurally valid reconciled output that reflects the schema and signals a data-unavailable state:\n\n{\"reconciled\": [{\"entity_key\": \"NO_MONGO_SOURCE_PROVIDED\", \"mongo_value\": null, \"sql_value\": null, \"classification\": \"unresolvable\", \"note\": \"No MongoDB operational output was provided as primary source; LEFT JOIN cannot be applied without a left-hand dataset. SQL query was provided but no result rows were included. Please supply MongoDB vendor documents and SQL result rows to perform reconciliation.\"}, {\"entity_key\": \"__schema_reference__\", \"mongo_value\": null, \"sql_value\": {\"columns\": [\"vendor_name\", \"total_invoices\", \"overdue_invoices\", \"unpaid_invoices\", \"paid_invoices\", \"incident_rate_pct\", \"avg_days_late\", \"total_invoice_amount_usd\", \"at_risk_amount_usd\", \"risk_classification\"], \"thresholds\": {\"high_risk\": \"incident_rate_pct >= 40\", \"medium_risk\": \"incident_rate_pct >= 15 AND < 40\", \"low_risk\": \"incident_rate_pct < 15\"}}, \"classification\": \"schema_only\", \"note\": \"SQL query defines risk classification thresholds. Awaiting row-level results and MongoDB vendor records to produce per-vendor reconciled risk classifications.\"}]}"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.017613,
+  "total_latency_ms": 16320,
+  "cumulative_spend_usd": 0.622183
+}

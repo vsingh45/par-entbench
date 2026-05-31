@@ -1,0 +1,94 @@
+{
+  "task_id": "XR-002",
+  "task_class": "cross_recon",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_active_contracts",
+        "description": "Query MongoDB contracts collection to retrieve all active billing contracts with contracted annual value",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_2024_invoices",
+        "description": "Query SQL invoice tables to aggregate total invoices issued per contract in 2024",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_flag",
+        "description": "Reconcile contracted annual values from MongoDB against 2024 actual invoices from SQL, calculate variance percentage, and flag contracts with material variance (>10%)",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "fetch_active_contracts",
+          "fetch_2024_invoices"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks (minimum necessary): (1) mongo_query (small) to fetch active contracts\u2014simple collection scan with projected fields; (2) sql_gen (small) to aggregate 2024 invoices by contract\u2014straightforward GROUP BY without complex joins; (3) cross_recon (mid) to reconcile two sources, calculate variance ratios, and classify contracts as flagged/compliant based on >10% threshold. Mid tier for cross_recon because it requires numeric reconciliation logic, variance calculation, and multi-signal classification. No additional subtasks needed: classification and flagging are reconciliation outcomes, not separate policy or planning tasks."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_active_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1215,
+      "output_tokens": 64,
+      "cached_tokens": 0,
+      "latency_ms": 1034,
+      "output": {
+        "collection": "billing_contracts",
+        "pipeline": [
+          {
+            "$match": {
+              "status": "active"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_2024_invoices",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 463,
+      "output_tokens": 293,
+      "cached_tokens": 0,
+      "latency_ms": 2701,
+      "output": {
+        "sql": "SELECT i.contract_id, COUNT(*) as invoice_count, SUM(i.amount_usd) as total_invoiced_2024, ROUND(100.0 * SUM(i.amount_usd) / NULLIF(c.annual_value, 0), 2) as variance_pct, CASE WHEN ABS(100.0 * SUM(i.amount_usd) / NULLIF(c.annual_value, 0) - 100) > 10 THEN 'FLAGGED' ELSE 'OK' END as variance_flag FROM invoice_facts i LEFT JOIN (SELECT contract_id, SUM(amount_usd) as annual_value FROM invoice_facts WHERE invoice_date >= '2024-01-01' AND invoice_date < '2025-01-01' GROUP BY contract_id) c ON i.contract_id = c.contract_id WHERE i.invoice_date >= '2024-01-01' AND i.invoice_date < '2025-01-01' AND i.status IN ('Paid', 'Open') GROUP BY i.contract_id, c.annual_value ORDER BY variance_pct DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_flag",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 598,
+      "output_tokens": 484,
+      "cached_tokens": 0,
+      "latency_ms": 4253,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"contract_id\",\n      \"mongo_source\": \"billing_contracts\",\n      \"mongo_field\": \"annual_value\",\n      \"sql_source\": \"invoice_facts\",\n      \"sql_field\": \"total_invoiced_2024\",\n      \"reconciliation_logic\": \"LEFT JOIN - all active contracts from MongoDB retained\",\n      \"variance_calculation\": \"(total_invoiced_2024 / annual_value * 100) - 100\",\n      \"materiality_threshold\": 10,\n      \"output_schema\": {\n        \"contract_id\": \"string\",\n        \"contracted_annual_value\": \"number\",\n        \"actual_invoiced_2024\": \"number\",\n        \"invoice_count\": \"integer\",\n        \"variance_percentage\": \"number\",\n        \"classification\": \"string\"\n      },\n      \"classification_rules\": {\n        \"FLAGGED\": \"variance_percentage > 10 or variance_percentage < -10\",\n        \"OK\": \"variance_percentage between -10 and 10\",\n        \"no_invoices\": \"actual_invoiced_2024 is null or 0\",\n        \"at_risk\": \"actual_invoiced_2024 significantly below contracted value\"\n      },\n      \"note\": \"MongoDB contracts with no matching 2024 invoices will show null/0 for SQL metrics and be classified as 'no_invoices' or 'at_risk'\"\n    }\n  ]\n}\n```\n\n**IMPORTANT**: The actual reconciled dataset cannot be generated without the real data outputs from both queries. To execute this reconciliation, please provide:\n\n1. **MongoDB result**: Array of active contracts with `contract_id` and `annual_value`\n2. **SQL result**: Invoice aggregations with `contract_id`, `invoice_count`, `total_invoiced_2024`, `variance_pct`, `variance_flag`\n\nOnce you provide the actual query results, I will return the fully reconciled JSON array with all contracts and their variance flags."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.006481000000000001,
+  "total_latency_ms": 7988,
+  "cumulative_spend_usd": 2.496394000000001,
+  "evaluator_reason": "ok"
+}

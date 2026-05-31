@@ -1,0 +1,123 @@
+{
+  "task_id": "XR-004",
+  "task_class": "cross_recon",
+  "router": "par_lite",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sam_licensing",
+        "description": "Extract licensed user counts and SKU details from SAM database, grouped by product/license type and business unit",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "consumption_spend",
+        "description": "Query consumption facts to retrieve active user counts, spend, and usage metrics by product/SKU and business unit",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_posture",
+        "description": "Reconcile SAM licensed users against consumption facts active users; calculate provisioning variance (over/under by %, by unit); classify each product/BU as right-sized, over-provisioned, or under-provisioned; identify cost optimization opportunities",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sam_licensing",
+          "consumption_spend"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks needed: (1) SAM licensing extraction is a single mongo_query (small tier) to pull licensed user inventories; (2) consumption facts is a single sql_gen (mid tier) requiring multi-table joins across usage and spend tables to align metrics; (3) cross_recon (frontier tier) handles the reconciliation logic, variance calculation, posture classification (over/under-provisioning), and optimization recommendation generation across multiple products/BUs. Frontier tier required for cross_recon due to multi-signal variance analysis, classification heuristics, and business unit segmentation. This is NOT a policy_action since no governance approval or compliance check is requested\u2014it is a posture analysis and cost optimization recommendation task native to reconciliation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sam_licensing",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1220,
+      "output_tokens": 749,
+      "cached_tokens": 0,
+      "latency_ms": 3740,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Microsoft",
+              "status": "active"
+            }
+          },
+          {
+            "$group": {
+              "_id": {
+                "product": "$product",
+                "assigned_team": "$assigned_team"
+              },
+              "license_count": {
+                "$sum": 1
+              },
+              "total_seat_count": {
+                "$sum": "$seat_count"
+              },
+              "total_contract_value": {
+                "$sum": "$contract_value_usd"
+              },
+              "avg_cost_per_seat": {
+                "$avg": "$cost_per_seat_usd"
+              },
+              "criticality": {
+                "$first": "$criticality_tier"
+              }
+            }
+          },
+          {
+            "$sort": {
+              "total_contract_value": -1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "consumption_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 467,
+      "output_tokens": 421,
+      "cached_tokens": 0,
+      "latency_ms": 6158,
+      "output": {
+        "sql": "SELECT product, COUNT(DISTINCT user_id) AS active_users, SUM(amount_usd) AS total_spend, AVG(daily_active_seats) AS avg_daily_active_seats, MAX(daily_active_seats) AS max_daily_active_seats, MIN(daily_active_seats) AS min_daily_active_seats, COUNT(DISTINCT license_id) AS licensed_count, SUM(daily_active_seats) AS total_seat_days, COUNT(DISTINCT event_id) AS total_events, SUM(CASE WHEN event_type = 'usage' THEN amount_usd ELSE 0 END) AS usage_spend, SUM(CASE WHEN event_type = 'license' THEN amount_usd ELSE 0 END) AS license_spend, ROUND(AVG(amount_usd), 2) AS avg_spend_per_event, ROUND(SUM(amount_usd) / NULLIF(COUNT(DISTINCT license_id), 0), 2) AS spend_per_license, ROUND(SUM(amount_usd) / NULLIF(COUNT(DISTINCT user_id), 0), 2) AS spend_per_active_user, (COUNT(DISTINCT license_id) - COUNT(DISTINCT user_id)) AS provisioning_gap, CASE WHEN COUNT(DISTINCT license_id) > COUNT(DISTINCT user_id) THEN 'Over-Provisioned' WHEN COUNT(DISTINCT license_id) < COUNT(DISTINCT user_id) THEN 'Under-Provisioned' ELSE 'Balanced' END AS provisioning_status FROM consumption_facts WHERE publisher ILIKE '%Microsoft%' GROUP BY product ORDER BY provisioning_gap DESC, total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1344,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8380,
+      "output": {
+        "raw_output": "{\"reconciled\":[\n{\"entity_key\":\"M365_E5|Engineering\",\"mongo_value\":{\"product\":\"M365 E5\",\"assigned_team\":\"Engineering\",\"license_count\":1,\"total_seat_count\":2500,\"total_contract_value\":1500000,\"avg_cost_per_seat\":600,\"criticality\":\"tier1\"},\"sql_value\":{\"product\":\"M365 E5\",\"active_users\":1850,\"total_spend\":1480000,\"licensed_count\":2500,\"provisioning_gap\":650,\"provisioning_status\":\"Over-Provisioned\"},\"classification\":\"over-provisioned\"},\n{\"entity_key\":\"M365_E3|Sales\",\"mongo_value\":{\"product\":\"M365 E3\",\"assigned_team\":\"Sales\",\"license_count\":1,\"total_seat_count\":1200,\"total_contract_value\":432000,\"avg_cost_per_seat\":360,\"criticality\":\"tier2\"},\"sql_value\":{\"product\":\"M365 E3\",\"active_users\":1180,\"total_spend\":428000,\"licensed_count\":1200,\"provisioning_gap\":20,\"provisioning_status\":\"Over-Provisioned\"},\"classification\":\"right-sized\"},\n{\"entity_key\":\"PowerBI_Pro|Finance\",\"mongo_value\":{\"product\":\"Power BI Pro\",\"assigned_team\":\"Finance\",\"license_count\":1,\"total_seat_count\":300,\"total_contract_value\":36000,\"avg_cost_per_seat\":120,\"criticality\":\"tier2\"},\"sql_value\":{\"product\":\"Power BI Pro\",\"active_users\":420,\"total_spend\":58000,\"licensed_count\":300,\"provisioning_gap\":-120,\"provisioning_status\":\"Under-Provisioned\"},\"classification\":\"under-provisioned\"},\n{\"entity_key\":\"Azure_DevOps|Engineering\",\"mongo_value\":{\"product\":\"Azure DevOps\",\"assigned_team\":\"Engineering\",\"license_count\":1,\"total_seat_count\":800,\"total_contract_value\":57600,\"avg_cost_per_seat\":72,\"criticality\":\"tier1\"},\"sql_value\":{\"product\":\"Azure DevOps\",\"active_users\":760,\"total_spend\":56200,\"licensed_count\":800,\"provisioning_gap\":40,\"provisioning_status\":\"Over-Provisioned\"},\"classification\":\"right-sized\"},\n{\"entity_key\":\"Dynamics365|Operations\",\"mongo_value\":{\"product\":\"Dynamics"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.039401000000000005,
+  "total_latency_ms": 18278,
+  "cumulative_spend_usd": 2.822954000000001,
+  "evaluator_reason": "stage1_mongo_fail: doc_bag_mismatch"
+}

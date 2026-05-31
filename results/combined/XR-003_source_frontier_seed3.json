@@ -1,0 +1,87 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_roles_permissions",
+        "description": "Query IAM system to retrieve all roles with elevated permissions and their currently granted permissions (including action names, resource arns, effect, conditions).",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_exercised_permissions",
+        "description": "Query CloudTrail or IAM access logs to retrieve all permissions actually exercised by each IAM role in the last 180 days (principal, action, resource, timestamp).",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_flag",
+        "description": "Reconcile granted vs. exercised permissions: for each role, identify permissions granted but never used in 180 days. Cross-reference action names, resource patterns, and conditions. Classify each unused permission by risk level (e.g., high-risk actions like iam:*, ec2:TerminateInstances vs. low-risk) and generate revocation candidates with justification.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "fetch_roles_permissions",
+          "fetch_exercised_permissions"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks minimum: (1) Fetch granted permissions from IAM\u2014requires querying permission metadata across roles, mid-tier complexity; (2) Fetch 180-day activity logs from CloudTrail/IAM logs\u2014requires aggregation over time, mid-tier; (3) Reconcile and flag\u2014frontier tier because this requires multi-signal reconciliation (matching granted vs. exercised permissions accounting for wildcards and resource patterns), risk classification based on action sensitivity, and recommendation generation. The reconciliation is complex: wildcards in granted permissions (e.g., \"ec2:*\") must be matched against actual exercised actions, and risk scoring requires domain knowledge. Cross_recon is the right specialist because it handles the comparison and classification in one pass, not as a separate policy_action (we are not evaluating against a compliance policy\u2014we are identifying unused permissions for operational risk reduction)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_roles_permissions",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 739,
+      "output_tokens": 110,
+      "cached_tokens": 0,
+      "latency_ms": 1779,
+      "output": {
+        "sql": "SELECT permission, resource, COUNT(*) AS access_count, MAX(access_time) AS last_used FROM access_log_facts WHERE access_time >= CURRENT_DATE - INTERVAL '180 days' GROUP BY permission, resource ORDER BY access_count DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_exercised_permissions",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 748,
+      "output_tokens": 117,
+      "cached_tokens": 0,
+      "latency_ms": 2259,
+      "output": {
+        "sql": "SELECT permission AS principal, action, resource, MAX(access_time) AS last_used, COUNT(*) AS usage_count FROM access_log_facts WHERE access_time >= CURRENT_DATE - INTERVAL '180 days' GROUP BY permission, action, resource ORDER BY permission, action"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_flag",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 480,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 4298,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"iam:*\",\n      \"mongo_value\": {\n        \"permission\": \"iam:*\",\n        \"resource\": \"*\",\n        \"granted\": true,\n        \"risk_level\": \"high\"\n      },\n      \"sql_value\": {\n        \"access_count\": 0,\n        \"last_used\": null,\n        \"usage_count\": 0\n      },\n      \"classification\": \"high_risk_unused\",\n      \"justification\": \"Wildcard IAM permission granted but never exercised in 180 days. Critical security exposure.\",\n      \"recommendation\": \"REVOKE\"\n    },\n    {\n      \"entity_key\": \"ec2:TerminateInstances\",\n      \"mongo_value\": {\n        \"permission\": \"ec2:TerminateInstances\",\n        \"resource\": \"*\",\n        \"granted\": true,\n        \"risk_level\": \"high\"\n      },\n      \"sql_value\": {\n        \"access_count\": 0,\n        \"last_used\": null,\n        \"usage_count\": 0\n      },\n      \"classification\": \"high_risk_unused\",\n      \"justification\": \"Destructive EC2 action granted but never used. High blast radius.\",\n      \"recommendation\": \"REVOKE\"\n    },\n    {\n      \"entity_key\": \"s3:DeleteObject\",\n      \"mongo_value\": {\n        \"permission\": \"s3:DeleteObject\",\n        \"resource\": \"arn:aws:s3:::*/*\",\n        \"granted\": true,\n        \"risk_level\": \"high\"\n      },\n      \"sql_value\": {\n        \"access_count\": 0,\n        \"last_used\": null,\n        \"usage_count\": 0\n      },\n      \"classification\": \"high_risk_unused\",\n      \"justification\": \"Broad S3 deletion permission unused. Data loss risk.\",\n      \"recommendation\": \"REVOKE\"\n    },\n    {\n      \"entity_key\": \"kms:Decrypt\",\n      \"mongo_value\": {\n        \"permission\": \"kms:Decrypt\",\n        \"resource\": \"arn:aws:kms:*:*:key/*\",\n        \"granted\": true,\n        \"risk_level\": \"high\"\n      },\n      \"sql_value\": {\n        \"access_count\": 0,\n        \"last_used\": null,\n        \"usage_count\": 0\n      },\n      \"classification\": \"high_risk_unused\",\n      \"justification\": \"Cryptographic access granted broadly but not exercised.\",\n      \"recommendation\": \"REVOKE\"\n    },\n    {\n      \"entity_key\": \"logs:PutRetentionPolicy\",\n      \"mongo_value\": {\n        \"permission\": \"logs:PutRetentionPolicy\",\n        \"resource\": \"arn:aws:logs:*:*:log-group:*\",\n        \"granted\": true,\n        \"risk_level\": \"medium\"\n      },\n      \"sql_value\": {\n        \"access_count\": 0,\n        \"last_used\": null,\n        \"usage_count\": 0\n      },\n      \"classification\": \"medium_risk_unused\",\n      \"justification\": \"Log tampering capability unused. Audit trail integrity risk.\","
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01759,
+  "total_latency_ms": 8336,
+  "cumulative_spend_usd": 3.1326900000000024,
+  "evaluator_reason": "no_mongo_node"
+}

@@ -1,0 +1,179 @@
+{
+  "task_id": "SQLC-007",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "get_publishers_spend",
+        "description": "Query SQL to identify top spending publishers and their cumulative spend amounts",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "get_product_mix",
+        "description": "Query MongoDB to retrieve product portfolio composition for each top publisher, including contract terms, volumes, and pricing tiers",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "assess_leverage",
+        "description": "Reconcile spend data with product mix and product portfolio context to assess negotiation leverage for each publisher. Classify leverage position (high/medium/low) based on concentration, contract terms, volume commitments, and switching costs.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "get_publishers_spend",
+          "get_product_mix"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks minimum required: (1) SQL to aggregate top publishers by spend (mid tier for multi-table aggregation), (2) MongoDB to fetch product mix details from contract repository (mid tier for aggregation pipeline), (3) cross_recon to synthesize both datasets and perform leverage assessment with classification logic (frontier tier because it requires multi-signal analysis, contextual reasoning about contract terms vs. market conditions, and nuanced posture classification that cannot be reduced to rule-based logic). The count is necessary because spend data lives in SQL warehouse (historical transactions), product portfolio in MongoDB (contract state), and leverage assessment requires reasoning across both sources plus market context, not just reconciliation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "get_publishers_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 445,
+      "output_tokens": 260,
+      "cached_tokens": 0,
+      "latency_ms": 4478,
+      "output": {
+        "sql": "SELECT publisher, product, SUM(amount_usd) AS product_spend, SUM(SUM(amount_usd)) OVER (PARTITION BY publisher) AS total_publisher_spend, ROUND(100.0 * SUM(amount_usd) / SUM(SUM(amount_usd)) OVER (PARTITION BY publisher), 2) AS product_pct_of_publisher, COUNT(DISTINCT license_id) AS license_count, COUNT(DISTINCT user_id) AS unique_users, AVG(daily_active_seats) AS avg_daily_active_seats, ROUND(SUM(SUM(amount_usd)) OVER (PARTITION BY publisher) / NULLIF(COUNT(DISTINCT license_id) OVER (PARTITION BY publisher), 0), 2) AS spend_per_license, RANK() OVER (ORDER BY SUM(SUM(amount_usd)) OVER (PARTITION BY publisher) DESC) AS publisher_spend_rank FROM consumption_facts GROUP BY publisher, product ORDER BY total_publisher_spend DESC, publisher, product_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "get_product_mix",
+      "specialist": "mongo_query",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1208,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9039,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$group": {
+              "_id": "$publisher",
+              "total_spend_usd": {
+                "$sum": "$contract_value_usd"
+              },
+              "total_seats": {
+                "$sum": "$seat_count"
+              },
+              "product_count": {
+                "$sum": 1
+              },
+              "products": {
+                "$push": "$product"
+              },
+              "avg_cost_per_seat_usd": {
+                "$avg": "$cost_per_seat_usd"
+              },
+              "min_cost_per_seat_usd": {
+                "$min": "$cost_per_seat_usd"
+              },
+              "max_cost_per_seat_usd": {
+                "$max": "$cost_per_seat_usd"
+              },
+              "active_licenses": {
+                "$sum": {
+                  "$cond": [
+                    {
+                      "$eq": [
+                        "$status",
+                        "active"
+                      ]
+                    },
+                    1,
+                    0
+                  ]
+                }
+              },
+              "critical_licenses": {
+                "$sum": {
+                  "$cond": [
+                    {
+                      "$eq": [
+                        "$criticality_tier",
+                        "critical"
+                      ]
+                    },
+                    1,
+                    0
+                  ]
+                }
+              },
+              "avg_contract_value_usd": {
+                "$avg": "$contract_value_usd"
+              },
+              "max_contract_value_usd": {
+                "$max": "$contract_value_usd"
+              },
+              "min_contract_value_usd": {
+                "$min": "$contract_value_usd"
+              },
+              "assigned_teams": {
+                "$addToSet": "$assigned_team"
+              },
+              "renewal_terms": {
+                "$push": "$renewal_terms"
+              },
+              "term_ends": {
+                "$push": "$term_end"
+              },
+              "criticality_tiers": {
+                "$push": "$criticality_tier"
+              }
+            }
+          },
+          {
+            "$sort": {
+              "total_spend_usd": -1
+            }
+          },
+          {
+            "$limit": 10
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "assess_leverage",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1388,
+      "output_tokens": 59,
+      "cached_tokens": 0,
+      "latency_ms": 1566,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "publisher_unknown",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "insufficient_data"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.029274,
+  "total_latency_ms": 15083,
+  "cumulative_spend_usd": 0.074865,
+  "evaluator_reason": "step1_sql_fail: generated_sql_execution_error"
+}

@@ -1,0 +1,50 @@
+{
+  "task_id": "MGO-008",
+  "task_class": "mongo_gen",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "Calculate average contract value USD by criticality tier.",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "mongo_query",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1704,
+      "output_tokens": 121,
+      "cached_tokens": 0,
+      "latency_ms": 1851,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$group": {
+              "_id": "$criticality_tier",
+              "avg_contract_value_usd": {
+                "$avg": "$contract_value_usd"
+              }
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.011545000000000001,
+  "total_latency_ms": 1851,
+  "cumulative_spend_usd": 2.3760109999999988,
+  "evaluator_reason": "doc_bag_mismatch"
+}

@@ -1,0 +1,46 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_access",
+        "description": "Evaluate contractor temporary access request against data access policies. Determine if contractor role permits customer database backup downloads and check data classification/export restrictions.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask at mid tier: The query explicitly requests policy evaluation for access control and compliance. This is a governance decision requiring assessment against multiple policy dimensions (role-based access, data sensitivity, export restrictions, contractor agreement terms). Mid tier handles multi-policy reasoning with exceptions (e.g., temporary access scope, backup download restrictions, data classification). No additional subtasks needed—the policy evaluation is the core requirement here. No cross-recon, no tool orchestration, no SQL/query generation is needed since this is purely a policy governance question."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_access",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 735,
+      "output_tokens": 149,
+      "cached_tokens": 0,
+      "latency_ms": 2526,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "Contractor role lacks DBA privileges required for backup access (POL-701), full database download violates de-identification and no-raw-export rule for contractors (POL-702), and no evidence of PM approval or 7-day notice (POL-703).",
+        "applied_constraints": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0074,
+  "total_latency_ms": 2526,
+  "cumulative_spend_usd": 8.781165000000007
+}

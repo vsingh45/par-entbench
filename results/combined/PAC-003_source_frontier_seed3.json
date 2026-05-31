@@ -1,0 +1,52 @@
+{
+  "task_id": "PAC-003",
+  "task_class": "policy_action",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_eval_emergency_access",
+        "description": "Evaluate emergency access request for user u_9981 (senior-engineer) to production database db-payments-primary against access control and incident response policies. Verify requestor authorization, incident severity (P1), role entitlement, and time-bound exception criteria.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask at mid tier: This is explicitly a governance/access control decision requiring policy evaluation against a registry. The task involves multi-factor reasoning (user role, incident severity, production sensitivity, time-bound exception authorization) across multiple policy rules (access control, incident escalation, database criticality). Mid tier is appropriate for multi-signal policy reasoning with exception evaluation. No additional subtasks needed\u2014the policy decision is the core deliverable; downstream access provisioning is out of scope for this planner.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_eval_emergency_access",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 806,
+      "output_tokens": 252,
+      "cached_tokens": 0,
+      "latency_ms": 3997,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-501": "pass",
+          "POL-502": "pass_conditional",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "Senior-engineer u_9981 has valid P1 incident ticket INC-20241215-0042 justifying emergency access to db-payments-primary. POL-501 satisfied via active incident ticket. POL-502 dual approval waived under declared P1 exception. POL-503 requires logging and 24-hour post-access review.",
+        "applied_constraints": [
+          "time-bound access tied to INC-20241215-0042 duration",
+          "all read_write operations logged for audit",
+          "mandatory post-incident access review within 24 hours",
+          "access auto-revokes upon incident closure"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01033,
+  "total_latency_ms": 3997,
+  "cumulative_spend_usd": 5.078522000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

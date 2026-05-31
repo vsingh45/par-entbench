@@ -1,0 +1,99 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_1",
+        "description": "Query AWS commitment contract data (service, region, commitment type, contract value, start/end dates) from financial contracts table",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_2",
+        "description": "Query AWS actual spend data (service, region, time period, actual spend amount) from cloud billing/spend table, aggregated to match commitment granularity",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "cross_1",
+        "description": "Reconcile AWS commitments vs actual spend by service/region, calculate variance (commitment vs actual), identify overcommitted and underutilized line items, and classify each commitment as over-provisioned, well-matched, or under-provisioned",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_1",
+          "sql_2"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: (1) Simple single-table query for commitments (small); (2) Simple aggregation query for spend (small); (3) Cross-reconciliation with variance calculation and posture classification (mid). The cross_recon tier is mid because it requires reconciling two data sources, computing multiple variance metrics, and applying classification logic to categorize utilization posture. No policy_action needed—this is a data-driven analysis, not a governance decision. No multitool_plan needed—data sources are standard SQL tables."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 459,
+      "output_tokens": 193,
+      "cached_tokens": 0,
+      "latency_ms": 2230,
+      "output": {
+        "raw_output": "{\"sql\": \"SELECT 'Data not available' as note, NULL::text as service, NULL::text as region, NULL::text as commitment_type, NULL::numeric as contract_value, NULL::date as start_date, NULL::date as end_date WHERE FALSE\"}\n```\n\n**Note:** The requested AWS commitment contract data is not available in the EntBench Postgres warehouse schema. The database contains:\n- Consumption facts (software licenses/products)\n- Invoice facts (vendor invoices)\n- Access logs\n- Customer/Orders/Lineitem (TPC-H benchmark data)\n\nTo fulfill this query, you would need a table such as `aws_commitments(contract_id, service, region, commitment_type, contract_value, start_date, end_date, actual_spend)` which does not exist in the current schema."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_2",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 466,
+      "output_tokens": 147,
+      "cached_tokens": 0,
+      "latency_ms": 1965,
+      "output": {
+        "sql": "SELECT 'AWS spend data not available in EntBench schema' AS error, 'The provided database schema contains consumption_facts, invoice_facts, access_log_facts, customer, orders, and lineitem tables, but no AWS billing or cloud spend tables. To query AWS actual spend data aggregated by service, region, and time period, you would need tables such as aws_billing_facts or cloud_spend_facts with columns like service_name, region, spend_date, and actual_spend_amount. Please verify the correct schema or provide access to AWS Cost Explorer data or billing exports.' AS details"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_1",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 630,
+      "output_tokens": 186,
+      "cached_tokens": 0,
+      "latency_ms": 4548,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "AWS_COMMITMENTS_GLOBAL",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity",
+            "note": "No MongoDB operational state data provided for AWS commitments",
+            "sql_error": "AWS commitment contract data not available in EntBench Postgres schema; required table aws_commitments does not exist",
+            "spend_error": "AWS billing/cloud spend data not available in EntBench schema; required tables such as aws_billing_facts or cloud_spend_facts are absent",
+            "variance": null,
+            "commitment_classification": "unclassifiable",
+            "recommended_action": "Ingest AWS Cost Explorer exports or CUR (Cost and Usage Report) data into the warehouse, and load contracted commitment data before reconciliation can be performed"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007305,
+  "total_latency_ms": 8743,
+  "cumulative_spend_usd": 4.445510000000002
+}

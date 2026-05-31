@@ -1,0 +1,114 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "router": "all_small",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "retrieve_seat_data",
+        "description": "Query Salesforce source system to retrieve licensed seat counts and actual seat assignment records, including user status, license type, and assignment date",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "analyze_utilization",
+        "description": "Reconcile licensed seat inventory against actual assignments, calculate utilization rate by license type, and identify unutilized licenses with assignment gaps and inactive user mappings",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "retrieve_seat_data"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen to pull dual data sources (license registry + assignment records) with joins on license type and user status, assigned mid-tier for multi-table query complexity; (2) cross_recon to compare licensed inventory against actual assignments and identify gaps/unutilized seats, assigned mid-tier for straightforward reconciliation logic without complex cross-document inference. No policy_action needed\u2014this is utilization analysis, not compliance evaluation. No multitool_plan needed\u2014data is sourced from SQL, not from external tool registry."
+  },
+  "node_results": [
+    {
+      "subtask_id": "retrieve_seat_data",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 464,
+      "output_tokens": 205,
+      "cached_tokens": 0,
+      "latency_ms": 1759,
+      "output": {
+        "sql": "SELECT cf.license_id, cf.publisher, cf.product, cf.daily_active_seats as licensed_seats, COUNT(DISTINCT cf.user_id) as assigned_seats, COUNT(DISTINCT cf.user_id)::FLOAT / NULLIF(cf.daily_active_seats, 0) as utilization_rate, cf.event_date, alf.permission, alf.result FROM consumption_facts cf LEFT JOIN access_log_facts alf ON cf.user_id = alf.user_id WHERE cf.event_date >= '2024-01-01' GROUP BY cf.license_id, cf.publisher, cf.product, cf.daily_active_seats, cf.event_date, alf.permission, alf.result ORDER BY cf.license_id, utilization_rate ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "analyze_utilization",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 465,
+      "output_tokens": 740,
+      "cached_tokens": 0,
+      "latency_ms": 5610,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "license_id",
+            "mongo_value": null,
+            "sql_value": "SELECT cf.license_id, cf.publisher, cf.product, cf.daily_active_seats, COUNT(DISTINCT cf.user_id) as assigned_seats, utilization_rate FROM consumption_facts cf LEFT JOIN access_log_facts alf ON cf.user_id = alf.user_id WHERE cf.event_date >= '2024-01-01' GROUP BY cf.license_id ORDER BY utilization_rate ASC",
+            "classification": "data_source_sql_primary",
+            "notes": "MongoDB source not provided; SQL query is authoritative for seat inventory reconciliation"
+          },
+          {
+            "entity_key": "utilization_analysis",
+            "mongo_value": null,
+            "sql_value": {
+              "metric": "utilization_rate",
+              "calculation": "assigned_seats / licensed_seats",
+              "data_source": "consumption_facts with access_log_facts join"
+            },
+            "classification": "metric_calculated",
+            "notes": "Utilization rate computed from assigned_seats / daily_active_seats"
+          },
+          {
+            "entity_key": "unutilized_licenses",
+            "mongo_value": null,
+            "sql_value": "WHERE utilization_rate < 1.0 OR assigned_seats < daily_active_seats",
+            "classification": "gap_identified",
+            "notes": "Licenses with assignment gaps where assigned_seats < licensed_seats indicate unutilized capacity"
+          },
+          {
+            "entity_key": "inactive_user_mappings",
+            "mongo_value": null,
+            "sql_value": "LEFT JOIN access_log_facts WHERE permission NOT NULL AND result = 'DENIED' OR access_log_facts IS NULL",
+            "classification": "inactive_mapping_detected",
+            "notes": "Users in consumption_facts without corresponding access_log_facts records indicate inactive user mappings"
+          },
+          {
+            "entity_key": "salesforce_seat_inventory",
+            "mongo_value": null,
+            "sql_value": {
+              "publisher": "Salesforce",
+              "licensed_seats_field": "daily_active_seats",
+              "assigned_seats_field": "COUNT(DISTINCT user_id)",
+              "gap_analysis": "licensed_seats - assigned_seats"
+            },
+            "classification": "expand_or_hold",
+            "notes": "Classification depends on utilization_rate: <0.5 = reduce, 0.5-0.8 = hold, >0.8 = expand"
+          }
+        ],
+        "summary": {
+          "reconciliation_status": "sql_authoritative",
+          "mongodb_present": false,
+          "recommendation": "Execute SQL query to identify licenses with utilization_rate < 0.8 for cost optimization review; cross-reference access_log_facts for inactive user mappings to reclaim unutilized seats"
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.005654,
+  "total_latency_ms": 7369,
+  "cumulative_spend_usd": 3.1302250000000016,
+  "evaluator_reason": "no_mongo_node"
+}

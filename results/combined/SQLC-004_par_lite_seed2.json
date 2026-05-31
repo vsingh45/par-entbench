@@ -1,0 +1,72 @@
+{
+  "task_id": "SQLC-004",
+  "task_class": "sql_compose",
+  "router": "par_lite",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "query_vendor_risk",
+        "description": "Query vendor reliability data to retrieve vendor IDs, names, incident counts, incident severity scores, uptime percentages, and other risk indicators from the vendor database",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "classify_vendors",
+        "description": "Reconcile and classify each vendor from the query results into risk categories (low_risk, medium_risk, high_risk) based on incident history, severity scores, uptime metrics, and apply risk scoring logic to produce final vendor risk assessment",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "query_vendor_risk"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid tier) to query vendor reliability data with multiple metrics (incidents, severity, uptime)\u2014mid tier handles multi-table joins and aggregation needed to gather risk indicators. (2) cross_recon (mid tier) to consolidate query results and apply classification logic across incident history and reliability metrics\u2014this is reconciliation+classification of a single source into risk categories, handled by cross_recon without needing a separate policy_action (classification is part of the reconciliation task). Both are mid-tier complexity; frontier not needed since there are no complex window functions or multi-signal inference required."
+  },
+  "node_results": [
+    {
+      "subtask_id": "query_vendor_risk",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 480,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9736,
+      "output": {
+        "raw_output": "{\"sql\": \"SELECT v.vendor_name, COUNT(i.invoice_id) AS incident_count, SUM(CASE WHEN i.status = 'overdue' THEN 1 ELSE 0 END) AS overdue_count, SUM(CASE WHEN i.status = 'unpaid' THEN 1 ELSE 0 END) AS unpaid_count, SUM(CASE WHEN i.status = 'paid' THEN 1 ELSE 0 END) AS paid_count, COUNT(DISTINCT i.contract_id) AS contract_count, AVG(CASE WHEN i.paid_date IS NOT NULL THEN (i.paid_date - i.due_date) ELSE NULL END) AS avg_payment_delay_days, SUM(i.amount_usd) AS total_invoiced_usd, SUM(CASE WHEN i.status IN ('overdue', 'unpaid') THEN i.amount_usd ELSE 0 END) AS outstanding_amount_usd, ROUND( (SUM(CASE WHEN i.status IN ('overdue', 'unpaid') THEN 1 ELSE 0 END)::NUMERIC / NULLIF(COUNT(i.invoice_id), 0)) * 100, 2 ) AS incident_rate_pct, CASE WHEN (SUM(CASE WHEN i.status IN ('overdue', 'unpaid') THEN 1 ELSE 0 END)::NUMERIC / NULLIF(COUNT(i.invoice_id), 0)) >= 0.3 THEN 'high_risk' WHEN (SUM(CASE WHEN i.status IN ('overdue', 'unpaid') THEN 1 ELSE 0 END)::NUMERIC / NULLIF(COUNT(i.invoice_id), 0)) >= 0.1 THEN 'medium_risk' ELSE 'low_risk' END AS risk_classification FROM invoice_facts i GROUP BY v.vendor_name\"}\n\nWait, there's a reference to `v` which is not defined. Let me fix this.\n\n{\"sql\": \"SELECT i.vendor_name, COUNT(i.invoice_id) AS incident_count, SUM(CASE WHEN i.status = 'overdue' THEN 1 ELSE 0 END) AS overdue_count, SUM(CASE WHEN i.status = 'unpaid' THEN 1 ELSE 0 END) AS unpaid_count, SUM(CASE WHEN i.status = 'paid' THEN 1 ELSE 0 END) AS paid_count, COUNT(DISTINCT i.contract_id) AS contract_count, AVG(CASE WHEN i.paid_date IS NOT NULL THEN (i.paid_date - i.due_date) ELSE NULL END) AS avg_payment_delay_days, SUM(i.amount_usd) AS total_invoiced_usd, SUM(CASE WHEN i.status IN ('overdue', 'unpaid') THEN i.amount_usd ELSE 0 END) AS outstanding_amount_usd, ROUND((SUM(CASE WHEN i.status IN ('overdue', 'unpaid') THEN 1 ELSE 0 END)::NUMERIC / NULLIF(COUNT(i.invoice_id), 0"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "classify_vendors",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1118,
+      "output_tokens": 98,
+      "cached_tokens": 0,
+      "latency_ms": 3068,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "unknown_vendor",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "high_risk",
+            "notes": "SQL query was malformed and returned no executable results; MongoDB source also returned no vendor operational state data. No vendors could be reconciled. All upstream outputs are null or incomplete. Manual review required before any risk classification can be applied."
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.018264000000000002,
+  "total_latency_ms": 12804,
+  "cumulative_spend_usd": 0.6404470000000001,
+  "evaluator_reason": "step1_sql_fail: no_sql_in_output"
+}

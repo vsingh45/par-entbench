@@ -1,0 +1,102 @@
+{
+  "task_id": "XR-002",
+  "task_class": "cross_recon",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "retrieve_active_contracts",
+        "description": "Retrieve all active billing contracts with contracted annual value and key identifiers from contract management system",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "retrieve_2024_invoices",
+        "description": "Query invoices issued in 2024, aggregated by contract ID to compute total invoiced amounts",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_flag_variance",
+        "description": "Reconcile contracted annual values against 2024 actual invoices, calculate variance percentage, and flag contracts with >10% variance (both positive and negative). Classify variance severity and provide reconciliation summary.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "retrieve_active_contracts",
+          "retrieve_2024_invoices"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks are necessary: (1) retrieve active contracts from the contract system (mongo_query, small\u2014straightforward filtering by status), (2) aggregate 2024 invoices by contract (sql_gen, small\u2014single aggregation query on invoice table), (3) reconcile the two sources, compute variance, and flag exceptions (cross_recon, mid\u2014requires matching contracts to invoices, variance calculation logic, and classification of material differences). The cross_recon tier is mid because it involves two-source reconciliation with threshold-based classification; both upstream tasks are simple, so no complexity boost is needed."
+  },
+  "node_results": [
+    {
+      "subtask_id": "retrieve_active_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1736,
+      "output_tokens": 85,
+      "cached_tokens": 0,
+      "latency_ms": 1367,
+      "output": {
+        "collection": "billing_contracts",
+        "pipeline": [
+          {
+            "$match": {
+              "status": "active"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "retrieve_2024_invoices",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 710,
+      "output_tokens": 97,
+      "cached_tokens": 0,
+      "latency_ms": 1564,
+      "output": {
+        "sql": "SELECT contract_id, SUM(amount_usd) AS total_invoiced_2024 FROM invoice_facts WHERE invoice_date >= '2024-01-01' AND invoice_date < '2025-01-01' GROUP BY contract_id"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_flag_variance",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 606,
+      "output_tokens": 126,
+      "cached_tokens": 0,
+      "latency_ms": 2598,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "contract_id",
+            "mongo_value": "contracted_annual_value",
+            "sql_value": "total_invoiced_2024",
+            "classification": "awaiting_data"
+          }
+        ],
+        "note": "No actual contract or invoice records were provided in upstream_outputs; only query/pipeline definitions were supplied. Reconciliation requires executed result sets."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.02296,
+  "total_latency_ms": 5529,
+  "cumulative_spend_usd": 2.4396990000000005,
+  "evaluator_reason": "ok"
+}

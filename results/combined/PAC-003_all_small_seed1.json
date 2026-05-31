@@ -1,0 +1,54 @@
+{
+  "task_id": "PAC-003",
+  "task_class": "policy_action",
+  "router": "all_small",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_emergency_access",
+        "description": "Evaluate emergency access request against incident response and database access control policies. Determine if u_9981 (senior-engineer) meets criteria for production database access during P1 incident, considering: on-call status verification, incident severity (P1), role permissions, access duration limits, and audit requirements.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask (mid tier) is sufficient because this requires evaluating one governance decision (emergency database access) against the incident response and access control policy registry. The mid tier is appropriate because it involves multi-signal reasoning: incident severity classification (P1), role-based permissions (senior-engineer), on-call status verification, and time-bounded access constraints. This is a straightforward compliance check with one primary decision point, not requiring frontier-level complexity. No additional subtasks needed\u2014this is purely a policy evaluation, not a multi-tool orchestration or data reconciliation task."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_emergency_access",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 569,
+      "output_tokens": 281,
+      "cached_tokens": 0,
+      "latency_ms": 2725,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-501": "pass",
+          "POL-502": "pass",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "User u_9981 (senior-engineer) qualifies for emergency production database access during P1 incident. POL-501 satisfied by active incident ticket (INC-20241215-0042). POL-502 waived for P1 severity, eliminating dual approval requirement. POL-503 applies with mandatory audit logging and 24-hour review constraint.",
+        "applied_constraints": [
+          "access_duration: 4_hours_maximum",
+          "audit_logging: all_queries_must_be_logged",
+          "review_requirement: incident_review_within_24_hours",
+          "incident_ticket_required: INC-20241215-0042_must_remain_active",
+          "scope_limitation: read_write_access_to_db-payments-primary_only",
+          "session_monitoring: real_time_monitoring_enabled"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001974,
+  "total_latency_ms": 2725,
+  "cumulative_spend_usd": 5.010037000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

@@ -1,0 +1,39 @@
+{
+  "task_id": "SQL-005",
+  "task_class": "sql_gen",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_active_seats_cost",
+        "description": "Query SQL warehouse for Q4 2024 active seats and cost by product. Calculate average cost per active seat and sort descending.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single SQL query task with moderate complexity. Requires aggregation (COUNT of active seats, SUM of cost) grouped by product with a calculated metric (cost/seat), filtering for Q4 2024, and ordering. This is a straightforward multi-table join with window aggregation logic that mid-tier (Sonnet 4.6) can reliably handle. No cross-source reconciliation needed; single-source SQL warehouse query. Cost justified: one subtask avoids unnecessary decomposition."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_active_seats_cost",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 464,
+      "output_tokens": 164,
+      "cached_tokens": 0,
+      "latency_ms": 2990,
+      "output": {
+        "sql": "SELECT product, SUM(amount_usd) AS total_cost, SUM(daily_active_seats) AS total_active_seats, CASE WHEN SUM(daily_active_seats) > 0 THEN ROUND(SUM(amount_usd) / SUM(daily_active_seats), 2) ELSE NULL END AS avg_cost_per_active_seat FROM consumption_facts WHERE fiscal_year = 2024 AND fiscal_quarter = 4 AND event_date >= '2024-10-01' AND event_date <= '2024-12-31' GROUP BY product ORDER BY avg_cost_per_active_seat DESC NULLS LAST"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.003852,
+  "total_latency_ms": 2990,
+  "cumulative_spend_usd": 0.147106
+}

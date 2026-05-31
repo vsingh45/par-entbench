@@ -1,0 +1,71 @@
+{
+  "task_id": "SQLC-002",
+  "task_class": "sql_compose",
+  "router": "sink_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top_customers",
+        "description": "Query TPC-H warehouse to identify top 10 customers by lifetime value in BUILDING market segment. Return custkey, name, lifetime_value, and relevant order metrics (order count, avg order value, recency).",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "extract_retention_narratives",
+        "description": "For each of the 10 customers, generate a personalized retention narrative that references their specific order patterns (frequency, timing, value distribution, product preferences). Use the customer metrics from sql_top_customers output to craft customized, business-relevant messaging.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_top_customers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks, minimal decomposition: (1) sql_gen assigned 'mid' tier because the query requires joining multiple TPC-H tables (customer, orders, lineitem) with aggregation and filtering on market segment and lifetime value ranking\u2014straightforward multi-table aggregation but not complex CTEs or window functions. (2) cross_recon assigned 'mid' tier to consume the customer data and generate personalized narratives using order pattern context\u2014this is synthesis and text generation grounded in structured data, not complex reconciliation, but requires moderate reasoning to produce business-meaningful narratives for 10 customers. No separate extract subtask needed; field extraction is implicit in the SQL query. No policy_action needed; retention narrative is a business output, not a policy decision. Plan is minimal because both steps directly chain: SQL identifies customers, then narrative generation uses that output."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top_customers",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 499,
+      "output_tokens": 179,
+      "cached_tokens": 0,
+      "latency_ms": 1637,
+      "output": {
+        "sql": "SELECT c.c_custkey, c.c_name, SUM(o.o_totalprice) AS lifetime_value, COUNT(o.o_orderkey) AS order_count, AVG(o.o_totalprice) AS avg_order_value, MAX(o.o_orderdate) AS last_order_date, CURRENT_DATE - MAX(o.o_orderdate) AS days_since_last_order FROM customer c INNER JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name ORDER BY lifetime_value DESC LIMIT 10"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "extract_retention_narratives",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 718,
+      "output_tokens": 110,
+      "cached_tokens": 0,
+      "latency_ms": 2110,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sql_top_customers",
+            "mongo_value": null,
+            "sql_value": "Top 10 BUILDING segment customers by lifetime value requires SQL execution; narrative generation requires actual customer data not provided in upstream outputs.",
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007734,
+  "total_latency_ms": 3747,
+  "cumulative_spend_usd": 0.8305509999999997,
+  "evaluator_reason": "step2_consumer_narrative_check_failed"
+}

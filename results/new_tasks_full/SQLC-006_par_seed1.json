@@ -1,0 +1,63 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_calc",
+        "description": "Calculate current month spend and 3-month rolling average spend by category/vendor, compute variance percentage, and flag outliers for classification",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_classify",
+        "description": "Reconcile current spend against 3-month baseline, apply classification logic (variance < 10% = normal_variance, 10-25% = concerning, > 25% = critical), and output anomaly report with severity tiers",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_spend_calc"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks are the minimum needed: (1) sql_gen to compute current vs. historical spend metrics in one multi-column query with rolling averages and variance calculations—this is a single SQL task with window functions, assigned mid tier for the aggregation and statistical computations. (2) cross_recon to compare the two datasets and apply the classification rules (normal_variance, concerning, critical)—assigned mid tier because it orchestrates the comparison logic and classification thresholds. No policy_action is needed because classification is part of the reconciliation process, not a governance policy evaluation. No extract or mongo_query is implied by the query. The plan is minimal and avoids unnecessary splitting."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_calc",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 474,
+      "output_tokens": 774,
+      "cached_tokens": 0,
+      "latency_ms": 10751,
+      "output": {
+        "sql": "WITH monthly_spend AS ( SELECT vendor_name, DATE_TRUNC('month', invoice_date) AS spend_month, SUM(amount_usd) AS monthly_amount FROM invoice_facts WHERE invoice_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '4 months' GROUP BY vendor_name, DATE_TRUNC('month', invoice_date) ), current_month AS ( SELECT vendor_name, monthly_amount AS current_spend FROM monthly_spend WHERE spend_month = DATE_TRUNC('month', CURRENT_DATE) ), rolling_avg AS ( SELECT vendor_name, AVG(monthly_amount) AS avg_3mo_spend, STDDEV(monthly_amount) AS stddev_3mo_spend FROM monthly_spend WHERE spend_month >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months' AND spend_month < DATE_TRUNC('month', CURRENT_DATE) GROUP BY vendor_name ), comparison AS ( SELECT c.vendor_name, c.current_spend, COALESCE(r.avg_3mo_spend, 0) AS avg_3mo_spend, COALESCE(r.stddev_3mo_spend, 0) AS stddev_3mo_spend, CASE WHEN COALESCE(r.avg_3mo_spend, 0) = 0 THEN NULL ELSE ROUND(((c.current_spend - r.avg_3mo_spend) / r.avg_3mo_spend) * 100, 2) END AS variance_pct, CASE WHEN COALESCE(r.avg_3mo_spend, 0) = 0 THEN NULL ELSE ROUND((c.current_spend - r.avg_3mo_spend) / NULLIF(r.stddev_3mo_spend, 0), 2) END AS z_score FROM current_month c LEFT JOIN rolling_avg r ON c.vendor_name = r.vendor_name ) SELECT vendor_name, ROUND(current_spend, 2) AS current_month_spend, ROUND(avg_3mo_spend, 2) AS rolling_3mo_avg, ROUND(stddev_3mo_spend, 2) AS rolling_3mo_stddev, variance_pct AS variance_pct, z_score, CASE WHEN variance_pct IS NULL THEN 'no_history' WHEN ABS(variance_pct) <= 15 THEN 'normal_variance' WHEN ABS(variance_pct) > 15 AND ABS(variance_pct) <= 50 AND (z_score IS NULL OR ABS(z_score) <= 2) THEN 'concerning' WHEN ABS(variance_pct) > 50 OR ABS(COALESCE(z_score, 0)) > 2 THEN 'critical' ELSE 'normal_variance' END AS anomaly_classification, CASE WHEN current_spend > avg_3mo_spend THEN 'over_spend' WHEN current_spend < avg_3mo_spend THEN 'under_spend' ELSE 'on_target' END AS spend_direction FROM comparison ORDER BY ABS(COALESCE(variance_pct, 0)) DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_classify",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1072,
+      "output_tokens": 295,
+      "cached_tokens": 0,
+      "latency_ms": 7577,
+      "output": {
+        "raw_output": "I need to reconcile MongoDB (operational state) with SQL (historical spend analysis), but I only have the SQL query definition — no actual result data from either source. I'll apply LEFT JOIN semantics: MongoDB is primary source. Since no MongoDB documents or SQL result rows were provided, I'll return a reconciled output reflecting the absence of data with appropriate null/zero defaults and classify as `no_data` per LEFT JOIN rules with empty primary source.\n\n{\"reconciled\": [{\"entity_key\": \"__no_mongo_documents_provided__\", \"mongo_value\": null, \"sql_value\": {\"current_month_spend\": null, \"rolling_3mo_avg\": null, \"rolling_3mo_stddev\": null, \"variance_pct\": null, \"z_score\": null, \"anomaly_classification\": \"no_history\", \"spend_direction\": null}, \"classification\": \"no_data\", \"reconciliation_note\": \"No MongoDB operational records were supplied as the primary source. SQL query definition was received but no SQL result rows were provided. Cannot perform variance classification (normal_variance / concerning / critical) without at least one MongoDB entity to anchor LEFT JOIN. Re-submit with populated upstream_outputs containing both MongoDB documents and SQL result rows.\", \"severity_tier\": null, \"variance_pct\": null, \"variance_bucket\": null}]}"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.020673,
+  "total_latency_ms": 18328,
+  "cumulative_spend_usd": 0.837892
+}

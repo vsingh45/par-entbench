@@ -1,0 +1,55 @@
+{
+  "task_id": "PAC-003",
+  "task_class": "policy_action",
+  "router": "par_lite",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_eval_emergency_access",
+        "description": "Evaluate emergency access request from u_9981 (senior-engineer) to db-payments-primary against access control and incident response policies. Verify role-based entitlements, incident severity thresholds, audit trail requirements, and approval authority.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask assigned to mid tier because this is a multi-policy evaluation: (1) role-based access control (RBAC) verification for senior-engineer role against production database, (2) P1 incident severity exception criteria, (3) on-call authority and delegation rules, and (4) audit/logging requirements for emergency access. This requires reasoning across multiple applicable policies and potential exceptions, beyond a single straightforward rule check. No additional subtasks needed \u2014 the policy engine will return approval status, required conditions, and audit directives as part of the policy evaluation response.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_eval_emergency_access",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 559,
+      "output_tokens": 383,
+      "cached_tokens": 0,
+      "latency_ms": 8131,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-501": "pass",
+          "POL-502": "pass_conditional",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "User u_9981 (senior-engineer) has an active P1 incident ticket INC-20241215-0042, satisfying POL-501's incident ticket requirement. POL-502 dual-approval requirement is waived under the declared P1 incident exemption for mission-critical resource db-payments-primary. Access is permitted with mandatory audit logging and 24-hour post-incident review per POL-503. Read-write access scope is justified by active P1 investigation needs.",
+        "applied_constraints": [
+          "Access session must be fully logged with all queries and mutations captured in audit trail, referencing INC-20241215-0042",
+          "Access grant is time-limited to duration of P1 incident INC-20241215-0042; must be revoked upon incident closure",
+          "Post-incident access review required within 24 hours of incident resolution per POL-503",
+          "Senior engineer must document all actions taken on db-payments-primary within the incident ticket",
+          "Access scope limited to investigation and remediation activities directly related to INC-20241215-0042",
+          "Security/DBA team must be notified of emergency access grant within 15 minutes of activation",
+          "Read-write access elevated from standard read-only; write operations require justification entry in audit log per action"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007422,
+  "total_latency_ms": 8131,
+  "cumulative_spend_usd": 5.1065110000000065,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

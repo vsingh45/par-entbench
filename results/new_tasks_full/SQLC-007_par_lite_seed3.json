@@ -1,0 +1,63 @@
+{
+  "task_id": "SQLC-007",
+  "task_class": "sql_compose",
+  "router": "par_lite",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "top_publishers_mix",
+        "description": "Query spend database to identify top spending publishers and retrieve their product mix (products/services, volume, spend by product category)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "assess_leverage",
+        "description": "Analyze publisher product mix, spend concentration, and contract terms to assess negotiation leverage for each top publisher (concentration risk, alternative options, strategic importance, contract flexibility)",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "top_publishers_mix"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid-tier) to fetch top publishers and product mix from spend/contract tables with aggregation and JOIN across product catalogs; (2) cross_recon (mid-tier) to reconcile spend patterns with contract terms and market factors to classify leverage (this is reconciliation between spend data and contract/strategic context). Both mid-tier because sql_gen requires multi-table joins with aggregation, and cross_recon needs to synthesize multiple signals (concentration, alternatives, contract flexibility) but is straightforward decision logic without frontier-level complexity. No separate policy_action needed—leverage assessment is part of the reconciliation analysis, not a governance policy check."
+  },
+  "node_results": [
+    {
+      "subtask_id": "top_publishers_mix",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 456,
+      "output_tokens": 186,
+      "cached_tokens": 0,
+      "latency_ms": 3769,
+      "output": {
+        "sql": "SELECT publisher, product, COUNT(DISTINCT license_id) AS license_count, SUM(daily_active_seats) AS total_active_seats, SUM(amount_usd) AS total_spend, ROUND(SUM(amount_usd) * 100.0 / SUM(SUM(amount_usd)) OVER (PARTITION BY publisher), 2) AS pct_of_publisher_spend, COUNT(DISTINCT event_type) AS event_type_diversity, MIN(event_date) AS first_event_date, MAX(event_date) AS last_event_date, DATEDIFF('day', MIN(event_date), MAX(event_date)) AS relationship_days FROM consumption_facts GROUP BY publisher, product ORDER BY publisher, total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "assess_leverage",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 452,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10948,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"publisher::Adobe\",\n      \"mongo_value\": {\n        \"publisher\": \"Adobe\",\n        \"products\": [\"Acrobat DC\", \"Creative Cloud\", \"Photoshop\", \"Premiere Pro\"],\n        \"active_contracts\": 14,\n        \"avg_contract_length_days\": 365,\n        \"renewal_due_within_90_days\": 3,\n        \"has_enterprise_agreement\": true,\n        \"preferred_vendor_status\": true\n      },\n      \"sql_value\": {\n        \"publisher\": \"Adobe\",\n        \"products\": [\n          {\n            \"product\": \"Creative Cloud\",\n            \"license_count\": 420,\n            \"total_active_seats\": 3850,\n            \"total_spend\": 1820000.0,\n            \"pct_of_publisher_spend\": 62.41,\n            \"event_type_diversity\": 6,\n            \"first_event_date\": \"2021-03-15\",\n            \"last_event_date\": \"2024-11-30\",\n            \"relationship_days\": 1356\n          },\n          {\n            \"product\": \"Acrobat DC\",\n            \"license_count\": 210,\n            \"total_active_seats\": 1920,\n            \"total_spend\": 620000.0,\n            \"pct_of_publisher_spend\": 21.27,\n            \"event_type_diversity\": 4,\n            \"first_event_date\": \"2021-06-01\",\n            \"last_event_date\": \"2024-11-30\",\n            \"relationship_days\": 1278\n          },\n          {\n            \"product\": \"Photoshop\",\n            \"license_count\": 95,\n            \"total_active_seats\": 780,\n            \"total_spend\": 340000.0,\n            \"pct_of_publisher_spend\": 11.66,\n            \"event_type_diversity\": 3,\n            \"first_event_date\": \"2022-01-10\",\n            \"last_event_date\": \"2024-11-30\",\n            \"relationship_days\": 1055\n          },\n          {\n            \"product\": \"Premiere Pro\",\n            \"license_count\": 20,\n            \"total_active_seats\": 140,\n            \"total_spend\": 136000.0,\n            \"pct_of_publisher_spend\": 4.66,\n            \"event_type_diversity\": 2,\n            \"first_event_date\": \"2023-02-01\",\n            \"last_event_date\": \"2024-11-30\",\n            \"relationship_days\": 668\n          }\n        ],\n        \"publisher_total_spend\": 2916000.0,\n        \"product_count\": 4,\n        \"spend_concentration_top1_pct\": 62.41\n      },\n      \"classification\": \"at_risk\",\n      \"negotiation_leverage_assessment\": {\n        \"overall_leverage_score\": 38,\n        \"leverage_tier\": \"low\",\n        \"concentration_risk\": {\n          \"score\": \"high\",\n          \"detail\": \"Creative Cloud represents 62.41% of Adobe spend. High dependency on a single product reduces walk-away credibility.\"\n        },\n        \""
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.017514000000000002,
+  "total_latency_ms": 14717,
+  "cumulative_spend_usd": 1.4394570000000009
+}

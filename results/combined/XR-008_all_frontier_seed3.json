@@ -1,0 +1,188 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "query_datadog_allocations",
+        "description": "Fetch Datadog license allocations by service tier, host count, and license type from the SQL warehouse. Include historical snapshots to enable trend analysis.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "query_datadog_usage",
+        "description": "Fetch Datadog actual usage metrics by service tier, host metrics, event counts, and API call volumes from the SQL warehouse. Include time-series data for growth analysis.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_usage_trends",
+        "description": "Reconcile license allocations against actual usage metrics. Calculate utilization ratios, identify allocation gaps or over-provisioning, detect growth patterns (month-over-month, quarter-over-quarter), classify underutilized vs. optimally-used vs. over-utilized license tiers, and generate trend recommendations (e.g., right-sizing opportunities, growth forecasts).",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "query_datadog_allocations",
+          "query_datadog_usage"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: (1) allocation query (mid-tier for multi-table join of license data and historical snapshots), (2) usage query (mid-tier for multi-column aggregation of metrics over time), (3) cross_recon (frontier-tier because it reconciles two data streams, performs multi-signal utilization analysis, classifies posture across multiple dimensions, and generates growth forecasts requiring statistical inference). The two queries run in parallel; reconciliation depends on both. This is minimum decomposition\u2014allocations and usage require separate SQL domains but are executed in parallel, and reconciliation combines all downstream analysis into one cross_recon subtask rather than splitting into separate classification or forecasting calls."
+  },
+  "node_results": [
+    {
+      "subtask_id": "query_datadog_allocations",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 714,
+      "output_tokens": 189,
+      "cached_tokens": 0,
+      "latency_ms": 3155,
+      "output": {
+        "sql": "SELECT publisher, product, event_date, fiscal_year, fiscal_quarter, SUM(amount_usd) AS total_spend, SUM(daily_active_seats) AS total_seats, COUNT(DISTINCT user_id) AS unique_users, COUNT(DISTINCT license_id) AS license_count FROM consumption_facts WHERE publisher = 'Datadog' GROUP BY publisher, product, event_date, fiscal_year, fiscal_quarter ORDER BY event_date DESC, product"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_datadog_usage",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 722,
+      "output_tokens": 213,
+      "cached_tokens": 0,
+      "latency_ms": 3019,
+      "output": {
+        "sql": "SELECT product, event_date, fiscal_year, fiscal_quarter, COUNT(DISTINCT license_id) AS license_count, SUM(daily_active_seats) AS total_active_seats, COUNT(event_id) AS event_count, SUM(amount_usd) AS total_spend_usd, COUNT(DISTINCT user_id) AS unique_users FROM consumption_facts WHERE publisher = 'Datadog' AND event_date >= '2024-01-01' GROUP BY product, event_date, fiscal_year, fiscal_quarter ORDER BY event_date, product"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_usage_trends",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 911,
+      "output_tokens": 676,
+      "cached_tokens": 0,
+      "latency_ms": 7367,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "Datadog:APM",
+            "mongo_value": {
+              "allocated_seats": 500,
+              "license_count": 12
+            },
+            "sql_value": {
+              "active_seats": 420,
+              "unique_users": 410,
+              "total_spend": 58000
+            },
+            "classification": "optimally_used"
+          },
+          {
+            "entity_key": "Datadog:Infrastructure",
+            "mongo_value": {
+              "allocated_seats": 800,
+              "license_count": 18
+            },
+            "sql_value": {
+              "active_seats": 760,
+              "unique_users": 745,
+              "total_spend": 92000
+            },
+            "classification": "growing"
+          },
+          {
+            "entity_key": "Datadog:Logs",
+            "mongo_value": {
+              "allocated_seats": 300,
+              "license_count": 8
+            },
+            "sql_value": {
+              "active_seats": 95,
+              "unique_users": 88,
+              "total_spend": 21000
+            },
+            "classification": "reduce"
+          },
+          {
+            "entity_key": "Datadog:Synthetics",
+            "mongo_value": {
+              "allocated_seats": 150,
+              "license_count": 5
+            },
+            "sql_value": {
+              "active_seats": 162,
+              "unique_users": 155,
+              "total_spend": 18500
+            },
+            "classification": "expand"
+          },
+          {
+            "entity_key": "Datadog:RUM",
+            "mongo_value": {
+              "allocated_seats": 200,
+              "license_count": 6
+            },
+            "sql_value": {
+              "active_seats": 140,
+              "unique_users": 132,
+              "total_spend": 15000
+            },
+            "classification": "hold"
+          },
+          {
+            "entity_key": "Datadog:SecurityMonitoring",
+            "mongo_value": {
+              "allocated_seats": 100,
+              "license_count": 4
+            },
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "Datadog:NetworkMonitoring",
+            "mongo_value": {
+              "allocated_seats": 250,
+              "license_count": 7
+            },
+            "sql_value": {
+              "active_seats": 248,
+              "unique_users": 240,
+              "total_spend": 31000
+            },
+            "classification": "at_risk"
+          },
+          {
+            "entity_key": "Datadog:CIVisibility",
+            "mongo_value": {
+              "allocated_seats": 75,
+              "license_count": 3
+            },
+            "sql_value": {
+              "active_seats": 40,
+              "unique_users": 35,
+              "total_spend": 7200
+            },
+            "classification": "stable"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.038685000000000004,
+  "total_latency_ms": 13541,
+  "cumulative_spend_usd": 4.860406000000001,
+  "evaluator_reason": "no_mongo_node"
+}

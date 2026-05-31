@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-002",
+  "task_class": "sql_gen",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "List the top 5 publishers by total spend in fiscal year 2024, with their total spend amounts.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 459,
+      "output_tokens": 71,
+      "cached_tokens": 0,
+      "latency_ms": 868,
+      "output": {
+        "sql": "SELECT publisher, SUM(amount_usd) as total_spend FROM consumption_facts WHERE event_date >= '2024-01-01' AND event_date < '2025-01-01' GROUP BY publisher ORDER BY total_spend DESC LIMIT 5"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.000814,
+  "total_latency_ms": 868,
+  "cumulative_spend_usd": 0.06138500000000003,
+  "evaluator_reason": "ok"
+}

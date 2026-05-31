@@ -1,0 +1,83 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "frugal_cascade",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_fetch_declining",
+        "description": "Query SQL warehouse for publishers with declining quarterly trends in 2024. Calculate QoQ growth/decline metrics across Q1-Q4 2024 to identify publishers with negative trend trajectory.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal",
+        "description": "Reconcile identified declining publishers with contract state and historical performance data. Generate renewal recommendations (hold, expand, reduce) for each publisher based on decline severity, contract value, and strategic importance.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_fetch_declining"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks with minimal decomposition: (1) sql_gen (mid tier) to fetch publishers with declining QoQ trends across 2024 requires multi-quarter aggregation and comparison\u2014straightforward enough to avoid frontier tier but complex enough for mid. (2) cross_recon (mid tier) to reconcile SQL results with contract/state metadata and generate recommendations based on multi-signal analysis (decline severity, contract value, strategic fit). No separate policy_action needed; renewal recommendations are a reconciliation responsibility, not a governance/compliance decision. No extract needed\u2014data is already structured in SQL. No multitool_plan needed\u2014this is a standard workflow, not multi-tool orchestration."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_fetch_declining",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 479,
+      "output_tokens": 509,
+      "cached_tokens": 0,
+      "latency_ms": 3317,
+      "output": {
+        "sql": "WITH quarterly_revenue AS (SELECT publisher, fiscal_quarter, SUM(amount_usd) as quarterly_revenue FROM consumption_facts WHERE event_date >= '2024-01-01' AND event_date < '2025-01-01' AND fiscal_year = 2024 GROUP BY publisher, fiscal_quarter), qoq_metrics AS (SELECT publisher, fiscal_quarter, quarterly_revenue, LAG(quarterly_revenue) OVER (PARTITION BY publisher ORDER BY fiscal_quarter) as prev_quarter_revenue, ROUND(((quarterly_revenue - LAG(quarterly_revenue) OVER (PARTITION BY publisher ORDER BY fiscal_quarter)) / LAG(quarterly_revenue) OVER (PARTITION BY publisher ORDER BY fiscal_quarter) * 100)::numeric, 2) as qoq_growth_pct FROM quarterly_revenue), publisher_trends AS (SELECT publisher, fiscal_quarter, quarterly_revenue, prev_quarter_revenue, qoq_growth_pct, COUNT(CASE WHEN qoq_growth_pct < 0 THEN 1 END) OVER (PARTITION BY publisher) as negative_quarters, AVG(qoq_growth_pct) OVER (PARTITION BY publisher) as avg_qoq_growth FROM qoq_metrics WHERE qoq_growth_pct IS NOT NULL), declining_publishers AS (SELECT DISTINCT publisher, negative_quarters, ROUND(avg_qoq_growth::numeric, 2) as avg_qoq_growth_pct, CASE WHEN negative_quarters >= 2 AND avg_qoq_growth < -5 THEN 'reduce' WHEN negative_quarters >= 2 AND avg_qoq_growth BETWEEN -5 AND 0 THEN 'hold' WHEN negative_quarters = 1 THEN 'hold' ELSE 'expand' END as renewal_recommendation FROM publisher_trends WHERE negative_quarters >= 1) SELECT publisher, negative_quarters, avg_qoq_growth_pct, renewal_recommendation FROM declining_publishers ORDER BY avg_qoq_growth_pct ASC, negative_quarters DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 778,
+      "output_tokens": 259,
+      "cached_tokens": 0,
+      "latency_ms": 3265,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "publisher_reconciliation_pending",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_data_provided",
+            "note": "MongoDB operational state not provided in upstream_outputs. Only SQL historical query definition available. Cannot execute LEFT JOIN reconciliation without MongoDB query results."
+          }
+        ],
+        "reconciliation_status": "incomplete",
+        "required_inputs": {
+          "missing": [
+            "mongo_fetch_current_publishers - current publisher contract state from MongoDB",
+            "mongo_fetch_contract_values - operational contract values and strategic importance flags"
+          ],
+          "available": [
+            "sql_fetch_declining - historical 2024 quarterly revenue trends with renewal recommendations"
+          ]
+        },
+        "remediation": "Provide MongoDB query outputs containing: (1) current active publishers with contract status, (2) current contract values, (3) strategic importance indicators. Then reconcile against the SQL declining_publishers results using publisher as the join key."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.005097000000000001,
+  "total_latency_ms": 6582,
+  "cumulative_spend_usd": 1.2817079999999996,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

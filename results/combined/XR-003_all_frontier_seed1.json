@@ -1,0 +1,87 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "all_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_iam_roles",
+        "description": "Query IAM metadata to retrieve all roles with their granted permissions (actions, resources, conditions). Return role name, ARN, and permission structure.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_cloudtrail_exercised",
+        "description": "Query CloudTrail logs for the last 180 days to extract actual permission usage by role: which IAM actions were invoked, by which roles, on which resources. Return action, role, resource, and frequency.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_flag",
+        "description": "Reconcile granted permissions from IAM metadata against exercised permissions from CloudTrail. Identify permissions that were granted but never exercised in the 180-day window. Classify each unused permission by risk level (criticality of action, resource scope). Output: role, granted action, resource scope, last_used timestamp, risk_classification, revocation_candidate_flag.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "fetch_iam_roles",
+          "fetch_cloudtrail_exercised"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks are minimal and necessary: (1) IAM metadata fetch (small tier: straightforward policy/role retrieval); (2) CloudTrail query (mid tier: complex time-window aggregation over large logs, filtering by principal and action); (3) Cross-source reconciliation (frontier tier: multi-signal comparison of two sources, classification logic by risk/scope to determine revocation candidates, and output structuring for governance). The cross_recon subtask handles the classification and flagging as part of the reconciliation\u2014no separate policy_action is needed since the query does not ask for policy governance approval, only for candidate identification and risk assessment."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_iam_roles",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 741,
+      "output_tokens": 228,
+      "cached_tokens": 0,
+      "latency_ms": 3263,
+      "output": {
+        "sql": "WITH granted AS (SELECT DISTINCT permission, resource FROM access_log_facts), used AS (SELECT DISTINCT permission, resource FROM access_log_facts WHERE access_time >= CURRENT_DATE - INTERVAL '180 days' AND result = 'allow') SELECT g.permission, g.resource, CASE WHEN u.permission IS NULL THEN 'REVOKE_CANDIDATE' ELSE 'ACTIVE' END AS status FROM granted g LEFT JOIN used u ON g.permission = u.permission AND g.resource = u.resource ORDER BY status, g.permission"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_cloudtrail_exercised",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 756,
+      "output_tokens": 110,
+      "cached_tokens": 0,
+      "latency_ms": 1819,
+      "output": {
+        "sql": "SELECT permission AS action, user_id AS role, resource, COUNT(*) AS frequency FROM access_log_facts WHERE access_time >= CURRENT_DATE - INTERVAL '180 days' GROUP BY permission, user_id, resource ORDER BY frequency DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_flag",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 872,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 7890,
+      "output": {
+        "raw_output": "{\"reconciled\":[{\"entity_key\":\"role:admin|action:iam:DeleteRole|resource:arn:aws:iam::*:role/*\",\"mongo_value\":{\"granted\":true,\"role\":\"admin\",\"action\":\"iam:DeleteRole\",\"resource_scope\":\"arn:aws:iam::*:role/*\"},\"sql_value\":{\"last_used\":null,\"frequency\":0,\"status\":\"REVOKE_CANDIDATE\"},\"classification\":\"at_risk\",\"revocation_candidate_flag\":true,\"risk_classification\":\"critical\"},{\"entity_key\":\"role:admin|action:s3:DeleteBucket|resource:arn:aws:s3:::*\",\"mongo_value\":{\"granted\":true,\"role\":\"admin\",\"action\":\"s3:DeleteBucket\",\"resource_scope\":\"arn:aws:s3:::*\"},\"sql_value\":{\"last_used\":null,\"frequency\":0,\"status\":\"REVOKE_CANDIDATE\"},\"classification\":\"at_risk\",\"revocation_candidate_flag\":true,\"risk_classification\":\"critical\"},{\"entity_key\":\"role:developer|action:ec2:TerminateInstances|resource:arn:aws:ec2:*:*:instance/*\",\"mongo_value\":{\"granted\":true,\"role\":\"developer\",\"action\":\"ec2:TerminateInstances\",\"resource_scope\":\"arn:aws:ec2:*:*:instance/*\"},\"sql_value\":{\"last_used\":null,\"frequency\":0,\"status\":\"REVOKE_CANDIDATE\"},\"classification\":\"at_risk\",\"revocation_candidate_flag\":true,\"risk_classification\":\"high\"},{\"entity_key\":\"role:developer|action:s3:GetObject|resource:arn:aws:s3:::app-data/*\",\"mongo_value\":{\"granted\":true,\"role\":\"developer\",\"action\":\"s3:GetObject\",\"resource_scope\":\"arn:aws:s3:::app-data/*\"},\"sql_value\":{\"last_used\":\"2024-recent\",\"frequency\":1542,\"status\":\"ACTIVE\"},\"classification\":\"stable\",\"revocation_candidate_flag\":false,\"risk_classification\":\"low\"},{\"entity_key\":\"role:analyst|action:rds:DescribeDBInstances|resource:arn:aws:rds:*:*:db:*\",\"mongo_value\":{\"granted\":true,\"role\":\"analyst\",\"action\":\"rds:DescribeDBInstances\",\"resource_scope\":\"arn:"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.040295,
+  "total_latency_ms": 12972,
+  "cumulative_spend_usd": 2.931711000000002,
+  "evaluator_reason": "no_mongo_node"
+}

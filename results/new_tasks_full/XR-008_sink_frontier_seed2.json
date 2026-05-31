@@ -1,0 +1,83 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "license_query",
+        "description": "Query Datadog license allocation data including license type, quantity allocated, cost per license, and assignment dates",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "usage_metrics_query",
+        "description": "Query Datadog actual usage metrics including daily active users, metrics ingestion volume, log ingestion volume, host count, container count, and time-series data over the period",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "growth_analysis",
+        "description": "Calculate growth rates, utilization ratios (actual usage vs allocated licenses), trend analysis with month-over-month and year-over-year growth, and identify peak usage periods and patterns",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Split into two separate SQL queries (license allocation and usage metrics) because they query different data sources/tables and return distinct result sets that are then reconciled. The cross_recon subtask (mid tier) performs the analysis: it calculates utilization ratios, growth rates, trend analysis, and compares allocations against actual usage to identify gaps and patterns. This is a moderate-complexity reconciliation task requiring inference and comparative analysis. We avoid a multitool_plan because no enterprise tool registry calls are requested—this is pure data analysis. We avoid separate policy_action because no compliance/governance decisions are requested. Three subtasks minimum: two independent data retrieval tasks plus one analysis task that depends on both."
+  },
+  "node_results": [
+    {
+      "subtask_id": "license_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 697,
+      "output_tokens": 171,
+      "cached_tokens": 0,
+      "latency_ms": 2668,
+      "output": {
+        "sql": "SELECT product, event_type, event_date, SUM(amount_usd) AS total_cost, SUM(daily_active_seats) AS total_seats, COUNT(DISTINCT license_id) AS license_count, COUNT(DISTINCT user_id) AS active_users FROM consumption_facts WHERE publisher = 'Datadog' AND event_date >= '2024-01-01' GROUP BY product, event_type, event_date ORDER BY event_date DESC, product"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "usage_metrics_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 715,
+      "output_tokens": 156,
+      "cached_tokens": 0,
+      "latency_ms": 2231,
+      "output": {
+        "sql": "SELECT event_date, product, SUM(daily_active_seats) AS daily_active_users, SUM(amount_usd) AS usage_cost, COUNT(DISTINCT user_id) AS unique_users, COUNT(*) AS event_count FROM consumption_facts WHERE publisher = 'Datadog' AND event_date >= '2024-01-01' GROUP BY event_date, product ORDER BY event_date, product"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "growth_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 430,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 812,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.017735,
+  "total_latency_ms": 5711,
+  "cumulative_spend_usd": 4.93322
+}

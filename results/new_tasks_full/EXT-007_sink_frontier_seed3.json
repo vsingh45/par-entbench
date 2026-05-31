@@ -1,0 +1,54 @@
+{
+  "task_id": "EXT-007",
+  "task_class": "extract",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_vendor_form",
+        "description": "Extract company details (name, address, registration), primary contact information (name, email, phone), and banking details (account holder, account number, routing number, bank name) from vendor onboarding form",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single extraction task with straightforward field mapping from a structured form. No document inference or multi-document reconciliation needed. Small tier is sufficient for basic field extraction from a vendor form template with explicit sections.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_vendor_form",
+      "specialist": "extract",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 629,
+      "output_tokens": 187,
+      "cached_tokens": 0,
+      "latency_ms": 2487,
+      "output": {
+        "company": {
+          "name": "TechVendor Solutions Inc.",
+          "address": "999 Tech Lane, Austin, TX 78701",
+          "registration_number": "NV-987654"
+        },
+        "primary_contact": {
+          "name": "Sarah Johnson",
+          "email": "sarah.johnson@techvendor.com",
+          "phone": "(512) 555-0123"
+        },
+        "banking_details": {
+          "account_holder": "TechVendor Solutions Inc.",
+          "account_number": "4567890123",
+          "routing_number": "021000021",
+          "bank_name": "Chase Bank"
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.00782,
+  "total_latency_ms": 2487,
+  "cumulative_spend_usd": 5.602301000000008
+}

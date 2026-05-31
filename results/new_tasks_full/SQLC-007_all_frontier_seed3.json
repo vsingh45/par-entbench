@@ -1,0 +1,68 @@
+{
+  "task_id": "SQLC-007",
+  "task_class": "sql_compose",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "spend_product_analysis",
+        "description": "Query SQL data warehouse to identify top spending publishers with their spend by product category/type. Aggregate total spend and product mix (% breakdown or count by product) for each publisher.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "leverage_assessment",
+        "description": "Cross-reference top publishers' spending and product mix with contract terms, market concentration, and alternative supplier availability from MongoDB to assess negotiation leverage (e.g., switching costs, concentration risk, category dependency). Produce leverage score and assessment for each publisher.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) SQL aggregation for spend metrics and product mix needs sql_gen at mid tier due to multi-dimension grouping and percentage calculations; (2) leverage assessment requires cross_recon to synthesize spend data with contract/supply chain data from MongoDB and apply negotiation heuristics (concentration, switching costs, alternatives). Both mid tier: sql_gen for multi-table join and aggregation; cross_recon for multi-signal reconciliation without explicit policy framework. No separate policy_action needed—leverage is strategic posture assessment, not compliance/governance."
+  },
+  "node_results": [
+    {
+      "subtask_id": "spend_product_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 714,
+      "output_tokens": 332,
+      "cached_tokens": 0,
+      "latency_ms": 3904,
+      "output": {
+        "sql": "WITH publisher_totals AS (SELECT publisher, SUM(amount_usd) AS total_spend FROM consumption_facts GROUP BY publisher), publisher_product AS (SELECT publisher, product, SUM(amount_usd) AS product_spend, COUNT(*) AS event_count FROM consumption_facts GROUP BY publisher, product) SELECT pp.publisher, pt.total_spend, pp.product, pp.product_spend, pp.event_count, ROUND(100.0 * pp.product_spend / NULLIF(pt.total_spend, 0), 2) AS product_pct FROM publisher_product pp JOIN publisher_totals pt ON pp.publisher = pt.publisher WHERE pt.publisher IN (SELECT publisher FROM publisher_totals ORDER BY total_spend DESC LIMIT 10) ORDER BY pt.total_spend DESC, pp.product_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "leverage_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 451,
+      "output_tokens": 59,
+      "cached_tokens": 0,
+      "latency_ms": 1328,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "NO_DATA",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0156,
+  "total_latency_ms": 5232,
+  "cumulative_spend_usd": 1.2588240000000004
+}

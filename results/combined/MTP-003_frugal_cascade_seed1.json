@@ -1,0 +1,208 @@
+{
+  "task_id": "MTP-003",
+  "task_class": "multitool_plan",
+  "router": "frugal_cascade",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_adobe_licenses",
+        "description": "Query MongoDB for Adobe license data including product SKUs, license counts, contract dates, renewal terms, and cost allocations",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_adobe_q4_usage",
+        "description": "Query Snowflake for Q4 Adobe usage metrics including consumptions, active users, product usage breakdown, and spend attribution",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_adobe_posture",
+        "description": "Reconcile MongoDB license inventory with Snowflake Q4 usage; classify renewal posture, identify over/under-provisioning, generate summary with recommendations for #sam-team posting",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "mongo_adobe_licenses",
+          "sql_adobe_q4_usage"
+        ]
+      },
+      {
+        "id": "post_to_slack",
+        "description": "Post reconciliation summary and recommendations to #sam-team Slack channel",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "reconcile_adobe_posture"
+        ]
+      }
+    ],
+    "cost_rationale": "Four subtasks (minimum required): mongo_query and sql_gen run in parallel to fetch data from distinct sources (2 small tasks\u2014simple single-query retrieval). cross_recon is mid-tier because it must correlate two independent datasets, classify renewal posture, and synthesize recommendations\u2014requiring moderate reasoning. multitool_plan is small and invokes a single Slack post action from the enterprise registry. Total tool calls: 2 (mongo+sql fetch) + 1 (cross_recon) + 1 (slack post) = 4 calls, well under the 6-call budget. Tier assignments are minimal: mongo and sql queries are straightforward lookups, cross_recon deserves mid-tier for multi-signal synthesis, and slack post is small. No policy_action needed\u2014posture classification is part of cross_recon reconciliation logic, not governance approval."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_adobe_licenses",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1236,
+      "output_tokens": 76,
+      "cached_tokens": 0,
+      "latency_ms": 1248,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Adobe"
+            }
+          },
+          {
+            "$sort": {
+              "term_start": -1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_adobe_q4_usage",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 484,
+      "output_tokens": 190,
+      "cached_tokens": 0,
+      "latency_ms": 1566,
+      "output": {
+        "sql": "SELECT cf.fiscal_quarter, cf.publisher, cf.product, COUNT(DISTINCT cf.user_id) as active_users, SUM(cf.daily_active_seats) as total_active_seats, SUM(cf.amount_usd) as total_spend_usd, cf.event_type, COUNT(DISTINCT cf.event_id) as event_count FROM consumption_facts cf WHERE cf.publisher = 'Adobe' AND cf.fiscal_quarter = 4 AND cf.event_date >= '2024-10-01' AND cf.event_date <= '2024-12-31' GROUP BY cf.fiscal_quarter, cf.publisher, cf.product, cf.event_type ORDER BY cf.product, cf.event_type"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_adobe_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 525,
+      "output_tokens": 602,
+      "cached_tokens": 0,
+      "latency_ms": 4305,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "Adobe_Creative_Cloud",
+            "mongo_value": {
+              "collection": "sam_licenses",
+              "publisher": "Adobe",
+              "product": "Creative Cloud",
+              "licensed_seats": null,
+              "term_start": null
+            },
+            "sql_value": {
+              "fiscal_quarter": 4,
+              "active_users": null,
+              "total_active_seats": null,
+              "total_spend_usd": null,
+              "event_count": null
+            },
+            "classification": "no_data_available",
+            "note": "MongoDB pipeline and SQL query executed but no result data provided"
+          },
+          {
+            "entity_key": "Adobe_Document_Cloud",
+            "mongo_value": {
+              "collection": "sam_licenses",
+              "publisher": "Adobe",
+              "product": "Document Cloud",
+              "licensed_seats": null,
+              "term_start": null
+            },
+            "sql_value": {
+              "fiscal_quarter": 4,
+              "active_users": null,
+              "total_active_seats": null,
+              "total_spend_usd": null,
+              "event_count": null
+            },
+            "classification": "no_data_available",
+            "note": "MongoDB pipeline and SQL query executed but no result data provided"
+          }
+        ],
+        "summary": {
+          "total_mongo_entities": 0,
+          "total_sql_records": 0,
+          "matched_products": 0,
+          "over_provisioned": [],
+          "under_provisioned": [],
+          "renewal_posture": "unable_to_assess",
+          "recommendations": [
+            "Execute MongoDB aggregation pipeline against sam_licenses collection to retrieve Adobe license inventory",
+            "Execute Snowflake SQL query against consumption_facts table for Q4 2024 Adobe usage metrics",
+            "Compare licensed_seats (Mongo) vs total_active_seats (SQL) for provisioning analysis",
+            "Identify products where active_seats > licensed_seats (under-provisioning risk)",
+            "Identify products where licensed_seats > active_seats * 1.3 (over-provisioning opportunity)",
+            "Post reconciliation summary and renewal recommendations to #sam-team Slack channel"
+          ]
+        },
+        "error": "No upstream result data provided. Please supply actual MongoDB query results and SQL query results to perform reconciliation."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "post_to_slack",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 927,
+      "output_tokens": 451,
+      "cached_tokens": 0,
+      "latency_ms": 3821,
+      "output": {
+        "plan": [
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "sam_licenses",
+              "filter": {
+                "publisher": "Adobe"
+              }
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "sql.snowflake.query",
+            "arguments": {
+              "query": "SELECT fiscal_quarter, product, active_users, total_active_seats, total_spend_usd, event_count FROM consumption_facts WHERE publisher = 'Adobe' AND fiscal_quarter = 4"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#sam-team",
+              "message": "\ud83d\udd04 **Adobe License Reconciliation Summary - Q4 2024**\n\n**Inventory Status:**\nMongo Records: $1.count\nSnowflake Records: $2.count\n\n**Key Findings:**\n\u2022 Licensed vs Active Seats comparison pending data population\n\u2022 Over-provisioned products: Awaiting seat analysis\n\u2022 Under-provisioned products: Awaiting seat analysis\n\n**Recommendations:**\n1. Review products where active_seats exceed licensed_seats (under-provisioning risk)\n2. Identify over-provisioned licenses (licensed_seats > active_seats \u00d7 1.3) for cost optimization\n3. Assess renewal terms and pricing for Q1 2025 budget planning\n4. Execute monthly reconciliation cadence for Adobe Creative Cloud and Document Cloud portfolios\n5. Establish alerting for usage trending above 85% of licensed capacity\n\n**Next Steps:** Engineering team to validate data quality and execute detailed product-level analysis"
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.009767,
+  "total_latency_ms": 10940,
+  "cumulative_spend_usd": 4.694495000000003,
+  "evaluator_reason": "ok"
+}

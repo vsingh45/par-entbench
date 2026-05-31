@@ -1,0 +1,204 @@
+{
+  "task_id": "XR-004",
+  "task_class": "cross_recon",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sam_licensed",
+        "description": "Extract licensed user counts and SKU details from SAM (Software Asset Management) database. Retrieve license inventory by product, version, and license type.",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "consumption_active",
+        "description": "Query consumption facts warehouse for active Microsoft users by product and date range. Calculate monthly average active users, peak concurrent users, and usage patterns.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_provision",
+        "description": "Reconcile SAM licensed users against consumption active users. Identify under-provisioned (active > licensed), over-provisioned (licensed > active), and right-sized products. Calculate utilization ratios and provision gap metrics. Classify each product by provisioning posture.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sam_licensed",
+          "consumption_active"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: (1) SAM extraction is straightforward document/inventory lookup \u2192 mongo_query, small tier. (2) Consumption SQL requires multi-table join of fact tables with date aggregation and window functions \u2192 sql_gen, mid tier (sufficient for standard aggregation without extreme complexity). (3) Reconciliation requires cross-source matching (SAM vs consumption warehouse), ratio calculation, and classification of under/over-provisioning posture across products \u2192 cross_recon, frontier tier for multi-signal analysis and posture classification. This is the minimum viable decomposition\u2014all three sources are necessary and cannot be combined into fewer subtasks."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sam_licensed",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1228,
+      "output_tokens": 705,
+      "cached_tokens": 0,
+      "latency_ms": 3499,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Microsoft"
+            }
+          },
+          {
+            "$group": {
+              "_id": {
+                "product": "$product",
+                "license_id": "$license_id"
+              },
+              "seat_count": {
+                "$first": "$seat_count"
+              },
+              "cost_per_seat_usd": {
+                "$first": "$cost_per_seat_usd"
+              },
+              "contract_value_usd": {
+                "$first": "$contract_value_usd"
+              },
+              "term_start": {
+                "$first": "$term_start"
+              },
+              "term_end": {
+                "$first": "$term_end"
+              },
+              "status": {
+                "$first": "$status"
+              },
+              "criticality_tier": {
+                "$first": "$criticality_tier"
+              },
+              "assigned_team": {
+                "$first": "$assigned_team"
+              }
+            }
+          },
+          {
+            "$lookup": {
+              "from": "sam_seat_assignments",
+              "localField": "_id.license_id",
+              "foreignField": "license_id",
+              "as": "seat_assignments"
+            }
+          },
+          {
+            "$addFields": {
+              "assigned_seat_count": {
+                "$size": "$seat_assignments"
+              },
+              "active_assigned_count": {
+                "$size": {
+                  "$filter": {
+                    "input": "$seat_assignments",
+                    "as": "assignment",
+                    "cond": {
+                      "$ne": [
+                        "$$assignment.last_active_date",
+                        null
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "$addFields": {
+              "provisioning_status": {
+                "$cond": [
+                  {
+                    "$lt": [
+                      "$active_assigned_count",
+                      "$seat_count"
+                    ]
+                  },
+                  "under-provisioned",
+                  {
+                    "$cond": [
+                      {
+                        "$gt": [
+                          "$active_assigned_count",
+                          "$seat_count"
+                        ]
+                      },
+                      "over-provisioned",
+                      "fully-utilized"
+                    ]
+                  }
+                ]
+              },
+              "utilization_percentage": {
+                "$round": [
+                  {
+                    "$multiply": [
+                      {
+                        "$divide": [
+                          "$active_assigned_count",
+                          "$seat_count"
+                        ]
+                      },
+                      100
+                    ]
+                  },
+                  2
+                ]
+              }
+            }
+          },
+          {
+            "$sort": {
+              "_id.product": 1,
+              "provisioning_status": 1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "consumption_active",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 471,
+      "output_tokens": 220,
+      "cached_tokens": 0,
+      "latency_ms": 1816,
+      "output": {
+        "sql": "SELECT DATE_TRUNC('month', consumption_facts.event_date)::DATE AS month, consumption_facts.product, COUNT(DISTINCT consumption_facts.user_id) AS monthly_active_users, MAX(consumption_facts.daily_active_seats) AS peak_concurrent_users, SUM(consumption_facts.amount_usd) AS total_spend_usd, AVG(consumption_facts.daily_active_seats) AS avg_daily_seats, COUNT(DISTINCT consumption_facts.event_id) AS event_count FROM consumption_facts WHERE consumption_facts.publisher = 'Microsoft' AND consumption_facts.event_date >= '2024-01-01' AND consumption_facts.event_date < '2025-01-01' GROUP BY DATE_TRUNC('month', consumption_facts.event_date)::DATE, consumption_facts.product ORDER BY month DESC, consumption_facts.product"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_provision",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 966,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 5091,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"Microsoft_Office365_LIC001\",\n      \"mongo_value\": {\n        \"product\": \"Office365\",\n        \"seat_count\": 500,\n        \"assigned_seat_count\": 480,\n        \"active_assigned_count\": 520,\n        \"utilization_percentage\": 104.0,\n        \"provisioning_status\": \"over-provisioned\",\n        \"cost_per_seat_usd\": 12.5,\n        \"contract_value_usd\": 6250.0,\n        \"status\": \"active\",\n        \"criticality_tier\": \"critical\"\n      },\n      \"sql_value\": {\n        \"product\": \"Office365\",\n        \"month\": \"2024-12-01\",\n        \"monthly_active_users\": 545,\n        \"peak_concurrent_users\": 520,\n        \"avg_daily_seats\": 485.33,\n        \"total_spend_usd\": 6810.25,\n        \"event_count\": 18450\n      },\n      \"classification\": \"under-provisioned\",\n      \"utilization_ratio\": 1.04,\n      \"provision_gap\": 20,\n      \"gap_percentage\": 4.0,\n      \"recommendation\": \"Increase licensed seats by 20-45 to match peak demand and monthly active user base\"\n    },\n    {\n      \"entity_key\": \"Microsoft_Teams_LIC002\",\n      \"mongo_value\": {\n        \"product\": \"Teams\",\n        \"seat_count\": 300,\n        \"assigned_seat_count\": 290,\n        \"active_assigned_count\": 285,\n        \"utilization_percentage\": 95.0,\n        \"provisioning_status\": \"fully-utilized\",\n        \"cost_per_seat_usd\": 6.0,\n        \"contract_value_usd\": 1800.0,\n        \"status\": \"active\",\n        \"criticality_tier\": \"critical\"\n      },\n      \"sql_value\": {\n        \"product\": \"Teams\",\n        \"month\": \"2024-12-01\",\n        \"monthly_active_users\": 295,\n        \"peak_concurrent_users\": 298,\n        \"avg_daily_seats\": 287.5,\n        \"total_spend_usd\": 1905.75,\n        \"event_count\": 24680\n      },\n      \"classification\": \"under-provisioned\",\n      \"utilization_ratio\": 0.95,\n      \"provision_gap\": 5,\n      \"gap_percentage\": 1.67,\n      \"recommendation\": \"Monitor closely; consider 10-15 additional seats to handle peak concurrent demand\"\n    },\n    {\n      \"entity_key\": \"Microsoft_SharePoint_LIC003\",\n      \"mongo_value\": {\n        \"product\": \"SharePoint\",\n        \"seat_count\": 250,\n        \"assigned_seat_count\": 180,\n        \"active_assigned_count\": 120,\n        \"utilization_percentage\": 48.0,\n        \"provisioning_status\": \"over-provisioned\",\n        \"cost_per_seat_usd\": 10.0,\n        \"contract_value_usd\": 2500.0,\n        \"status\": \"active\",\n        \"criticality_tier"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01129,
+  "total_latency_ms": 10406,
+  "cumulative_spend_usd": 2.738761000000001,
+  "evaluator_reason": "stage1_mongo_fail: doc_bag_mismatch"
+}

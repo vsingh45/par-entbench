@@ -1,0 +1,275 @@
+{
+  "task_id": "MTP-008",
+  "task_class": "multitool_plan",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "retrieve_jira_requirements",
+        "description": "Retrieve project requirements and open issues from Jira using the enterprise tool registry",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "check_calendar_availability",
+        "description": "Query team member availability from calendar API (Google Calendar, Outlook, or equivalent) to identify common meeting windows",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "schedule_and_share",
+        "description": "Schedule the standup meeting at an available time slot and share the agenda via Slack, coordinating the Jira requirements with calendar booking and messaging tools",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "retrieve_jira_requirements",
+          "check_calendar_availability"
+        ]
+      }
+    ],
+    "cost_rationale": "This workflow requires multi-tool orchestration from the enterprise registry (Jira, Calendar API, Slack), making multitool_plan the appropriate specialist. Decomposed into 3 subtasks: (1) retrieve Jira requirements independently, (2) check calendar availability independently (can run in parallel with step 1), (3) synthesize both outputs to schedule the meeting and broadcast via Slack. Each subtask is mid-tier because they involve tool-call sequencing and parameter mapping from the registry, but no complex inference or reconciliation. The 3-subtask count is minimal\u2014combining all steps into one subtask would require sequential tool calls in a single plan, which is unnecessarily constrained; separating retrieval steps allows parallel execution before the final scheduling step."
+  },
+  "node_results": [
+    {
+      "subtask_id": "retrieve_jira_requirements",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 444,
+      "output_tokens": 518,
+      "cached_tokens": 0,
+      "latency_ms": 3992,
+      "output": {
+        "plan": [
+          {
+            "tool": "jira.list_tickets",
+            "arguments": {
+              "project": "requirements",
+              "status": "open",
+              "limit": 100
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "jira.list_tickets",
+            "arguments": {
+              "project": "issues",
+              "status": "open",
+              "limit": 100
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "timeframe": "next_7_days",
+              "team": "cross-team"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.create_event",
+            "arguments": {
+              "title": "Cross-Team Standup Meeting",
+              "duration_minutes": 30,
+              "attendees": [
+                "team@enterprise.com"
+              ],
+              "description": "Project requirements review and issue tracking standup"
+            },
+            "depends_on": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#cross-team-collaboration",
+              "message": "\ud83d\udccb **Standup Meeting Scheduled**\n\n**Requirements**: $1.results\n\n**Open Issues**: $2.results\n\n**Team Calendar**: $3.results\n\n**Meeting Details**: $4.results\n\nPlease review and confirm attendance."
+            },
+            "depends_on": [
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "cross_team_collaboration_orchestrated",
+              "resource": "jira_requirements_calendar_slack",
+              "details": "Retrieved project requirements and issues, checked team availability, scheduled standup, and shared agenda"
+            },
+            "depends_on": [
+              4,
+              5
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "check_calendar_availability",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 450,
+      "output_tokens": 476,
+      "cached_tokens": 0,
+      "latency_ms": 3583,
+      "output": {
+        "plan": [
+          {
+            "tool": "jira.list_tickets",
+            "arguments": {
+              "project": "all",
+              "status": "open",
+              "limit": 50
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "time_min": "now",
+              "time_max": "+7days",
+              "show_deleted": false
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.create_event",
+            "arguments": {
+              "title": "Cross-Team Standup",
+              "description": "Discussing project requirements and team collaboration. Requirements: $1.results",
+              "duration_minutes": 60,
+              "attendees": []
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "create_event",
+              "resource": "calendar_event",
+              "resource_id": "$3.event_id",
+              "details": "Standup meeting created for cross-team collaboration"
+            },
+            "depends_on": [
+              3
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#team",
+              "message": "\ud83d\udcc5 Cross-Team Standup scheduled!\n\n**Project Requirements:**\n$1.results\n\n**Meeting Details:**\nTime: $3.start_time\nDuration: 60 minutes\nAttendees: Team members\n\n**Agenda:**\n\u2022 Review project requirements\n\u2022 Identify collaboration opportunities\n\u2022 Discuss blockers and dependencies"
+            },
+            "depends_on": [
+              3
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "schedule_and_share",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1224,
+      "output_tokens": 571,
+      "cached_tokens": 0,
+      "latency_ms": 3136,
+      "output": {
+        "plan": [
+          {
+            "tool": "jira.list_tickets",
+            "arguments": {
+              "project": "requirements",
+              "status": "open",
+              "limit": 100
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "jira.list_tickets",
+            "arguments": {
+              "project": "issues",
+              "status": "open",
+              "limit": 100
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "timeframe": "next_7_days",
+              "team": "cross-team"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.create_event",
+            "arguments": {
+              "title": "Cross-Team Standup Meeting",
+              "duration_minutes": 30,
+              "attendees": [
+                "team@enterprise.com"
+              ],
+              "description": "Project requirements review and issue tracking standup\n\nRequirements: $1.results\n\nOpen Issues: $2.results"
+            },
+            "depends_on": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "calendar_event_created",
+              "resource": "calendar_event",
+              "resource_id": "$4.event_id",
+              "details": "Cross-team standup meeting scheduled"
+            },
+            "depends_on": [
+              4
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#cross-team-collaboration",
+              "message": "\ud83d\udccb **Standup Meeting Scheduled**\n\n**Requirements**: $1.results\n\n**Open Issues**: $2.results\n\n**Meeting Details**: $4.event_link\nTime: $4.start_time\nDuration: 30 minutes\n\n**Agenda**:\n\u2022 Review project requirements\n\u2022 Discuss open issues\n\u2022 Identify blockers and dependencies\n\u2022 Collaboration opportunities\n\nPlease confirm attendance."
+            },
+            "depends_on": [
+              4,
+              5
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009943,
+  "total_latency_ms": 10711,
+  "cumulative_spend_usd": 8.062089000000004,
+  "evaluator_reason": "missing_tools: {'slack.messages.post', 'calendar.events.create', 'calendar.availability.check', 'jira.issue.get'}"
+}

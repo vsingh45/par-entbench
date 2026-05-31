@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "par_lite",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_1",
+        "description": "Query publishers with quarterly performance metrics in 2024, calculating quarter-over-quarter trend direction (declining vs stable/growing). Return publisher ID, name, and trend classification.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_1",
+        "description": "For each publisher with declining trend, reconcile historical performance, current contract status, and market context. Generate renewal recommendation (hold/expand/reduce) based on trend severity, contract value at risk, and strategic importance.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_1"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks minimum: (1) sql_gen retrieves declining publishers with quarterly trend analysis\u2014a mid-tier task requiring multi-quarter aggregation and trend comparison logic within a single query. (2) cross_recon generates the renewal recommendations by analyzing the sql_gen output alongside contract/performance context. Cross_recon is appropriate here because it synthesizes multi-signal data (trend severity, contract impact, strategic value) into a classification decision\u2014recommendation generation is core to its scope and avoids an unnecessary separate specialist. Both tasks are mid-tier: the SQL requires conditional aggregation and comparison across quarters; the reconciliation requires weighted reasoning across multiple signals but not frontier-level complexity like inference or multi-source temporal alignment. Cost is optimized by avoiding redundant specialists; the recommendation logic is part of cross_recon's analytical scope."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 476,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10064,
+      "output": {
+        "raw_output": "{\"sql\": \"WITH quarterly_metrics AS (\\n  SELECT\\n    publisher,\\n    fiscal_quarter,\\n    SUM(amount_usd) AS total_revenue,\\n    SUM(daily_active_seats) AS total_seats,\\n    COUNT(DISTINCT user_id) AS active_users\\n  FROM consumption_facts\\n  WHERE event_date >= '2024-01-01' AND event_date < '2025-01-01'\\n  GROUP BY publisher, fiscal_quarter\\n),\\nquarter_over_quarter AS (\\n  SELECT\\n    q1.publisher,\\n    q1.fiscal_quarter AS current_quarter,\\n    q1.total_revenue AS current_revenue,\\n    q2.total_revenue AS prev_revenue,\\n    q1.total_seats AS current_seats,\\n    q2.total_seats AS prev_seats,\\n    q1.active_users AS current_users,\\n    q2.active_users AS prev_users,\\n    CASE\\n      WHEN q2.total_revenue IS NULL THEN 0\\n      ELSE ROUND(((q1.total_revenue - q2.total_revenue) / NULLIF(q2.total_revenue, 0)) * 100, 2)\\n    END AS revenue_growth_pct,\\n    CASE\\n      WHEN q2.total_seats IS NULL THEN 0\\n      ELSE ROUND(((q1.total_seats - q2.total_seats) / NULLIF(q2.total_seats::NUMERIC, 0)) * 100, 2)\\n    END AS seat_growth_pct\\n  FROM quarterly_metrics q1\\n  LEFT JOIN quarterly_metrics q2\\n    ON q1.publisher = q2.publisher AND q1.fiscal_quarter = q2.fiscal_quarter + 1\\n),\\npublisher_trend AS (\\n  SELECT\\n    publisher,\\n    COUNT(*) AS quarters_compared,\\n    SUM(CASE WHEN revenue_growth_pct < -5 THEN 1 ELSE 0 END) AS declining_revenue_quarters,\\n    SUM(CASE WHEN seat_growth_pct < -5 THEN 1 ELSE 0 END) AS declining_seat_quarters,\\n    AVG(revenue_growth_pct) AS avg_revenue_growth,\\n    AVG(seat_growth_pct) AS avg_seat_growth,\\n    MAX(current_revenue) AS max_quarterly_revenue,\\n    MIN(current_revenue) AS min_quarterly_revenue\\n  FROM quarter_over_quarter\\n  WHERE prev_revenue IS NOT NULL\\n  GROUP BY publisher\\n),\\ntrend_classification AS (\\n  SELECT\\n    publisher,\\n    avg_revenue_growth,\\n    avg_seat_growth,\\n    declining_revenue_quarters,\\n    declining_seat_quarters,\\n    quarters_compared,\\n    max_quarterly_revenue,\\n    min_quarterly_revenue,\\n    CASE\\n      WHEN avg_revenue_growth < -10 OR (declining_revenue_quarters >= 2 AND declining_seat_quarters >= 2) THEN 'declining'\\n      WHEN avg_revenue_growth >= 5 AND avg_seat_growth"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_1",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1098,
+      "output_tokens": 390,
+      "cached_tokens": 0,
+      "latency_ms": 9321,
+      "output": {
+        "raw_output": "I need to work with what's available. The SQL output is truncated (incomplete query result), and there's no MongoDB output provided. I'll apply LEFT JOIN semantics with MongoDB as primary \u2014 since MongoDB output is missing/empty, I'll reconcile based on the SQL partial data with nulls for missing fields, and classify based on available signals.\n\n```json\n{\"reconciled\": [{\"entity_key\": \"sql_output_truncated\", \"mongo_value\": null, \"sql_value\": {\"status\": \"incomplete\", \"raw_output_truncated\": true, \"query_stage_reached\": \"trend_classification_partial\", \"parsed_fields\": {\"quarterly_metrics\": \"defined\", \"quarter_over_quarter\": \"defined\", \"publisher_trend\": \"defined\", \"trend_classification\": \"partial_incomplete\"}, \"available_signals\": {\"declining_threshold_revenue\": -10, \"declining_threshold_seats\": -5, \"declining_quarters_trigger\": 2, \"period\": \"2024-01-01_to_2025-01-01\"}}, \"classification\": \"no_recent_activity\", \"reconciliation_notes\": {\"mongo_source\": \"absent_no_primary_records_to_reconcile\", \"sql_source\": \"truncated_query_result_unusable_for_publisher_level_metrics\", \"left_join_result\": \"zero_rows_emitted_mongo_is_primary_and_empty\", \"recommendation\": \"hold_pending_data_resubmission\"}, \"renewal_recommendation\": null, \"data_quality_flags\": [\"mongo_output_missing\", \"sql_output_truncated_mid_cte\", \"no_publisher_entities_resolved\", \"reconciliation_incomplete\"]}]}"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.022572000000000002,
+  "total_latency_ms": 19385,
+  "cumulative_spend_usd": 1.3331059999999997,
+  "evaluator_reason": "step1_sql_fail: no_sql_in_output"
+}

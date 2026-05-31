@@ -1,0 +1,121 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_license_metrics",
+        "description": "Query Datadog license allocation records including license type, quantity allocated, start/end dates, and contract terms. Retrieve historical snapshots to enable trend analysis over time.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_usage_metrics",
+        "description": "Query Datadog actual usage metrics including daily/monthly active users, hosts monitored, custom metrics ingested, logs ingested, and API call volumes. Aggregate by time period to detect growth patterns and seasonal trends.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_analysis",
+        "description": "Reconcile license allocations against actual usage metrics. Calculate utilization ratios, identify over-provisioned vs. under-provisioned segments. Classify growth patterns (flat, linear, exponential). Detect anomalies and generate trend recommendations (e.g., right-sizing, capacity planning, optimization opportunities).",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_license_metrics",
+          "sql_usage_metrics"
+        ]
+      }
+    ],
+    "cost_rationale": "Plan uses 2 SQL queries + 1 cross-recon: (1) sql_license_metrics is mid-tier due to multi-table joins across license allocation, contract, and temporal tables; (2) sql_usage_metrics is mid-tier for aggregating usage from multiple metric types across time periods; (3) cross_recon is frontier-tier because it must reconcile two complex sources, compute derived metrics (utilization ratios), perform trend classification via growth pattern analysis, and generate business recommendations. All three subtasks are necessary and cannot be combined because they pull from different source systems and the reconciliation requires outputs from both upstream queries. No policy_action is needed since this is analytical trend analysis, not compliance or governance approval."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_license_metrics",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 469,
+      "output_tokens": 491,
+      "cached_tokens": 0,
+      "latency_ms": 9602,
+      "output": {
+        "sql": "SELECT cf.license_id, cf.product, cf.event_type, cf.event_date, cf.amount_usd, cf.daily_active_seats, cf.user_id, cf.fiscal_year, cf.fiscal_quarter, inf.contract_id, inf.invoice_date, inf.due_date, inf.paid_date, inf.amount_usd AS invoice_amount_usd, inf.status AS invoice_status, SUM(cf.daily_active_seats) OVER (PARTITION BY cf.license_id ORDER BY cf.event_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumulative_seats, AVG(cf.daily_active_seats) OVER (PARTITION BY cf.license_id, cf.fiscal_year, cf.fiscal_quarter) AS avg_seats_per_quarter, SUM(cf.amount_usd) OVER (PARTITION BY cf.license_id ORDER BY cf.event_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumulative_spend, LAG(cf.daily_active_seats, 1) OVER (PARTITION BY cf.license_id ORDER BY cf.event_date) AS prev_day_seats, cf.daily_active_seats - LAG(cf.daily_active_seats, 1) OVER (PARTITION BY cf.license_id ORDER BY cf.event_date) AS seat_growth, ROUND(100.0 * (cf.daily_active_seats - LAG(cf.daily_active_seats, 1) OVER (PARTITION BY cf.license_id ORDER BY cf.event_date)) / NULLIF(LAG(cf.daily_active_seats, 1) OVER (PARTITION BY cf.license_id ORDER BY cf.event_date), 0), 2) AS seat_growth_pct FROM consumption_facts cf LEFT JOIN invoice_facts inf ON cf.license_id::TEXT = inf.contract_id WHERE cf.publisher ILIKE '%Datadog%' ORDER BY cf.license_id, cf.event_date"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_usage_metrics",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 479,
+      "output_tokens": 534,
+      "cached_tokens": 0,
+      "latency_ms": 6985,
+      "output": {
+        "sql": "SELECT fiscal_year, fiscal_quarter, publisher, product, SUM(amount_usd) AS total_amount_usd, SUM(daily_active_seats) AS total_daily_active_seats, AVG(daily_active_seats) AS avg_daily_active_seats, COUNT(DISTINCT user_id) AS distinct_users, COUNT(DISTINCT license_id) AS distinct_licenses, COUNT(event_id) AS total_events, MIN(event_date) AS period_start, MAX(event_date) AS period_end, SUM(CASE WHEN event_type = 'usage' THEN amount_usd ELSE 0 END) AS usage_amount_usd, SUM(CASE WHEN event_type = 'overage' THEN amount_usd ELSE 0 END) AS overage_amount_usd, SUM(CASE WHEN event_type = 'license' THEN amount_usd ELSE 0 END) AS license_amount_usd, MAX(daily_active_seats) AS peak_daily_active_seats, MIN(daily_active_seats) AS min_daily_active_seats, ROUND(AVG(amount_usd), 2) AS avg_event_amount_usd, LAG(SUM(daily_active_seats)) OVER (PARTITION BY publisher, product ORDER BY fiscal_year, fiscal_quarter) AS prev_quarter_seats, SUM(daily_active_seats) - LAG(SUM(daily_active_seats)) OVER (PARTITION BY publisher, product ORDER BY fiscal_year, fiscal_quarter) AS seat_growth_qoq, ROUND(100.0 * (SUM(daily_active_seats) - LAG(SUM(daily_active_seats)) OVER (PARTITION BY publisher, product ORDER BY fiscal_year, fiscal_quarter)) / NULLIF(LAG(SUM(daily_active_seats)) OVER (PARTITION BY publisher, product ORDER BY fiscal_year, fiscal_quarter), 0), 2) AS seat_growth_pct_qoq FROM consumption_facts WHERE LOWER(publisher) LIKE '%datadog%' GROUP BY fiscal_year, fiscal_quarter, publisher, product ORDER BY publisher, product, fiscal_year, fiscal_quarter"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 2064,
+      "output_tokens": 320,
+      "cached_tokens": 0,
+      "latency_ms": 4025,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "Datadog APM",
+            "mongo_value": null,
+            "sql_value": {
+              "total_daily_active_seats": 1200,
+              "avg_daily_active_seats": 40,
+              "peak_daily_active_seats": 75,
+              "seat_growth_pct_qoq": 12.5
+            },
+            "classification": "linear_growth"
+          },
+          {
+            "entity_key": "Datadog Infrastructure",
+            "mongo_value": null,
+            "sql_value": {
+              "total_daily_active_seats": 2400,
+              "avg_daily_active_seats": 80,
+              "peak_daily_active_seats": 120,
+              "seat_growth_pct_qoq": 35.0
+            },
+            "classification": "expand"
+          },
+          {
+            "entity_key": "Datadog Logs",
+            "mongo_value": null,
+            "sql_value": {
+              "total_daily_active_seats": 800,
+              "avg_daily_active_seats": 26.7,
+              "peak_daily_active_seats": 50,
+              "seat_growth_pct_qoq": 2.1
+            },
+            "classification": "flat"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.036539,
+  "total_latency_ms": 20612,
+  "cumulative_spend_usd": 4.784061000000001,
+  "evaluator_reason": "no_mongo_node"
+}

@@ -1,0 +1,94 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "iam_granted_perms",
+        "description": "Query IAM role registry to fetch all IAM roles and their explicitly granted permissions (policy documents, attached managed policies, inline policies). Return role ID, role name, and granular permission list.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "iam_exercised_perms",
+        "description": "Query CloudTrail/audit logs to extract permissions actually exercised by each IAM role in the last 180 days. Aggregate by role ID and action/resource pairs. Return role ID and list of used permissions.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_flag",
+        "description": "Reconcile granted permissions (from iam_granted_perms) against exercised permissions (from iam_exercised_perms). Identify permission gaps: granted permissions never used in 180 days. Classify each role by elevation level and flag unused permissions as revocation candidates. Output: role ID, elevation level, granted permissions, exercised permissions, unused permissions, and recommendation.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "iam_granted_perms",
+          "iam_exercised_perms"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: (1) IAM-policy query for granted permissions (mid tier: multi-table join across policy documents and role metadata); (2) Audit log query for exercised permissions in 180-day window with aggregation (mid tier: large-scale filtering and grouping); (3) Cross-reconciliation with elevated-permission classification and unused-permission detection (frontier tier: multi-signal comparison, elevation classification logic, and revocation recommendation generation require high capability to avoid false positives/negatives on security-sensitive decisions). Minimum decomposition: the two queries cannot be combined (different sources and aggregation strategies), and the reconciliation logic (comparing two sets and flagging candidates) requires cross_recon's inference capability to classify elevation and produce accurate recommendations."
+  },
+  "node_results": [
+    {
+      "subtask_id": "iam_granted_perms",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 495,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 11477,
+      "output": {
+        "raw_output": "{\"sql\": \"SELECT\\n    alr.permission AS granted_permission,\\n    alr.user_id AS role_id,\\n    COUNT(*) AS total_grants,\\n    SUM(CASE WHEN alr.result = 'ALLOW' THEN 1 ELSE 0 END) AS total_allowed,\\n    SUM(CASE WHEN alr.result = 'DENY' THEN 1 ELSE 0 END) AS total_denied,\\n    exercised.permission AS exercised_permission,\\n    exercised.last_used,\\n    exercised.use_count,\\n    CASE\\n        WHEN exercised.permission IS NULL THEN 'NEVER_USED - CANDIDATE FOR REVOCATION'\\n        WHEN exercised.last_used < NOW() - INTERVAL '180 days' THEN 'STALE (>180 days) - CANDIDATE FOR REVOCATION'\\n        WHEN exercised.use_count < 3 THEN 'RARELY_USED - REVIEW RECOMMENDED'\\n        ELSE 'ACTIVE - RETAIN'\\n    END AS revocation_recommendation\\nFROM (\\n    SELECT DISTINCT\\n        user_id,\\n        permission\\n    FROM access_log_facts\\n    WHERE action IN ('GRANT', 'ASSIGN', 'ATTACH', 'PUT_POLICY', 'CREATE_ROLE', 'ASSUME_ROLE')\\n       OR result IN ('ALLOW', 'DENY')\\n) alr\\nLEFT JOIN (\\n    SELECT\\n        user_id,\\n        permission,\\n        MAX(access_time) AS last_used,\\n        COUNT(*) AS use_count\\n    FROM access_log_facts\\n    WHERE access_time >= NOW() - INTERVAL '180 days'\\n      AND action NOT IN ('GRANT', 'ASSIGN', 'ATTACH', 'PUT_POLICY')\\n      AND result = 'ALLOW'\\n    GROUP BY user_id, permission\\n) exercised\\n    ON alr.user_id = exercised.user_id\\n    AND alr.permission = exercised.permission\\nWHERE alr.user_id IN (\\n    SELECT user_id\\n    FROM access_log_facts\\n    WHERE permission IN (\\n        'admin', 'root', 'superuser', 'iam:*', 's3:*', 'ec2:*',\\n        'sts:AssumeRole', 'iam:PassRole', 'iam:CreateRole',\\n        'iam:AttachRolePolicy', 'iam:PutUserPolicy', 'iam:CreateUser',\\n        'iam:CreateAccessKey', 'lambda:InvokeFunction', 'kms:Decrypt',\\n        'secretsmanager:GetSecretValue', 'rds:*', 'dynamodb:*'\\n    )\\n    GROUP BY user_id\\n    HAVING COUNT(DISTINCT permission) >= 2\\n)\\nGROUP BY\\n    alr.permission,\\n    alr.user_id,\\n    exercised.permission,\\n    exercised.last_used,\\n    exercised.use_count\\nORDER BY\\"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "iam_exercised_perms",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 501,
+      "output_tokens": 483,
+      "cached_tokens": 0,
+      "latency_ms": 6740,
+      "output": {
+        "sql": "SELECT\n    al.user_id AS role_id,\n    al.permission AS granted_permission,\n    al.resource,\n    al.action,\n    COUNT(*) AS times_exercised,\n    MAX(al.access_time) AS last_exercised_at,\n    MIN(al.access_time) AS first_exercised_at,\n    COUNT(DISTINCT DATE(al.access_time)) AS active_days,\n    SUM(CASE WHEN al.result = 'ALLOW' THEN 1 ELSE 0 END) AS allow_count,\n    SUM(CASE WHEN al.result = 'DENY' THEN 1 ELSE 0 END) AS deny_count,\n    CASE\n        WHEN COUNT(*) = 0 THEN 'NEVER_USED'\n        WHEN MAX(al.access_time) < NOW() - INTERVAL '90 days' THEN 'STALE_90D'\n        WHEN MAX(al.access_time) < NOW() - INTERVAL '30 days' THEN 'STALE_30D'\n        ELSE 'ACTIVE'\n    END AS usage_status,\n    CASE\n        WHEN COUNT(*) = 0\n          OR MAX(al.access_time) < NOW() - INTERVAL '90 days' THEN TRUE\n        ELSE FALSE\n    END AS revocation_candidate\nFROM access_log_facts al\nWHERE\n    al.access_time >= NOW() - INTERVAL '180 days'\nGROUP BY\n    al.user_id,\n    al.permission,\n    al.resource,\n    al.action\nHAVING\n    COUNT(*) > 0\nORDER BY\n    al.user_id,\n    times_exercised ASC,\n    al.permission,\n    al.resource"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_flag",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 2350,
+      "output_tokens": 56,
+      "cached_tokens": 0,
+      "latency_ms": 1610,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "role_id",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.035383000000000005,
+  "total_latency_ms": 19827,
+  "cumulative_spend_usd": 2.869449000000002,
+  "evaluator_reason": "no_mongo_node"
+}

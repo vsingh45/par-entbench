@@ -1,0 +1,138 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "all_small",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_sam_contracts",
+        "description": "Extract contract renewal dates and license terms from SAM system documents",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_consumption_trends",
+        "description": "Query consumption data from the data warehouse to calculate usage trends over the last 12 months, growth rate, and projected renewal costs",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "assess_risk_and_notify",
+        "description": "Reconcile SAM renewal dates with consumption trends, assess renewal risk (urgency, cost impact, adoption changes), classify posture (urgent/at-risk/standard/low-priority), and generate procurement notification payload with recommendations",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "3 subtasks minimum: (1) Extract from SAM requires document parsing for contract dates/terms (extract, small\u2014single-source field extraction). (2) Query consumption trends requires SQL to aggregate usage history across licenses (sql_gen, mid\u2014multi-table aggregation). (3) Risk assessment and notification requires cross-source reconciliation (SAM dates + consumption data), posture classification, and alert generation (cross_recon, frontier\u2014multi-signal synthesis and recommendation logic). No separate policy_action needed: compliance/governance is embedded in risk classification. No multitool_plan required: the query does not ask for tool registry orchestration, only workflow steps."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_sam_contracts",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 233,
+      "output_tokens": 128,
+      "cached_tokens": 0,
+      "latency_ms": 1153,
+      "output": {
+        "contract_renewal_dates": null,
+        "license_terms": null,
+        "effective_date": null,
+        "expiration_date": null,
+        "renewal_date": null,
+        "license_type": null,
+        "license_duration_months": null,
+        "auto_renewal_flag": null,
+        "vendor_name": null,
+        "contract_value_usd": null,
+        "consumption_metrics": null,
+        "risk_assessment": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_consumption_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 467,
+      "output_tokens": 358,
+      "cached_tokens": 0,
+      "latency_ms": 2491,
+      "output": {
+        "sql": "SELECT license_id, publisher, product, fiscal_year, SUM(amount_usd) as total_consumption_usd, SUM(daily_active_seats) as total_active_seats, COUNT(DISTINCT event_date) as usage_days, COUNT(DISTINCT user_id) as unique_users, MIN(event_date) as first_usage_date, MAX(event_date) as last_usage_date, ROUND(100.0 * (SUM(CASE WHEN event_date >= CURRENT_DATE - INTERVAL '6 months' THEN amount_usd ELSE 0 END) - SUM(CASE WHEN event_date < CURRENT_DATE - INTERVAL '6 months' AND event_date >= CURRENT_DATE - INTERVAL '12 months' THEN amount_usd ELSE 0 END)) / NULLIF(SUM(CASE WHEN event_date < CURRENT_DATE - INTERVAL '6 months' AND event_date >= CURRENT_DATE - INTERVAL '12 months' THEN amount_usd ELSE 0 END), 0), 2) as growth_rate_percent, ROUND(SUM(amount_usd) * 1.1, 2) as projected_renewal_cost_usd FROM consumption_facts WHERE event_date >= CURRENT_DATE - INTERVAL '12 months' GROUP BY license_id, publisher, product, fiscal_year ORDER BY license_id, fiscal_year DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "assess_risk_and_notify",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 286,
+      "output_tokens": 564,
+      "cached_tokens": 0,
+      "latency_ms": 4673,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sam_renewal_workflow",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity",
+            "reason": "No upstream MongoDB operational state provided"
+          }
+        ],
+        "workflow_definition": {
+          "status": "awaiting_data_sources",
+          "error": "Empty upstream_outputs - cannot reconcile without MongoDB query results and SQL historical data",
+          "required_inputs": {
+            "mongodb_query": "SELECT contract_id, renewal_date, license_count, product_sku FROM sam_contracts WHERE renewal_date <= NOW() + INTERVAL 90 DAY",
+            "sql_query": "SELECT contract_id, consumption_trend_6mo, adoption_rate_change, cost_impact, last_audit_date FROM license_consumption_history WHERE audit_date >= DATE_SUB(NOW(), INTERVAL 180 DAY)"
+          },
+          "reconciliation_template": {
+            "left_join_key": "contract_id",
+            "primary_source": "mongodb",
+            "fields_to_reconcile": [
+              "renewal_date",
+              "license_count",
+              "consumption_trend",
+              "adoption_change",
+              "cost_variance"
+            ]
+          },
+          "risk_classification_logic": {
+            "urgent": "renewal_date <= 30 days AND (consumption_trend == 'increasing' OR cost_impact > 20%)",
+            "at_risk": "renewal_date <= 60 days AND adoption_rate_change < -10%",
+            "standard": "renewal_date > 60 days AND consumption_stable",
+            "low_priority": "renewal_date > 90 days AND consumption_declining"
+          },
+          "notification_payload_schema": {
+            "contract_id": "string",
+            "renewal_urgency": "urgent|at_risk|standard|low_priority",
+            "days_to_renewal": "integer",
+            "current_consumption": "number",
+            "trend_6_months": "increasing|stable|declining",
+            "recommended_action": "string",
+            "cost_impact_estimate": "currency",
+            "adoption_risk_score": "0-100"
+          }
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.006236,
+  "total_latency_ms": 8317,
+  "cumulative_spend_usd": 7.142444000000007,
+  "evaluator_reason": "no_plan_in_output"
+}

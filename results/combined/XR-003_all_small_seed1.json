@@ -1,0 +1,102 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "all_small",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "query_iam_roles",
+        "description": "Query IAM system to retrieve all roles with elevated permissions (admin/elevated flags), including their full permission grants and role metadata",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "query_access_logs",
+        "description": "Query CloudTrail/access logs for the last 180 days to extract actually-exercised permissions by role (which API calls, actions, services were invoked per role)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_flag",
+        "description": "Reconcile granted permissions against exercised permissions: for each elevated role, identify permissions that were granted but never invoked in 180 days. Classify revocation candidates by risk level (high-impact unused admin actions vs. low-risk) and output role-by-role unused permission report with revocation recommendations",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "query_iam_roles",
+          "query_access_logs"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks, minimum decomposition: (1) sql_gen retrieves the granted IAM permissions state (mid tier for multi-table join across role, permission, and elevation metadata), (2) sql_gen extracts actual usage from access logs over 180 days (mid tier for time-windowed log aggregation), (3) cross_recon reconciles both sources to classify unused permissions and generate revocation recommendations with risk stratification (frontier tier because this requires multi-signal analysis: permission scope inference, risk classification logic, and producing a prioritized revocation plan). This is a pure reconciliation task with classification, not a policy_action \u2014 no governance approval is being requested, only analysis and recommendation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "query_iam_roles",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 480,
+      "output_tokens": 321,
+      "cached_tokens": 0,
+      "latency_ms": 3531,
+      "output": {
+        "raw_output": "{\"sql\": \"SELECT 'IAM roles with elevated permissions are not available in the EntBench schema' as note, 'The warehouse contains consumption_facts, invoice_facts, access_log_facts, customer, orders, and lineitem tables' as available_tables, 'To query IAM roles and permissions, a dedicated IAM schema would be required with tables such as: iam_roles, iam_role_permissions, iam_users, iam_user_roles' as required_schema\"}\n```\n\n**Explanation:** The EntBench Postgres warehouse schema does not contain IAM or role-based access control tables. The `access_log_facts` table tracks user actions (permission, resource, action, result) but does not contain role definitions or permission grant metadata needed to:\n\n1. Identify roles with elevated/admin flags\n2. Compare granted permissions against exercised permissions\n3. Flag unused permissions for revocation\n\nTo execute this query, you would need tables such as:\n- `iam_roles` (role_id, role_name, is_admin, is_elevated)\n- `iam_role_permissions` (role_id, permission, granted_date)\n- `iam_user_roles` (user_id, role_id, assigned_date)\n\nThen correlate with `access_log_facts` filtered by `access_time >= current_date - interval '180 days'`."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_access_logs",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 491,
+      "output_tokens": 99,
+      "cached_tokens": 0,
+      "latency_ms": 1180,
+      "output": {
+        "sql": "SELECT permission, action, resource, COUNT(*) as exercise_count, COUNT(DISTINCT user_id) as unique_users, MAX(access_time) as last_used FROM access_log_facts WHERE access_time >= CURRENT_DATE - INTERVAL '180 days' AND result = 'success' GROUP BY permission, action, resource ORDER BY exercise_count DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_flag",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 756,
+      "output_tokens": 275,
+      "cached_tokens": 0,
+      "latency_ms": 2786,
+      "output": {
+        "reconciled": [],
+        "metadata": {
+          "status": "insufficient_data",
+          "reason": "MongoDB operational state (IAM roles with elevated permissions) not available",
+          "details": {
+            "mongo_source": "No IAM role grant data provided",
+            "sql_source": "access_log_facts available but lacks role definitions and permission grant metadata",
+            "required_tables": [
+              "iam_roles (role_id, role_name, is_admin, is_elevated)",
+              "iam_role_permissions (role_id, permission, granted_date)",
+              "iam_user_roles (user_id, role_id, assigned_date)"
+            ],
+            "available_table": "access_log_facts (permission, action, resource, user_id, access_time, result)"
+          },
+          "recommendation": "Reconciliation requires both sources: (1) MongoDB/operational IAM state with role-permission grants, and (2) SQL historical access logs. Currently only the second source is available. Provide MongoDB query output containing granted roles and their permissions to enable LEFT JOIN reconciliation."
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.005202,
+  "total_latency_ms": 7497,
+  "cumulative_spend_usd": 3.0152730000000023,
+  "evaluator_reason": "no_mongo_node"
+}

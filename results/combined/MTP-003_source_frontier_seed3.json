@@ -1,0 +1,118 @@
+{
+  "task_id": "MTP-003",
+  "task_class": "multitool_plan",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_adobe_licenses",
+        "description": "Fetch Adobe license inventory and metadata from MongoDB (seats, tiers, contract dates, renewal status)",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "snowflake_adobe_q4_usage",
+        "description": "Query Snowflake for Adobe Q4 usage metrics (consumption, user counts, product breakdown, spend tracking)",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_summarize",
+        "description": "Reconcile MongoDB license data with Snowflake Q4 usage; identify gaps, overages, underutilization; classify renewal posture and generate summary recommendations. Output reconciliation report.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "mongo_adobe_licenses",
+          "snowflake_adobe_q4_usage"
+        ]
+      },
+      {
+        "id": "post_to_slack",
+        "description": "Post the reconciliation summary and recommendations to the #sam-team Slack channel using the enterprise messaging tool",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "reconcile_and_summarize"
+        ]
+      }
+    ],
+    "cost_rationale": "4 subtasks with 6 available tool calls. mongo_adobe_licenses and snowflake_adobe_q4_usage run in parallel (2 tool calls, both small tier\u2014direct single-source queries). reconcile_and_summarize is mid tier (requires reconciliation logic across two sources, posture classification, and summary generation\u2014within cross_recon's scope, no separate policy_action needed). post_to_slack is small tier (single multitool_plan call to invoke Slack messaging). Dependencies: reconcile waits for both data queries; Slack post waits for reconciliation. Total tool budget: mongo_query (1) + sql_gen (1) + cross_recon invocation (1) + multitool_plan invocation (1) = 4 tool calls used out of 6, leaving headroom for retry or extended queries."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_adobe_licenses",
+      "specialist": "mongo_query",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1766,
+      "output_tokens": 90,
+      "cached_tokens": 0,
+      "latency_ms": 1341,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Adobe"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "snowflake_adobe_q4_usage",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 740,
+      "output_tokens": 183,
+      "cached_tokens": 0,
+      "latency_ms": 2390,
+      "output": {
+        "sql": "SELECT product, COUNT(DISTINCT user_id) AS user_count, SUM(daily_active_seats) AS total_active_seats, SUM(amount_usd) AS total_spend_usd, COUNT(*) AS event_count FROM consumption_facts WHERE publisher = 'Adobe' AND event_date >= '2024-10-01' AND event_date <= '2024-12-31' AND fiscal_quarter = 4 GROUP BY product ORDER BY total_spend_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_summarize",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 456,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 6696,
+      "output": {
+        "raw_output": "{\n  \"reconciliation_report\": {\n    \"task\": \"Adobe License Reconciliation - MongoDB vs Snowflake Q4\",\n    \"timestamp\": \"2024-Q4\",\n    \"status\": \"awaiting_data_execution\",\n    \"data_sources\": {\n      \"primary\": {\n        \"system\": \"MongoDB\",\n        \"collection\": \"sam_licenses\",\n        \"filter\": {\"publisher\": \"Adobe\"},\n        \"role\": \"operational_state\"\n      },\n      \"secondary\": {\n        \"system\": \"Snowflake\",\n        \"table\": \"consumption_facts\",\n        \"period\": \"2024-10-01 to 2024-12-31\",\n        \"role\": \"historical_validation\"\n      }\n    },\n    \"reconciliation_strategy\": {\n      \"join_type\": \"LEFT OUTER JOIN (MongoDB PRIMARY)\",\n      \"logic\": \"Every Adobe product license in MongoDB must appear in output; Snowflake usage acts as validation metric\",\n      \"null_handling\": \"Missing Snowflake metrics default to 0 or null, triggering no_recent_activity or at_risk classification\"\n    },\n    \"classification_framework\": {\n      \"expand\": \"License count < active users; demand exceeds supply\",\n      \"reduce\": \"License count >> active users; significant underutilization\",\n      \"hold\": \"License count \u2248 active users with variance <15%\",\n      \"at_risk\": \"Zero Q4 usage detected; potential obsolescence\",\n      \"no_recent_activity\": \"Licensed product absent from Q4 consumption data\",\n      \"stable\": \"Consistent usage patterns; no variance flag\",\n      \"growing\": \"Q4 usage trending +20% vs baseline\"\n    },\n    \"execution_plan\": {\n      \"tool_calls_budget\": 6,\n      \"steps\": [\n        {\"step\": 1, \"action\": \"Execute MongoDB query\", \"target\": \"sam_licenses.Adobe products\"},\n        {\"step\": 2, \"action\": \"Execute Snowflake SQL\", \"target\": \"Q4 Adobe consumption aggregate\"},\n        {\"step\": 3, \"action\": \"LEFT JOIN reconciliation\", \"key\": \"product\"},\n        {\"step\": 4, \"action\": \"Gap analysis\", \"metrics\": [\"overage\", \"underutilization\", \"orphaned_licenses\"]},\n        {\"step\": 5, \"action\": \"Classification assignment\", \"outputs\": \"renewal_posture per product\"},\n        {\"step\": 6, \"action\": \"Generate summary report\", \"destination\": \"#sam-team Slack\"}\n      ]\n    },\n    \"expected_output_schema\": {\n      \"reconciled\": [\n        {\n          \"entity_key\": \"product_name\",\n          \"mongo_licenses\": \"count from operational state\",\n          \"sql_q4_users\": \"distinct user count from consumption\",\n          \"sql_q4_active_seats\": \"total active seats consumed\",\n          \"sql_q4_spend_usd\": \"revenue/cost attribution\",\n          \"sql_q4_events\": \"usage event count\",\n          \"gap_analysis\": {\n            \"overage_count\": \"licenses - active_seats (if negative)\",\n            \"underutilization_pct\": \"(licenses - active_seats) / licenses * 100\",\n            \"orphaned\": \"licensed but zero Q4 usage\"\n          },\n          \"classification\": \"expand|reduce|hold|"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "post_to_slack",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1438,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 4095,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"sam_licenses\",\n        \"filter\": {\"publisher\": \"Adobe\"}\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT product_name, COUNT(DISTINCT user_id) as q4_users, SUM(seats_consumed) as q4_active_seats, SUM(spend_usd) as q4_spend_usd, COUNT(*) as q4_events FROM consumption_facts WHERE publisher = 'Adobe' AND period BETWEEN '2024-10-01' AND '2024-12-31' GROUP BY product_name\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.aggregate\",\n      \"arguments\": {\n        \"collection\": \"sam_licenses\",\n        \"pipeline\": [\n          {\"$match\": {\"publisher\": \"Adobe\"}},\n          {\"$lookup\": {\n            \"from\": \"consumption_facts_view\",\n            \"let\": {\"product\": \"$product_name\"},\n            \"pipeline\": [\n              {\"$match\": {\"$expr\": {\"$eq\": [\"$product_name\", \"$$product\"]}, \"period_start\": {\"$gte\": \"2024-10-01\"}, \"period_end\": {\"$lte\": \"2024-12-31\"}}}\n            ],\n            \"as\": \"q4_consumption\"\n          }},\n          {\"$project\": {\n            \"product_name\": 1,\n            \"mongo_licenses\": \"$license_count\",\n            \"sql_q4_users\": {\"$cond\": [{\"$gt\": [{\"$size\": \"$q4_consumption\"}, 0]}, {\"$arrayElemAt\": [\"$q4_consumption.distinct_users\", 0]}, 0]},\n            \"sql_q4_active_seats\": {\"$cond\": [{\"$gt\": [{\"$size\": \"$q4_consumption\"}, 0]}, {\"$arrayElemAt\": [\"$q4_consumption.active_seats\", 0]}, 0]},\n            \"sql_q4_spend_usd\": {\"$cond\": [{\"$gt\": [{\"$size\": \"$q4_consumption\"}, 0]}, {\"$arrayElemAt\": [\"$q4_consumption.spend\", 0]}, 0]},\n            \"sql_q4_events\": {\"$cond\": [{\"$gt\": [{\"$size\": \"$q4_consumption\"}, 0]}, {\"$arrayElemAt\": [\"$q4_consumption.event_count\", 0]}, 0]},\n            \"gap_analysis\": {\n              \"overage_count\": {\"$subtract\": [\"$license_count\", {\"$cond\": [{\"$gt\": [{\"$size\": \"$q4_consumption\"}, 0]}, {\"$arrayElemAt\": [\"$q4_consumption.active_seats\", 0]}, 0]}]},\n              \"underutilization_pct\": {\"$multiply\": [{\"$divide\": [{\"$subtract\": [\"$license_count\", {\"$cond\": [{\"$gt\": [{\"$size\": \"$q4_consumption\"}, 0]}, {\"$arrayElemAt\": [\"$q4_consumption"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.029249000000000004,
+  "total_latency_ms": 14522,
+  "cumulative_spend_usd": 4.684728000000003,
+  "evaluator_reason": "no_plan_in_output"
+}

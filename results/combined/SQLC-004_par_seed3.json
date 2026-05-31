@@ -1,0 +1,40 @@
+{
+  "task_id": "SQLC-004",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "Get vendor risk scores by querying vendor reliability data, then classify each vendor as low_risk, medium_risk, or high_risk based on incident history.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 479,
+      "output_tokens": 247,
+      "cached_tokens": 0,
+      "latency_ms": 1943,
+      "output": {
+        "sql": "SELECT vendor_name, COUNT(invoice_id) as total_invoices, COUNT(CASE WHEN status = 'paid' THEN 1 END) as paid_invoices, COUNT(CASE WHEN status IN ('overdue', 'disputed') THEN 1 END) as incident_count, ROUND(100.0 * COUNT(CASE WHEN status = 'paid' THEN 1 END) / NULLIF(COUNT(invoice_id), 0), 2) as payment_rate, CASE WHEN COUNT(CASE WHEN status IN ('overdue', 'disputed') THEN 1 END) = 0 THEN 'low_risk' WHEN COUNT(CASE WHEN status IN ('overdue', 'disputed') THEN 1 END) <= 2 THEN 'medium_risk' ELSE 'high_risk' END as risk_classification FROM invoice_facts GROUP BY vendor_name ORDER BY incident_count DESC, vendor_name ASC"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0017140000000000002,
+  "total_latency_ms": 1943,
+  "cumulative_spend_usd": 0.4515100000000001,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

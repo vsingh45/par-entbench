@@ -1,0 +1,158 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "frugal_cascade",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "task_1_extract_contracts",
+        "description": "Extract contract renewal dates and license details from SAM system documents (structured contract records). Return contract ID, vendor, renewal date, license type, and current quantity.",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "task_2_consumption_query",
+        "description": "Query consumption trends from SQL warehouse: for each contract, retrieve usage metrics over the past 12 months (monthly consumption, peak usage, utilization rate), current license quantity, and burn rate trend. Return aggregated metrics for risk assessment.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "task_3_risk_reconcile",
+        "description": "Reconcile extracted SAM contract data with SQL consumption trends. Assess renewal risk for each contract by evaluating renewal proximity (days until expiry), utilization vs. license quantity, consumption trend direction, and budget impact. Classify risk tier (critical/high/medium/low) and generate renewal recommendation (renew now/schedule/defer). Output: risk assessment scorecard with priority ordering.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "task_4_notification_plan",
+        "description": "Generate procurement notification plan from the risk assessment. Identify actionable alerts for procurement team: critical renewals within 30 days, high-risk under-licensed vendors, and cost-optimization opportunities. Create multi-step notification payload (email recipients, escalation rules, required actions).",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "task_3_risk_reconcile"
+        ]
+      }
+    ],
+    "cost_rationale": "Four subtasks, minimum for complete workflow: (1) Extract SAM contracts (small\u2014straightforward document field extraction), (2) Query consumption trends from SQL (mid\u2014requires multi-table joins and aggregation across 12-month window with trend calculation), (3) Reconcile contract + consumption data and classify risk (mid\u2014combines two sources with multi-signal logic for posture classification, no separate policy_action needed as risk classification is part of reconciliation), (4) Generate notification workflow plan (small\u2014structured output of alert rules and tool invocations for procurement notification). Task 4 depends on Task 3 results. This avoids false decomposition: risk classification and recommendation are integrated into cross_recon (not split into a separate policy_action), and contract extraction + consumption query are kept separate because they source different systems (SAM vs. SQL warehouse), but each is singular in its domain."
+  },
+  "node_results": [
+    {
+      "subtask_id": "task_1_extract_contracts",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 253,
+      "output_tokens": 80,
+      "cached_tokens": 0,
+      "latency_ms": 1071,
+      "output": {
+        "contract_id": null,
+        "vendor": null,
+        "renewal_date": null,
+        "license_type": null,
+        "current_quantity": null,
+        "note": "No SAM system document provided. Unable to extract contract renewal dates and license details without source document."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_2_consumption_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 489,
+      "output_tokens": 344,
+      "cached_tokens": 0,
+      "latency_ms": 3540,
+      "output": {
+        "sql": "SELECT c.contract_id, c.vendor_name, DATE_TRUNC('month', cf.event_date)::DATE AS month, SUM(cf.amount_usd) AS monthly_consumption, MAX(cf.daily_active_seats) AS peak_usage, ROUND(100.0 * SUM(cf.daily_active_seats) / NULLIF(MAX(cf.daily_active_seats), 0), 2) AS utilization_rate, COUNT(DISTINCT cf.license_id) AS current_license_quantity, ROUND((SUM(cf.amount_usd) - LAG(SUM(cf.amount_usd)) OVER (PARTITION BY c.contract_id ORDER BY DATE_TRUNC('month', cf.event_date))) / NULLIF(LAG(SUM(cf.amount_usd)) OVER (PARTITION BY c.contract_id ORDER BY DATE_TRUNC('month', cf.event_date)), 0), 4) AS burn_rate_trend FROM invoice_facts c LEFT JOIN consumption_facts cf ON c.vendor_name = cf.publisher WHERE cf.event_date >= CURRENT_DATE - INTERVAL '12 months' AND c.status IN ('open', 'pending') GROUP BY c.contract_id, c.vendor_name, DATE_TRUNC('month', cf.event_date) ORDER BY c.contract_id, month DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_3_risk_reconcile",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 320,
+      "output_tokens": 445,
+      "cached_tokens": 0,
+      "latency_ms": 4011,
+      "output": {
+        "reconciled": [],
+        "status": "insufficient_data",
+        "error": "No MongoDB or SQL query results provided",
+        "details": {
+          "mongo_results": "empty",
+          "sql_results": "empty",
+          "required_fields": [
+            "contract_id",
+            "license_name",
+            "renewal_date",
+            "days_until_expiry",
+            "licensed_quantity",
+            "current_utilization",
+            "utilization_rate",
+            "consumption_trend",
+            "budget_allocated",
+            "budget_consumed",
+            "trend_direction",
+            "historical_growth_rate"
+          ],
+          "expected_output_structure": {
+            "entity_key": "contract_id",
+            "mongo_fields": {
+              "renewal_date": "from SAM system",
+              "licensed_quantity": "from SAM system",
+              "budget_allocated": "from SAM system"
+            },
+            "sql_fields": {
+              "current_utilization": "from consumption trends",
+              "consumption_trend": "from historical analysis",
+              "budget_consumed": "from spend tracking"
+            },
+            "calculated_metrics": {
+              "days_until_expiry": "renewal_date - today",
+              "utilization_rate": "current_utilization / licensed_quantity",
+              "risk_score": "composite of expiry_proximity + utilization_pressure + budget_impact"
+            },
+            "classification_options": [
+              "critical_renew_now",
+              "high_schedule_renewal",
+              "medium_defer_decision",
+              "low_no_action"
+            ]
+          }
+        },
+        "recommendation": "Provide MongoDB SAM contract records and SQL consumption/budget trend queries to enable cross-backend reconciliation and risk assessment"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_4_notification_plan",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 820,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 4813,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"resource\": \"procurement_notifications\",\n        \"action\": \"create_alert_workflow\",\n        \"context\": \"license_renewal_risk_assessment\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"sam_contracts\",\n        \"filter\": {\n          \"renewal_date\": {\n            \"$gte\": {\n              \"$date\": \"2024-01-01\"\n            },\n            \"$lte\": {\n              \"$date\": \"2024-01-31\"\n            }\n          },\n          \"status\": {\n            \"$in\": [\"active\", \"expiring\"]\n          }\n        },\n        \"projection\": {\n          \"contract_id\": 1,\n          \"license_name\": 1,\n          \"renewal_date\": 1,\n          \"licensed_quantity\": 1,\n          \"budget_allocated\": 1,\n          \"vendor_name\": 1,\n          \"contract_value\": 1\n        }\n      },\n      \"depends_on\": [0]\n    },\n    {\n      \"tool\": \"sql.postgres.query\",\n      \"arguments\": {\n        \"query\": \"SELECT contract_id, SUM(usage_count) as current_utilization, AVG(daily_consumption) as consumption_trend, SUM(spend_amount) as budget_consumed, EXTRACT(DAY FROM (SELECT MAX(usage_date) - MIN(usage_date) FROM consumption_logs)) as trend_days FROM consumption_logs WHERE contract_id IN (SELECT contract_id FROM sam_contracts WHERE renewal_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days') AND usage_date >= CURRENT_DATE - INTERVAL '90 days' GROUP BY contract_id\"\n      },\n      \"depends_on\": [0]\n    },\n    {\n      \"tool\": \"sql.postgres.query\",\n      \"arguments\": {\n        \"query\": \"SELECT contract_id, budget_allocated, SUM(spend_amount) as budget_consumed, ROUND(100.0 * SUM(spend_amount) / budget_allocated, 2) as budget_utilization_pct, CASE WHEN SUM(spend_amount) / budget_allocated > 0.9 THEN 'critical' WHEN SUM(spend_amount) / budget_allocated > 0.75 THEN 'high' WHEN SUM(spend_amount) / budget_allocated > 0.5 THEN 'medium' ELSE 'low' END as budget_risk FROM spend_tracking WHERE contract_id IN (SELECT contract_id FROM sam_contracts WHERE renewal_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days') AND transaction_date >= CURRENT_DATE - INTERVAL '365 days' GROUP BY contract_id, budget_allocated\"\n      },\n      \"depends_on\": [0]\n    },\n    {\n      \"tool\": \"mongo.aggregate\",\n      \"arguments\": {\n        \"collection\": \"sam_contracts\",\n        \"pipeline\": [\n          {\n            \"$match\": {\n              \"renewal_date\": {\n                \"$gte\": {\n                  \"$date\": \"2024-01-01\"\n                },"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.010227,
+  "total_latency_ms": 13435,
+  "cumulative_spend_usd": 7.367469000000005,
+  "evaluator_reason": "no_plan_in_output"
+}

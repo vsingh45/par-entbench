@@ -1,0 +1,50 @@
+{
+  "task_id": "PAC-004",
+  "task_class": "policy_action",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check",
+        "description": "Evaluate developer's production database access request against security and compliance policies. Check: (1) Is direct production access permitted for debugging? (2) Does developer have required authorization/role? (3) Are there mandatory approval workflows or audit requirements? (4) What are conditional guardrails (e.g., time limits, read-only access, IP restrictions)?",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single subtask because the query presents one discrete governance decision: whether to allow/deny/conditionally permit developer access to production database. This is a policy evaluation task requiring cross-policy reasoning (security, compliance, and operational policies likely interact), so mid-tier is appropriate. No additional source reconciliation or multi-tool orchestration is needed\u2014this is purely a policy gate decision."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 750,
+      "output_tokens": 223,
+      "cached_tokens": 0,
+      "latency_ms": 4299,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-401": "fail",
+          "POL-402": "fail"
+        },
+        "reason": "Developer 'dev-alice' lacks Manager approval and on-call role required by POL-401 for production DB access. POL-402 mandates debugging be performed in the designated staging environment, not production. Recommend redirecting debug activity to staging; if production access is truly required, obtain Manager approval and assume on-call role.",
+        "applied_constraints": [
+          "Redirect debugging to staging environment per POL-402",
+          "Require Manager approval and on-call role assignment per POL-401 before any production access",
+          "Log denied access attempt for audit"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.009325,
+  "total_latency_ms": 4299,
+  "cumulative_spend_usd": 8.347445,
+  "evaluator_reason": "ok"
+}

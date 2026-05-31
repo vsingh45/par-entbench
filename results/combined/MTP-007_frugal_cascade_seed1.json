@@ -1,0 +1,160 @@
+{
+  "task_id": "MTP-007",
+  "task_class": "multitool_plan",
+  "router": "frugal_cascade",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "scan_iam_policies",
+        "description": "Extract and analyze all IAM policies from the policy registry to identify current permission assignments, role structures, and potential overly-permissive grants",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "audit_cloudtrail",
+        "description": "Query CloudTrail logs to identify API calls, user actions, timestamp patterns, and anomalous activity that may indicate unauthorized access or policy violations",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "check_policy_violations",
+        "description": "Reconcile IAM policy scan results with CloudTrail audit events to detect violations, unauthorized actions, permission misuse, and flag deviations from expected security posture",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "scan_iam_policies",
+          "audit_cloudtrail"
+        ]
+      },
+      {
+        "id": "generate_compliance_report",
+        "description": "Evaluate policy violations and security findings against compliance policies (SOC2, CIS, HIPAA as applicable) and generate comprehensive compliance report with risk ratings and remediation recommendations",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": [
+          "check_policy_violations"
+        ]
+      }
+    ],
+    "cost_rationale": "Four subtasks required for end-to-end security audit: (1) IAM policy extraction (mid: multi-field document extraction from policy registry), (2) CloudTrail querying (mid: straightforward SQL log analysis), (3) violation detection via cross_recon (frontier: requires synthesizing two independent datasets to identify anomalies and classify violations\u2014this demands high reasoning capability), (4) compliance report generation via policy_action (mid: evaluate findings against known compliance frameworks and generate structured report). This is the minimum decomposition\u2014the policy violation check cannot be skipped and requires frontier-tier reasoning to correlate behavioral signals across policy and activity streams. The compliance report is policy_action rather than part of cross_recon because it explicitly evaluates against a governance/compliance policy registry."
+  },
+  "node_results": [
+    {
+      "subtask_id": "scan_iam_policies",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 250,
+      "output_tokens": 73,
+      "cached_tokens": 0,
+      "latency_ms": 1136,
+      "output": {
+        "error": "No document provided",
+        "details": "The task requests extraction of IAM policies from a policy registry, but no document, policy file, or registry data was provided in the input. Please provide the actual IAM policy document or policy registry data to extract and analyze."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "audit_cloudtrail",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 470,
+      "output_tokens": 121,
+      "cached_tokens": 0,
+      "latency_ms": 1329,
+      "output": {
+        "sql": "SELECT log_id, user_id, permission, resource, access_time, action, result, COUNT(*) as event_count FROM access_log_facts WHERE access_time >= CURRENT_DATE - INTERVAL '90 days' GROUP BY log_id, user_id, permission, resource, access_time, action, result HAVING result != 'success' OR action IN ('delete', 'modify_policy') ORDER BY access_time DESC LIMIT 1000"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "check_policy_violations",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 455,
+      "output_tokens": 342,
+      "cached_tokens": 0,
+      "latency_ms": 2950,
+      "output": {
+        "reconciliation_status": "incomplete",
+        "error_details": {
+          "upstream_failures": [
+            {
+              "source": "scan_iam_policies",
+              "status": "failed",
+              "reason": "No IAM policy document or registry data provided",
+              "impact": "Cannot perform policy-to-action reconciliation"
+            },
+            {
+              "source": "audit_cloudtrail",
+              "status": "query_defined",
+              "reason": "SQL query defined but no result dataset provided for reconciliation",
+              "impact": "Cannot cross-reference CloudTrail events against policies"
+            }
+          ]
+        },
+        "reconciled": [],
+        "recommendations": [
+          {
+            "requirement": "IAM Policy Input",
+            "description": "Provide IAM policy document(s) or policy registry containing policy definitions, permissions, and resource constraints"
+          },
+          {
+            "requirement": "CloudTrail Result Set",
+            "description": "Execute the CloudTrail audit query and provide actual event records with user_id, permission, resource, action, and result fields"
+          },
+          {
+            "requirement": "Reconciliation Execution",
+            "description": "Once both datasets are provided, perform LEFT JOIN (CloudTrail events as primary) to identify: unauthorized actions, policy violations, permission misuse, and deviations from expected security posture"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "generate_compliance_report",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 649,
+      "output_tokens": 405,
+      "cached_tokens": 0,
+      "latency_ms": 4218,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "SOC2-AUDIT-001": "fail",
+          "SOC2-DATA-INTEGRITY-001": "fail",
+          "CIS-IAM-001": "fail",
+          "CIS-LOGGING-001": "fail",
+          "HIPAA-AUDIT-001": "not_applicable",
+          "HIPAA-ACCESS-CONTROL-001": "not_applicable",
+          "COMPLIANCE-REPORT-GEN-001": "pending_review"
+        },
+        "reason": "Cannot execute compliance audit task due to critical missing input data. Upstream dependencies failed: IAM policy registry not provided, CloudTrail query executed but no result dataset provided. Policy-to-action reconciliation cannot proceed without both IAM policies and CloudTrail event records. Compliance report generation requires complete audit evidence.",
+        "applied_constraints": [
+          "Task blocked: SOC2 audit control requires complete IAM policy documentation for baseline security posture assessment",
+          "Task blocked: CIS compliance verification requires executed CloudTrail result set with actual event records (user_id, permission, resource, action, result fields)",
+          "Task blocked: Reconciliation engine requires LEFT JOIN dataset pairing CloudTrail events against policies to detect violations",
+          "Task blocked: Compliance report cannot be generated without reconciliation results and identified violations to assess and rate",
+          "Constraint: Before re-execution, provide: (1) IAM policy document/registry with all policy definitions, (2) CloudTrail result dataset with executed query output, (3) Confirmation of scope (SOC2/CIS/HIPAA applicability)"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.006529,
+  "total_latency_ms": 9633,
+  "cumulative_spend_usd": 7.815329000000003,
+  "evaluator_reason": "no_plan_in_output"
+}

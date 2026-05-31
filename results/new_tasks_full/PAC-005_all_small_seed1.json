@@ -1,0 +1,53 @@
+{
+  "task_id": "PAC-005",
+  "task_class": "policy_action",
+  "router": "all_small",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_pii_export",
+        "description": "Evaluate the bulk PII export request against data protection and access control policies. Determine if the request is compliant with governance rules for PII handling, whether the analyst has authorization to export customer names, emails, and phone numbers in bulk, and what conditions or restrictions apply.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This is a governance/compliance decision, not a data retrieval task. The query explicitly requests bulk export of PII, which triggers policy evaluation against access control and data protection regulations. A policy_action subtask (mid tier) is required to assess whether the request is authorized and compliant. No sql_gen subtask is included because the fundamental issue is whether the export should be permitted at all—approval or denial of the policy check should precede any data query. Mid tier is appropriate because multi-policy reasoning (data protection, access control, audit requirements) is typical for PII export governance."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_pii_export",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 536,
+      "output_tokens": 276,
+      "cached_tokens": 0,
+      "latency_ms": 3226,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-501": "fail",
+          "POL-502": "fail",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "Bulk PII export request cannot be approved without required Legal and CISO sign-off (POL-501). The request violates data minimization principles as customer names, emails, and phone numbers are sensitive PII with no demonstrated business-critical justification (POL-502). Audit logging infrastructure exists (POL-503) but is insufficient without upstream approvals.",
+        "applied_constraints": [
+          "Export denied pending explicit written approval from Legal department",
+          "Export denied pending explicit written approval from CISO",
+          "Requestor must provide business justification demonstrating criticality for each PII field",
+          "If approved, export limited to 30-day retention period with mandatory deletion enforcement",
+          "If approved, all export activity must be comprehensively audit logged with user identification",
+          "Consider alternative: export anonymized or aggregated dataset instead of individual PII records"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0019160000000000002,
+  "total_latency_ms": 3226,
+  "cumulative_spend_usd": 8.420385000000001
+}

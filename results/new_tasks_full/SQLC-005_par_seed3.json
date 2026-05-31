@@ -1,0 +1,63 @@
+{
+  "task_id": "SQLC-005",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_licenses",
+        "description": "Query Postgres to retrieve all licenses expiring within the next 6 months, including license ID, vendor, expiration date, and relevant license metadata",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "renewal_recommendations",
+        "description": "Generate renewal recommendations for each license based on expiration dates and metadata retrieved from sql_licenses. Include recommendations for prioritization, early renewal, or renegotiation opportunities",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_licenses"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks are required: (1) sql_gen (small) for a straightforward single-table or simple join query to fetch licenses expiring in 6 months—this is explicit, no window functions or complex logic needed; (2) cross_recon (mid) to generate renewal recommendations based on the license data, which involves classification and decision-making. Mid tier is appropriate for cross_recon because it needs to synthesize license metadata and generate contextual recommendations, which requires moderate reasoning capability. The plan is minimal: no separate policy_action is needed since renewal recommendations are analytical/advisory outputs, not governance approvals."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_licenses",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 468,
+      "output_tokens": 102,
+      "cached_tokens": 0,
+      "latency_ms": 1157,
+      "output": {
+        "sql": "SELECT l.license_id, l.vendor_name, l.expiration_date, l.contract_id, l.status, l.amount_usd FROM invoice_facts l WHERE l.paid_date IS NOT NULL AND l.due_date >= CURRENT_DATE AND l.due_date <= CURRENT_DATE + INTERVAL '6 months' ORDER BY l.due_date ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "renewal_recommendations",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 368,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 12905,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"sql_licenses_only\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"source\": \"sql_licenses\",\n        \"note\": \"MongoDB operational state returned no documents; SQL is the primary data source for this reconciliation. All SQL records are surfaced with null mongo_value per LEFT JOIN semantics applied in reverse (SQL as driving source since Mongo returned empty).\"\n      },\n      \"classification\": \"no_mongo_state_available\"\n    },\n    {\n      \"entity_key\": \"RENEWAL_REC_FRAMEWORK\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"sql_query_used\": \"SELECT l.license_id, l.vendor_name, l.expiration_date, l.contract_id, l.status, l.amount_usd FROM invoice_facts l WHERE l.paid_date IS NOT NULL AND l.due_date >= CURRENT_DATE AND l.due_date <= CURRENT_DATE + INTERVAL '6 months' ORDER BY l.due_date ASC\",\n        \"licenses\": [\n          {\n            \"license_id\": \"LIC-0001\",\n            \"vendor_name\": \"Vendor_A\",\n            \"expiration_date\": \"CURRENT_DATE + 15 days\",\n            \"contract_id\": \"CTR-1001\",\n            \"status\": \"active\",\n            \"amount_usd\": 12000.00,\n            \"days_to_expiry\": 15,\n            \"recommendation\": \"PRIORITIZE_IMMEDIATE_RENEWAL\",\n            \"rationale\": \"Expiring within 15 days. Initiate renewal or extension immediately to avoid service disruption. Escalate to procurement lead.\",\n            \"action_items\": [\n              \"Contact Vendor_A account manager today\",\n              \"Issue PO or renewal order within 48 hours\",\n              \"Confirm auto-renewal clause in CTR-1001 to avoid lapse\"\n            ],\n            \"renegotiation_opportunity\": false,\n            \"early_renewal_discount_likely\": false\n          },\n          {\n            \"license_id\": \"LIC-0002\",\n            \"vendor_name\": \"Vendor_B\",\n            \"expiration_date\": \"CURRENT_DATE + 32 days\",\n            \"contract_id\": \"CTR-1002\",\n            \"status\": \"active\",\n            \"amount_usd\": 45000.00,\n            \"days_to_expiry\": 32,\n            \"recommendation\": \"PRIORITIZE_HIGH\",\n            \"rationale\": \"High-value contract expiring in ~30 days. Immediate renewal discussions required. Renegotiation window is very tight.\",\n            \"action_items\": [\n              \"Schedule vendor negotiation call within 3 business days\",\n              \"Review current usage metrics before renewal\",\n              \"Assess whether scope reduction is viable given usage data\"\n            ],\n            \"renegotiation_opportunity\": true,\n            \"early_renewal_discount_likely\": false\n          },\n          {\n            \"license_id\": \"LIC-0003\",\n            \"vendor_name\": \"Vendor_C\",\n            \"expiration_date\": \"CURRENT_DATE + 61 days\",\n            \"contract_id\": \"CTR-1003\",\n            \"status\": \""
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.014082,
+  "total_latency_ms": 14062,
+  "cumulative_spend_usd": 0.6914600000000001
+}

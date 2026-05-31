@@ -1,0 +1,76 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_budget_analysis",
+        "description": "Query budget data aggregated by product category with cost trends over time (month-over-month or year-over-year). Include total spend, average spend per category, and trend calculations (variance, growth rate) to support allocation analysis.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_reallocation",
+        "description": "Reconcile budget allocation analysis with cost trends, classify spending patterns (high-growth, declining, stable), assess efficiency gaps, and generate reallocation recommendations based on ROI potential and organizational priorities.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_budget_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two-subtask decomposition: (1) sql_gen (mid tier) for multi-table budget aggregation with trend calculations across time periods and product categories—mid tier handles joins and window functions for growth rate calculation. (2) cross_recon (frontier tier) for strategic reconciliation: takes structured budget data and generates classification of spending patterns, efficiency assessment, and reallocation recommendations. Frontier is required because this involves multi-signal analysis (spend levels + trends + priorities) and inference-based prioritization, not just data retrieval. No separate policy_action needed—governance alignment is part of the reconciliation decision-making. No separate multitool_plan needed—the analysis uses SQL data only, not multi-tool orchestration."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_budget_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 480,
+      "output_tokens": 652,
+      "cached_tokens": 0,
+      "latency_ms": 4108,
+      "output": {
+        "sql": "WITH monthly_spend AS (SELECT DATE_TRUNC('month', cf.event_date)::DATE AS month_date, cf.product, SUM(cf.amount_usd) AS monthly_spend, COUNT(DISTINCT cf.user_id) AS active_users FROM consumption_facts cf WHERE cf.event_date >= '2023-01-01' AND cf.event_date <= '2024-12-31' GROUP BY DATE_TRUNC('month', cf.event_date)::DATE, cf.product), product_metrics AS (SELECT ms.product, ms.month_date, ms.monthly_spend, ms.active_users, LAG(ms.monthly_spend) OVER (PARTITION BY ms.product ORDER BY ms.month_date) AS prev_month_spend, SUM(ms.monthly_spend) OVER (PARTITION BY ms.product) AS total_spend FROM monthly_spend ms), trend_analysis AS (SELECT pm.product, pm.month_date, pm.monthly_spend, pm.active_users, pm.total_spend, CASE WHEN pm.prev_month_spend IS NOT NULL THEN ROUND(((pm.monthly_spend - pm.prev_month_spend) / pm.prev_month_spend * 100)::NUMERIC, 2) ELSE NULL END AS mom_growth_rate, ROUND(pm.monthly_spend / NULLIF(pm.active_users, 0)::NUMERIC, 2) AS spend_per_user FROM product_metrics pm), category_summary AS (SELECT ta.product, COUNT(DISTINCT ta.month_date) AS months_tracked, SUM(ta.monthly_spend) AS total_category_spend, ROUND(AVG(ta.monthly_spend)::NUMERIC, 2) AS avg_monthly_spend, ROUND(STDDEV_POP(ta.monthly_spend)::NUMERIC, 2) AS spend_variance, MIN(ta.monthly_spend) AS min_monthly_spend, MAX(ta.monthly_spend) AS max_monthly_spend, ROUND(AVG(ta.mom_growth_rate)::NUMERIC, 2) AS avg_mom_growth_pct FROM trend_analysis ta GROUP BY ta.product) SELECT cs.product, cs.months_tracked, cs.total_category_spend, cs.avg_monthly_spend, cs.spend_variance, cs.min_monthly_spend, cs.max_monthly_spend, cs.avg_mom_growth_pct, ROUND((cs.total_category_spend / SUM(cs.total_category_spend) OVER ())::NUMERIC * 100, 2) AS spend_pct_of_total FROM category_summary cs ORDER BY cs.total_category_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_reallocation",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1429,
+      "output_tokens": 119,
+      "cached_tokens": 0,
+      "latency_ms": 2893,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "unknown_product_1",
+            "mongo_value": null,
+            "sql_value": {
+              "months_tracked": 24,
+              "total_category_spend": null,
+              "avg_monthly_spend": null,
+              "avg_mom_growth_pct": null,
+              "spend_pct_of_total": null
+            },
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01386,
+  "total_latency_ms": 7001,
+  "cumulative_spend_usd": 1.629399000000001
+}

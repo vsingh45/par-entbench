@@ -1,0 +1,84 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_publishers_q_trends",
+        "description": "Query SQL warehouse to fetch all publishers with their Q1-Q4 2024 quarterly metrics (revenue, spend, or activity volume as applicable) and compute quarter-over-quarter trends to identify those with declining patterns across multiple quarters.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "classify_renewal_posture",
+        "description": "Reconcile the declining publisher trends with contract and renewal state data. Apply classification logic to determine posture (hold/expand/reduce) for each declining publisher based on trend severity, contract value, and performance signals. Generate renewal recommendations.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "fetch_publishers_q_trends"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid tier) because the SQL requires multi-quarter aggregation and QoQ trend calculation across a potentially large publisher set\u2014more complex than a simple single-quarter fetch, but does not require CTEs or window functions beyond basic aggregation. (2) cross_recon (mid tier) to reconcile SQL output with contract/renewal data and generate posture classifications and recommendations as a single analytical pass. Classification and recommendation generation are part of cross_recon's reconciliation scope, not separate policy_action subtasks. No multitool_plan or policy_action needed because the query does not ask for tool orchestration or explicit compliance/governance evaluation, only business logic posture assignment."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_publishers_q_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 488,
+      "output_tokens": 713,
+      "cached_tokens": 0,
+      "latency_ms": 3887,
+      "output": {
+        "sql": "WITH quarterly_metrics AS (SELECT publisher, fiscal_quarter, SUM(amount_usd) as quarterly_revenue, SUM(daily_active_seats) as quarterly_activity FROM consumption_facts WHERE fiscal_year = 2024 AND event_date >= '2024-01-01' AND event_date <= '2024-12-31' GROUP BY publisher, fiscal_quarter), publisher_trends AS (SELECT publisher, MAX(CASE WHEN fiscal_quarter = 1 THEN quarterly_revenue END) as q1_revenue, MAX(CASE WHEN fiscal_quarter = 2 THEN quarterly_revenue END) as q2_revenue, MAX(CASE WHEN fiscal_quarter = 3 THEN quarterly_revenue END) as q3_revenue, MAX(CASE WHEN fiscal_quarter = 4 THEN quarterly_revenue END) as q4_revenue, MAX(CASE WHEN fiscal_quarter = 1 THEN quarterly_activity END) as q1_activity, MAX(CASE WHEN fiscal_quarter = 2 THEN quarterly_activity END) as q2_activity, MAX(CASE WHEN fiscal_quarter = 3 THEN quarterly_activity END) as q3_activity, MAX(CASE WHEN fiscal_quarter = 4 THEN quarterly_activity END) as q4_activity FROM quarterly_metrics GROUP BY publisher) SELECT publisher, q1_revenue, q2_revenue, q3_revenue, q4_revenue, ROUND(((q2_revenue - q1_revenue) / NULLIF(q1_revenue, 0) * 100)::NUMERIC, 2) as q1_to_q2_trend_pct, ROUND(((q3_revenue - q2_revenue) / NULLIF(q2_revenue, 0) * 100)::NUMERIC, 2) as q2_to_q3_trend_pct, ROUND(((q4_revenue - q3_revenue) / NULLIF(q3_revenue, 0) * 100)::NUMERIC, 2) as q3_to_q4_trend_pct, CASE WHEN (q2_revenue < q1_revenue OR q2_revenue IS NULL) AND (q3_revenue < q2_revenue OR q3_revenue IS NULL) AND (q4_revenue < q3_revenue OR q4_revenue IS NULL) THEN 'REDUCE' WHEN (q2_revenue < q1_revenue OR q2_revenue IS NULL) AND (q3_revenue < q2_revenue OR q3_revenue IS NULL) THEN 'HOLD' WHEN q4_revenue < q1_revenue THEN 'HOLD' ELSE 'EXPAND' END as renewal_recommendation FROM publisher_trends WHERE (q2_revenue < q1_revenue OR q2_revenue IS NULL) OR (q3_revenue < q2_revenue OR q3_revenue IS NULL) OR (q4_revenue < q3_revenue OR q4_revenue IS NULL) ORDER BY publisher"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "classify_renewal_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 993,
+      "output_tokens": 395,
+      "cached_tokens": 0,
+      "latency_ms": 4932,
+      "output": {
+        "reconciled": [],
+        "status": "no_data",
+        "message": "No upstream MongoDB results provided for reconciliation. The task specifies a SQL query for trending data but no actual query execution results were supplied. To complete reconciliation, provide the executed output from 'fetch_publishers_q_trends' containing publisher trend records with quarterly revenue, activity metrics, and trend percentages.",
+        "expected_input_structure": {
+          "mongo_source": "Publisher documents with current contract state, activity status, and engagement metrics",
+          "sql_source": "Query results from fetch_publishers_q_trends containing quarterly revenue trends and calculated recommendations"
+        },
+        "reconciliation_logic_ready": {
+          "classification_rules": {
+            "reduce": "Three consecutive quarters of decline OR >50% cumulative decline across fiscal year",
+            "hold": "Two consecutive quarters of decline OR 20-50% cumulative decline with non-zero Q4 activity",
+            "expand": "Net positive trend across fiscal year OR Q4 revenue >= Q1 revenue",
+            "at_risk": "Declining trend + contract expiration within 90 days + activity < historical baseline",
+            "no_recent_activity": "Zero activity in Q3-Q4 OR zero revenue in final quarter"
+          },
+          "renewal_recommendation_mapping": {
+            "REDUCE": "Do not renew OR negotiate significant discount (30-50% reduction) + performance SLAs",
+            "HOLD": "Renew at current terms OR small increase if activity recovers in Q4",
+            "EXPAND": "Renew with growth incentive OR volume-based discount"
+          }
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007021,
+  "total_latency_ms": 8819,
+  "cumulative_spend_usd": 1.1806789999999998,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

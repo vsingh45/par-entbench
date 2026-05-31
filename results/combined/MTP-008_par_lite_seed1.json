@@ -1,0 +1,40 @@
+{
+  "task_id": "MTP-008",
+  "task_class": "multitool_plan",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "multi_tool_orchestrate",
+        "description": "Orchestrate multi-tool workflow: retrieve project requirements from Jira, check team availability from calendar API, schedule standup meeting, and share agenda via Slack. Generate a step-by-step tool invocation plan using the enterprise tool registry.",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This query explicitly asks for multi-tool orchestration involving four distinct systems (Jira, Calendar API, Meeting Scheduler, Slack). The multitool_plan specialist is designed to generate a coordinated tool-call sequence from the 25-tool enterprise registry. A single mid-tier subtask is sufficient because the planner is generating the orchestration plan itself, not executing parallel data transformations. Mid tier is appropriate for sequencing dependencies (Jira \u2192 Calendar \u2192 Meeting \u2192 Slack) and handling the conditional logic of meeting availability and scheduling."
+  },
+  "node_results": [
+    {
+      "subtask_id": "multi_tool_orchestrate",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 480,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 11782,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"step\": 1,\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"resource\": \"jira.tickets\",\n        \"action\": \"read\",\n        \"principal\": \"current_user\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"step\": 2,\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"resource\": \"calendar.events\",\n        \"action\": \"read_write\",\n        \"principal\": \"current_user\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"step\": 3,\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"resource\": \"slack.channels\",\n        \"action\": \"post\",\n        \"principal\": \"current_user\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"step\": 4,\n      \"tool\": \"jira.list_tickets\",\n      \"arguments\": {\n        \"project\": \"CURRENT_PROJECT\",\n        \"status\": [\"Open\", \"In Progress\", \"To Do\"],\n        \"fields\": [\"summary\", \"description\", \"priority\", \"assignee\", \"labels\", \"acceptance_criteria\"],\n        \"max_results\": 50\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"step\": 5,\n      \"tool\": \"calendar.list_events\",\n      \"arguments\": {\n        \"team_members\": [\"$4.assignees\"],\n        \"time_range\": {\n          \"start\": \"now\",\n          \"end\": \"now+5d\"\n        },\n        \"include_busy_slots\": true,\n        \"timezone\": \"UTC\"\n      },\n      \"depends_on\": [2, 4]\n    },\n    {\n      \"step\": 6,\n      \"tool\": \"audit.log_action\",\n      \"arguments\": {\n        \"action\": \"READ_JIRA_REQUIREMENTS\",\n        \"resource\": \"jira.tickets\",\n        \"metadata\": {\n          \"tickets_retrieved\": \"$4.total\",\n          \"project\": \"CURRENT_PROJECT\",\n          \"ticket_ids\": \"$4.ticket_ids\"\n        },\n        \"status\": \"success\"\n      },\n      \"depends_on\": [4]\n    },\n    {\n      \"step\": 7,\n      \"tool\": \"calendar.create_event\",\n      \"arguments\": {\n        \"title\": \"Cross-Team Standup: Project Requirements Review\",\n        \"description\": \"Standup to review project requirements retrieved from Jira. Tickets in scope: $4.ticket_ids\",\n        \"attendees\": \"$4.assignees\",\n        \"duration_minutes\": 30,\n        \"preferred_slot\": \"$5.next_common_availability\",\n        \"timezone\": \"UTC\",\n        \"recurrence\": \"none\",\n        \"location\": \"Virtual / Video Conference\",\n        \"agenda_items\": [\n          \"Review open Jira requirements: $4.summaries\",\n          \"Assign ownership and clarify blockers\",\n          \"Define acceptance criteria and priority alignment\",\n          \"Set next action items and deadlines\"\n        ]\n      },\n      \"depends_on\": [2, 5]\n    },\n    {"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01344,
+  "total_latency_ms": 11782,
+  "cumulative_spend_usd": 8.227902,
+  "evaluator_reason": "no_plan_in_output"
+}

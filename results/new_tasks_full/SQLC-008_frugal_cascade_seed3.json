@@ -1,0 +1,63 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_budget_analysis",
+        "description": "Generate SQL query to analyze budget allocation by product category, extract current spending levels, cost trends over time (e.g., YoY/QoQ), variance from budget, and category-level metrics needed for reallocation recommendations",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_strategy",
+        "description": "Reconcile budget allocation data with actual spending trends, classify categories by performance (over/under budget, growth/decline trends), identify inefficiencies and opportunities, and generate reallocation strategy recommendations prioritized by impact and risk",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_budget_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks with minimum necessary decomposition: (1) sql_gen at mid-tier handles multi-table budget joins, aggregations by category, and trend calculations (YoY/QoQ), which requires moderately complex SQL with multiple grouping levels and window functions; (2) cross_recon at frontier-tier handles the strategic reconciliation phase—it takes the budget data and synthesizes analysis into a reallocation strategy, which demands complex reasoning across multiple signals (budget vs. actual, trends, category performance, business context) to produce prioritized, risk-aware recommendations. The frontier tier is justified because strategy generation requires inference beyond data aggregation (balancing efficiency, risk, and business objectives). No separate policy_action is needed; governance constraints (if any) are incorporated into the strategy reasoning within cross_recon. No mongo_query or extract needed—this is pure relational budget/spend analysis."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_budget_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 480,
+      "output_tokens": 705,
+      "cached_tokens": 0,
+      "latency_ms": 4905,
+      "output": {
+        "sql": "WITH product_spending AS (SELECT product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS total_spending, COUNT(DISTINCT user_id) AS unique_users, AVG(daily_active_seats) AS avg_seats FROM consumption_facts WHERE event_date >= '2023-01-01' GROUP BY product, fiscal_year, fiscal_quarter), product_summary AS (SELECT product, fiscal_year, SUM(total_spending) AS yearly_spending FROM product_spending GROUP BY product, fiscal_year), yoy_comparison AS (SELECT ps1.product, ps1.fiscal_year AS current_year, ps1.yearly_spending AS current_year_spend, ps2.yearly_spending AS prior_year_spend, ROUND(((ps1.yearly_spending - COALESCE(ps2.yearly_spending, 0)) / NULLIF(ps2.yearly_spending, 0) * 100)::NUMERIC, 2) AS yoy_pct_change FROM product_summary ps1 LEFT JOIN product_summary ps2 ON ps1.product = ps2.product AND ps1.fiscal_year = ps2.fiscal_year + 1), qoq_data AS (SELECT ps.product, ps.fiscal_year, ps.fiscal_quarter, ps.total_spending, LAG(ps.total_spending) OVER (PARTITION BY ps.product ORDER BY ps.fiscal_year, ps.fiscal_quarter) AS prior_quarter_spend, ROUND(((ps.total_spending - LAG(ps.total_spending) OVER (PARTITION BY ps.product ORDER BY ps.fiscal_year, ps.fiscal_quarter)) / NULLIF(LAG(ps.total_spending) OVER (PARTITION BY ps.product ORDER BY ps.fiscal_year, ps.fiscal_quarter), 0) * 100)::NUMERIC, 2) AS qoq_pct_change FROM product_spending ps) SELECT yoy.product, yoy.current_year, yoy.current_year_spend, yoy.prior_year_spend, yoy.yoy_pct_change, qoq.fiscal_quarter, qoq.total_spending AS quarter_spending, qoq.qoq_pct_change, ps.unique_users, ps.avg_seats, ROUND((yoy.current_year_spend / SUM(yoy.current_year_spend) OVER () * 100)::NUMERIC, 2) AS pct_of_total_budget FROM yoy_comparison yoy LEFT JOIN qoq_data qoq ON yoy.product = qoq.product AND yoy.current_year = qoq.fiscal_year LEFT JOIN product_spending ps ON yoy.product = ps.product AND yoy.current_year = ps.fiscal_year AND qoq.fiscal_quarter = ps.fiscal_quarter ORDER BY yoy.current_year DESC, yoy.current_year_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_strategy",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 974,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 5901,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"product_budget_allocation\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"analysis_type\": \"budget_allocation_by_product\",\n        \"metrics\": [\n          \"current_year_spend\",\n          \"prior_year_spend\",\n          \"yoy_pct_change\",\n          \"quarter_spending\",\n          \"qoq_pct_change\",\n          \"unique_users\",\n          \"avg_seats\",\n          \"pct_of_total_budget\"\n        ],\n        \"time_periods\": [\"fiscal_year\", \"fiscal_quarter\"],\n        \"aggregation_level\": \"product\"\n      },\n      \"classification\": \"no_recent_activity\",\n      \"note\": \"MongoDB source not provided; SQL analysis available for reconciliation\"\n    },\n    {\n      \"entity_key\": \"spending_trend_analysis\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"yoy_comparison\": \"enabled\",\n        \"qoq_comparison\": \"enabled\",\n        \"trend_direction\": \"multi_period_tracking\",\n        \"efficiency_metrics\": [\"cost_per_user\", \"cost_per_seat\"]\n      },\n      \"classification\": \"growing\",\n      \"rationale\": \"SQL provides comprehensive trend analysis with YoY and QoQ comparisons; growth/decline classification requires actual product data\"\n    },\n    {\n      \"entity_key\": \"budget_variance_detection\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"over_budget_products\": \"determinable_from_pct_change_anomalies\",\n        \"under_budget_products\": \"determinable_from_pct_change_anomalies\",\n        \"variance_indicator\": \"yoy_pct_change and qoq_pct_change\",\n        \"risk_threshold\": \"products with consistent negative growth or sharp declines\"\n      },\n      \"classification\": \"at_risk\",\n      \"rationale\": \"Variance analysis requires baseline budget allocations not provided in SQL output\"\n    },\n    {\n      \"entity_key\": \"reallocation_opportunity_identification\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"inefficiency_signals\": [\n          \"high_pct_of_total_budget with declining qoq_pct_change\",\n          \"low_unique_users relative to spending\",\n          \"low_avg_seats relative to spending\",\n          \"negative yoy_pct_change indicating contraction\"\n        ],\n        \"growth_signals\": [\n          \"positive yoy_pct_change with increasing unique_users\",\n          \"positive qoq_pct_change with growing avg_seats\",\n          \"improving cost_per_user metrics\"\n        ]\n      },\n      \"classification\": \"expand\",\n      \"rationale\": \"SQL framework enables identification; actual reallocation requires product-level decision data\"\n    },\n    {\n      \"entity_key\": \"reallocation_strategy_priority_ranking\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"ranking_criteria\": [\n          \"yoy_pct_change (magnitude and direction)\",\n          \"qoq_pct_change (trend consistency)\",\n          \"pct_of_total_budget"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.008979000000000001,
+  "total_latency_ms": 10806,
+  "cumulative_spend_usd": 1.7231010000000009
+}

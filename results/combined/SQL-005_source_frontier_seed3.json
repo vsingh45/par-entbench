@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-005",
+  "task_class": "sql_gen",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_calc_avg_cost_per_seat_q4",
+        "description": "Generate SQL to calculate average cost per active seat by product for Q4 2024, sorted descending by average cost per seat. Query will aggregate spend/cost data from the SaaS warehouse, filter for Q4 2024 dates, group by product, and compute avg(total_cost / active_seats).",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single sql_gen subtask (mid tier) sufficient: requires multi-table join (likely cost/spend table with seat/usage data), filtering by date range, aggregation with division operation, and sorting. Mid tier handles moderately complex aggregation logic. Only one database query needed. No cross-source reconciliation, extraction, or policy logic required."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_calc_avg_cost_per_seat_q4",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 756,
+      "output_tokens": 129,
+      "cached_tokens": 0,
+      "latency_ms": 2524,
+      "output": {
+        "sql": "SELECT product, SUM(amount_usd) / NULLIF(SUM(daily_active_seats), 0) AS avg_cost_per_seat FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date <= '2024-12-31' GROUP BY product ORDER BY avg_cost_per_seat DESC"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007005000000000001,
+  "total_latency_ms": 2524,
+  "cumulative_spend_usd": 0.139935,
+  "evaluator_reason": "result_bag_mismatch"
+}

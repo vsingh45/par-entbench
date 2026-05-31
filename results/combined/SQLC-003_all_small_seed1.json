@@ -1,0 +1,80 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "all_small",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_declining_2024",
+        "description": "Query SQL warehouse to identify publishers with declining quarterly trends in 2024. Return publisher ID, name, and quarterly spend/performance metrics (Q1-Q4 2024) to establish trend direction.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal",
+        "description": "Reconcile the declining publishers from SQL with any contract state or renewal eligibility data (if available in MongoDB or policy store), then classify each publisher's renewal posture (hold, expand, reduce) based on declining trend severity, historical context, and business value signals. Generate renewal recommendation for each publisher.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_declining_2024"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid tier) to fetch declining publishers with quarterly metrics from SQL warehouse\u2014mid tier because this requires aggregating quarterly data across 2024 with trend analysis (likely GROUP BY quarter, multiple metric columns, and comparison logic). (2) cross_recon (mid tier) to reconcile SQL results with contract/renewal state and generate renewal recommendations\u2014mid tier because it must classify multiple signals (trend severity, business value, renewal eligibility) for each publisher without requiring frontier-level inference or complex multi-document extraction. The recommendation logic (hold/expand/reduce) is a standard posture classification, part of the reconciliation output, not a separate policy evaluation. Plan is minimal: we avoid unnecessary extract or multitool subtasks since the SQL and reconciliation phases handle all required steps."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_declining_2024",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 481,
+      "output_tokens": 741,
+      "cached_tokens": 0,
+      "latency_ms": 6719,
+      "output": {
+        "sql": "WITH quarterly_metrics AS (SELECT publisher, fiscal_quarter, SUM(amount_usd) as quarterly_spend, SUM(daily_active_seats) as total_seats, COUNT(DISTINCT event_id) as event_count FROM consumption_facts WHERE event_date >= '2024-01-01' AND event_date < '2025-01-01' AND fiscal_year = 2024 GROUP BY publisher, fiscal_quarter), publisher_trends AS (SELECT publisher, MAX(CASE WHEN fiscal_quarter = 1 THEN quarterly_spend END) as q1_spend, MAX(CASE WHEN fiscal_quarter = 2 THEN quarterly_spend END) as q2_spend, MAX(CASE WHEN fiscal_quarter = 3 THEN quarterly_spend END) as q3_spend, MAX(CASE WHEN fiscal_quarter = 4 THEN quarterly_spend END) as q4_spend, MAX(CASE WHEN fiscal_quarter = 1 THEN total_seats END) as q1_seats, MAX(CASE WHEN fiscal_quarter = 2 THEN total_seats END) as q2_seats, MAX(CASE WHEN fiscal_quarter = 3 THEN total_seats END) as q3_seats, MAX(CASE WHEN fiscal_quarter = 4 THEN total_seats END) as q4_seats FROM quarterly_metrics GROUP BY publisher HAVING MAX(CASE WHEN fiscal_quarter = 1 THEN quarterly_spend END) > MAX(CASE WHEN fiscal_quarter = 4 THEN quarterly_spend END)) SELECT publisher, COALESCE(q1_spend, 0) as q1_2024_spend, COALESCE(q2_spend, 0) as q2_2024_spend, COALESCE(q3_spend, 0) as q3_2024_spend, COALESCE(q4_spend, 0) as q4_2024_spend, COALESCE(q1_seats, 0) as q1_2024_seats, COALESCE(q2_seats, 0) as q2_2024_seats, COALESCE(q3_seats, 0) as q3_2024_seats, COALESCE(q4_seats, 0) as q4_2024_seats, ROUND(((COALESCE(q4_spend, 0) - COALESCE(q1_spend, 0)) / NULLIF(COALESCE(q1_spend, 0), 0) * 100)::NUMERIC, 2) as spend_decline_pct, CASE WHEN COALESCE(q4_spend, 0) < COALESCE(q1_spend, 0) * 0.8 THEN 'reduce' WHEN COALESCE(q4_spend, 0) < COALESCE(q1_spend, 0) * 0.9 THEN 'hold' ELSE 'expand' END as renewal_recommendation FROM publisher_trends ORDER BY spend_decline_pct ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1034,
+      "output_tokens": 234,
+      "cached_tokens": 0,
+      "latency_ms": 2814,
+      "output": {
+        "status": "insufficient_data",
+        "message": "No MongoDB operational state provided for reconciliation",
+        "reconciliation_note": "Task requires LEFT JOIN with MongoDB as primary source, but only SQL historical data supplied. Cannot execute cross-backend reconciliation without MongoDB contract state or renewal eligibility data.",
+        "expected_input_structure": {
+          "mongodb_contracts": [
+            {
+              "publisher_key": "string",
+              "contract_status": "active|expired|pending_renewal",
+              "renewal_eligible": "boolean",
+              "last_renewal_date": "ISO-8601",
+              "contract_value_usd": "number",
+              "business_value_score": "number (0-100)"
+            }
+          ],
+          "sql_declining_results": "provided"
+        },
+        "recommended_action": "Provide MongoDB query output containing publisher contract state and renewal eligibility data to proceed with reconciliation and renewal posture classification"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.006390000000000001,
+  "total_latency_ms": 9533,
+  "cumulative_spend_usd": 1.1674029999999997,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

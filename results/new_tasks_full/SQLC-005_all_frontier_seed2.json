@@ -1,0 +1,63 @@
+{
+  "task_id": "SQLC-005",
+  "task_class": "sql_compose",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_licenses",
+        "description": "Query Postgres to retrieve all licenses expiring in the next 6 months, including license ID, name, expiration date, vendor, and renewal status",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "renewal_rec",
+        "description": "Analyze the retrieved licenses and generate renewal recommendations for each based on expiration urgency, renewal status, and license details",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_licenses"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen/small for a straightforward time-based query on a single table with a WHERE clause on expiration_date; (2) cross_recon/mid to analyze the SQL results and generate contextual renewal recommendations (classification, prioritization, and recommendation generation). The cross_recon tier is mid because it needs to reason across multiple license records and generate tailored recommendations, but doesn't require frontier-level inference or multi-source reconciliation beyond the SQL dataset itself. We do not add a separate policy_action because policy evaluation of renewals is part of cross_recon's output generation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_licenses",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 713,
+      "output_tokens": 118,
+      "cached_tokens": 0,
+      "latency_ms": 2690,
+      "output": {
+        "sql": "SELECT DISTINCT license_id, product AS license_name, publisher AS vendor FROM consumption_facts WHERE event_type = 'license_expiration' AND event_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '6 months' ORDER BY event_date"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "renewal_rec",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 533,
+      "output_tokens": 13,
+      "cached_tokens": 0,
+      "latency_ms": 985,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009505,
+  "total_latency_ms": 3675,
+  "cumulative_spend_usd": 0.7115250000000002
+}

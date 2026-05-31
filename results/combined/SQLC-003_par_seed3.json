@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_declining_publishers",
+        "description": "Query SQL warehouse for publishers with declining quarterly revenue/spend trends across Q1-Q4 2024. Return publisher ID, name, and quarterly metrics (Q1, Q2, Q3, Q4 spend/revenue) to identify negative QoQ trends.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal_recommendation",
+        "description": "For each declining publisher, reconcile current spend trend with historical performance data (if available from MongoDB or warehouse archives). Classify renewal posture and generate actionable recommendation (hold, expand, reduce) based on trend severity, contract terms, and business impact.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_declining_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "2 subtasks required: (1) SQL query to identify publishers with declining 2024 trends\u2014this is a single mid-tier sql_gen task combining multi-quarter aggregation and trend comparison across one table. (2) Cross_recon to generate renewal recommendations\u2014this reconciles the trend data with any historical/contract context and produces the classification and recommendation as part of its reconciliation output (not a separate policy_action, since the query asks for a business recommendation, not a governance approval). Both subtasks are mid-tier: the SQL involves multi-quarter grouping and trend logic; the cross_recon adds reconciliation context and recommendation reasoning but no extreme complexity. This avoids splitting the SQL into multiple calls and avoids creating unnecessary separate tasks for recommendation generation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_declining_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 496,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8862,
+      "output": {
+        "raw_output": "{\"sql\": \"WITH quarterly_spend AS (\\n  SELECT\\n    publisher,\\n    SUM(CASE WHEN fiscal_quarter = 1 AND event_date >= '2024-01-01' AND event_date < '2024-04-01' THEN amount_usd ELSE 0 END) AS q1_spend,\\n    SUM(CASE WHEN fiscal_quarter = 2 AND event_date >= '2024-04-01' AND event_date < '2024-07-01' THEN amount_usd ELSE 0 END) AS q2_spend,\\n    SUM(CASE WHEN fiscal_quarter = 3 AND event_date >= '2024-07-01' AND event_date < '2024-10-01' THEN amount_usd ELSE 0 END) AS q3_spend,\\n    SUM(CASE WHEN fiscal_quarter = 4 AND event_date >= '2024-10-01' AND event_date < '2025-01-01' THEN amount_usd ELSE 0 END) AS q4_spend,\\n    COUNT(DISTINCT license_id) AS total_licenses,\\n    AVG(daily_active_seats) AS avg_daily_active_seats\\n  FROM consumption_facts\\n  WHERE event_date >= '2024-01-01'\\n    AND event_date < '2025-01-01'\\n  GROUP BY publisher\\n),\\ntrend_analysis AS (\\n  SELECT\\n    publisher,\\n    q1_spend,\\n    q2_spend,\\n    q3_spend,\\n    q4_spend,\\n    total_licenses,\\n    avg_daily_active_seats,\\n    ROUND((q2_spend - q1_spend) / NULLIF(q1_spend, 0) * 100, 2) AS q1_to_q2_pct_change,\\n    ROUND((q3_spend - q2_spend) / NULLIF(q2_spend, 0) * 100, 2) AS q2_to_q3_pct_change,\\n    ROUND((q4_spend - q3_spend) / NULLIF(q3_spend, 0) * 100, 2) AS q3_to_q4_pct_change,\\n    ROUND((q4_spend - q1_spend) / NULLIF(q1_spend, 0) * 100, 2) AS overall_q1_to_q4_pct_change,\\n    CASE\\n      WHEN q4_spend > q1_spend * 1.05 THEN 'expand'\\n      WHEN q4_spend < q1_spend * 0.95 THEN 'reduce'\\n      ELSE 'hold'\\n    END AS renewal_recommendation\\n  FROM quarterly_spend\\n)\\nSELECT\\n  publisher AS publisher_id,\\n  publisher AS publisher_name,\\n  ROUND(q1_spend, 2) AS q1_spend_usd,\\n  ROUND(q2_spend, 2) AS q2_spend_usd,\\n  ROUND(q3_spend, 2) AS q3_spend_usd,\\n"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal_recommendation",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1105,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9041,
+      "output": {
+        "raw_output": "{\"reconciled\": [{\"entity_key\": \"sql_declining_publishers_query\", \"mongo_value\": null, \"sql_value\": {\"status\": \"incomplete\", \"raw_sql_fragment\": \"WITH quarterly_spend AS (SELECT publisher, SUM(CASE WHEN fiscal_quarter = 1 AND event_date >= '2024-01-01' AND event_date < '2024-04-01' THEN amount_usd ELSE 0 END) AS q1_spend, SUM(CASE WHEN fiscal_quarter = 2 AND event_date >= '2024-04-01' AND event_date < '2024-07-01' THEN amount_usd ELSE 0 END) AS q2_spend, SUM(CASE WHEN fiscal_quarter = 3 AND event_date >= '2024-07-01' AND event_date < '2024-10-01' THEN amount_usd ELSE 0 END) AS q3_spend, SUM(CASE WHEN fiscal_quarter = 4 AND event_date >= '2024-10-01' AND event_date < '2025-01-01' THEN amount_usd ELSE 0 END) AS q4_spend, COUNT(DISTINCT license_id) AS total_licenses, AVG(daily_active_seats) AS avg_daily_active_seats FROM consumption_facts WHERE event_date >= '2024-01-01' AND event_date < '2025-01-01' GROUP BY publisher), trend_analysis AS (SELECT publisher, q1_spend, q2_spend, q3_spend, q4_spend, total_licenses, avg_daily_active_seats, ROUND((q2_spend - q1_spend) / NULLIF(q1_spend, 0) * 100, 2) AS q1_to_q2_pct_change, ROUND((q3_spend - q2_spend) / NULLIF(q2_spend, 0) * 100, 2) AS q2_to_q3_pct_change, ROUND((q4_spend - q3_spend) / NULLIF(q3_spend, 0) * 100, 2) AS q3_to_q4_pct_change, ROUND((q4_spend - q1_spend) / NULLIF(q1_spend, 0) * 100, 2) AS overall_q1_to_q4_pct_change, CASE WHEN q4_spend > q1_spend * 1.05 THEN 'expand' WHEN q4_spend < q1_spend * 0.95 THEN 'reduce' ELSE 'hold' END AS renewal_recommendation FROM quarterly_spend) SELECT publisher AS publisher_id, publisher AS publisher_name, ROUND(q1_spend, 2) AS q1_spend_usd, ROUND(q2_spend, 2) AS q2_spend_usd, ROUND(q3_spend, 2) AS q3_spend_usd, [TRUNCATED - SELECT clause incomplete, q4_spend_usd and downstream columns missing]\", \"issues\": [\"SQL output is truncated mid-SELECT clause; q4_spend_usd, total_licenses, avg_daily_active_seats, pct_change columns, and final WHERE/ORDER BY clauses are missing\", \"No result"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.028803000000000002,
+  "total_latency_ms": 17903,
+  "cumulative_spend_usd": 1.0818629999999998,
+  "evaluator_reason": "step1_sql_fail: no_sql_in_output"
+}

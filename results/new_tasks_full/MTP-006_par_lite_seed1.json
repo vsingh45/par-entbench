@@ -1,0 +1,205 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_sam_contracts",
+        "description": "Extract contract renewal dates and license metadata from SAM system documents (contract files, renewal notices). Parse key fields: contract_id, vendor_name, renewal_date, license_count, current_status.",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_consumption_trends",
+        "description": "Query consumption database for license usage trends: current utilization rate, usage velocity (30/60/90 day trend), peak usage, and active user count per contract/vendor. Single SQL query aggregating usage metrics by contract_id.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "risk_assessment_and_notification",
+        "description": "Cross-reference SAM contract data with consumption trends to assess renewal risk: calculate risk score (days-to-renewal, utilization coverage, usage growth), classify as critical/high/medium/low, generate alert payload with vendor, renewal date, current usage, and recommendation. Route notification to procurement team with escalation rules.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "extract_sam_contracts",
+          "query_consumption_trends"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks, minimum necessary: (1) extract_sam_contracts is a straightforward document field extraction from SAM system (small tier—no complex inference needed); (2) query_consumption_trends is a single multi-table aggregation SQL with window functions to compute usage velocity and utilization rates (mid tier—moderately complex); (3) risk_assessment_and_notification is the reconciliation step where we cross-reference contract renewal dates against actual consumption patterns, classify renewal risk posture, and generate the alert message for procurement (mid tier—multi-signal decision making but not frontier-level complexity). No policy_action subtask is needed because the query does not ask for policy compliance evaluation or governance approval—just risk classification and notification routing, which are part of cross_recon's reconciliation and recommendation scope. No multitool_plan is needed because the workflow uses only three standard specialist agents without requiring enterprise tool registry orchestration."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_sam_contracts",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 263,
+      "output_tokens": 55,
+      "cached_tokens": 0,
+      "latency_ms": 4295,
+      "output": {
+        "contract_id": null,
+        "vendor_name": null,
+        "renewal_date": null,
+        "license_count": null,
+        "current_status": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_consumption_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 490,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8472,
+      "output": {
+        "raw_output": "{\"sql\": \"SELECT\\n  cf.license_id,\\n  cf.publisher AS vendor_name,\\n  cf.product,\\n  COUNT(DISTINCT cf.user_id) AS active_user_count,\\n  MAX(cf.daily_active_seats) AS peak_seats,\\n  AVG(cf.daily_active_seats) AS avg_seats,\\n  MAX(cf.daily_active_seats) FILTER (WHERE cf.event_date >= CURRENT_DATE - INTERVAL '30 days') AS peak_seats_30d,\\n  MAX(cf.daily_active_seats) FILTER (WHERE cf.event_date >= CURRENT_DATE - INTERVAL '60 days' AND cf.event_date < CURRENT_DATE - INTERVAL '30 days') AS peak_seats_60d,\\n  MAX(cf.daily_active_seats) FILTER (WHERE cf.event_date >= CURRENT_DATE - INTERVAL '90 days' AND cf.event_date < CURRENT_DATE - INTERVAL '60 days') AS peak_seats_90d,\\n  AVG(cf.daily_active_seats) FILTER (WHERE cf.event_date >= CURRENT_DATE - INTERVAL '30 days') AS avg_seats_30d,\\n  AVG(cf.daily_active_seats) FILTER (WHERE cf.event_date >= CURRENT_DATE - INTERVAL '60 days' AND cf.event_date < CURRENT_DATE - INTERVAL '30 days') AS avg_seats_60d,\\n  AVG(cf.daily_active_seats) FILTER (WHERE cf.event_date >= CURRENT_DATE - INTERVAL '90 days' AND cf.event_date < CURRENT_DATE - INTERVAL '60 days') AS avg_seats_90d,\\n  ROUND(\\n    AVG(cf.daily_active_seats) FILTER (WHERE cf.event_date >= CURRENT_DATE - INTERVAL '30 days')\\n    / NULLIF(AVG(cf.daily_active_seats) FILTER (WHERE cf.event_date >= CURRENT_DATE - INTERVAL '90 days'), 0) * 100\\n  , 2) AS utilization_velocity_pct,\\n  SUM(cf.amount_usd) FILTER (WHERE cf.event_date >= CURRENT_DATE - INTERVAL '30 days') AS spend_30d,\\n  SUM(cf.amount_usd) FILTER (WHERE cf.event_date >= CURRENT_DATE - INTERVAL '60 days' AND cf.event_date < CURRENT_DATE - INTERVAL '30 days') AS spend_60d,\\n  SUM(cf.amount_usd) FILTER (WHERE cf.event_date >= CURRENT_DATE - INTERVAL '90 days' AND cf.event_date < CURRENT_DATE - INTERVAL '60 days') AS spend_90d,\\n  COUNT(DISTINCT cf.user_id) FILTER (WHERE cf.event_date >= CURRENT_DATE - INTERVAL '30 days') AS active_users_30d,\\n  COUNT(DISTINCT cf.user_id) FILTER (WHERE cf.event_date >= CURRENT_DATE - INTERVAL '60 days' AND cf.event_date < CURRENT_DATE - INTERVAL '30 days') AS active_users_60d,\\n  COUNT"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "risk_assessment_and_notification",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1163,
+      "output_tokens": 772,
+      "cached_tokens": 0,
+      "latency_ms": 12484,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "unknown_contract",
+            "mongo_value": {
+              "contract_id": null,
+              "vendor_name": null,
+              "renewal_date": null,
+              "license_count": null,
+              "current_status": null
+            },
+            "sql_value": {
+              "license_id": null,
+              "vendor_name": null,
+              "product": null,
+              "active_user_count": null,
+              "peak_seats": null,
+              "avg_seats": null,
+              "peak_seats_30d": null,
+              "peak_seats_60d": null,
+              "peak_seats_90d": null,
+              "avg_seats_30d": null,
+              "avg_seats_60d": null,
+              "avg_seats_90d": null,
+              "utilization_velocity_pct": null,
+              "spend_30d": null,
+              "spend_60d": null,
+              "spend_90d": null,
+              "active_users_30d": null,
+              "active_users_60d": null,
+              "active_users_90d": null
+            },
+            "classification": "no_recent_activity",
+            "risk_score": {
+              "days_to_renewal": null,
+              "utilization_coverage": null,
+              "usage_growth": null,
+              "composite_score": null,
+              "risk_tier": "undetermined"
+            },
+            "alert_payload": {
+              "vendor": null,
+              "renewal_date": null,
+              "current_usage": {
+                "avg_seats_30d": null,
+                "peak_seats_30d": null,
+                "active_users_30d": null,
+                "spend_30d": null
+              },
+              "recommendation": "Unable to generate recommendation: SAM contract data returned null for all fields and SQL consumption query output is incomplete. Manual review required.",
+              "alert_level": "undetermined",
+              "routing": {
+                "team": "procurement",
+                "escalation_rules": [
+                  {
+                    "condition": "risk_tier == critical",
+                    "action": "immediate_escalation",
+                    "notify": [
+                      "procurement_lead",
+                      "finance_director"
+                    ],
+                    "sla_hours": 4
+                  },
+                  {
+                    "condition": "risk_tier == high",
+                    "action": "priority_escalation",
+                    "notify": [
+                      "procurement_manager"
+                    ],
+                    "sla_hours": 24
+                  },
+                  {
+                    "condition": "risk_tier == medium",
+                    "action": "standard_notification",
+                    "notify": [
+                      "procurement_team"
+                    ],
+                    "sla_hours": 72
+                  },
+                  {
+                    "condition": "risk_tier == low",
+                    "action": "informational_digest",
+                    "notify": [
+                      "procurement_team"
+                    ],
+                    "sla_hours": 168
+                  },
+                  {
+                    "condition": "risk_tier == undetermined",
+                    "action": "data_remediation_required",
+                    "notify": [
+                      "procurement_team",
+                      "it_sam_admin"
+                    ],
+                    "sla_hours": 48
+                  }
+                ],
+                "notification_channel": "unresolvable_pending_data_fix"
+              }
+            },
+            "reconciliation_metadata": {
+              "mongo_source": "extract_sam_contracts",
+              "sql_source": "query_consumption_trends",
+              "join_type": "LEFT JOIN",
+              "join_key_matched": false,
+              "mongo_fields_null": true,
+              "sql_query_truncated": true,
+              "data_quality_flags": [
+                "SAM_CONTRACT_ALL_NULL",
+                "SQL_OUTPUT_TRUNCATED",
+                "NO_JOIN_KEY_AVAILABLE",
+                "RISK_SCORE_UNCOMPUTABLE"
+              ],
+              "recommended_action": "Re-run extract_sam_contracts to retrieve valid contract records and ensure query_consumption_trends returns complete resultset before reconciliation can proceed."
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.029077,
+  "total_latency_ms": 25251,
+  "cumulative_spend_usd": 7.4132530000000045
+}

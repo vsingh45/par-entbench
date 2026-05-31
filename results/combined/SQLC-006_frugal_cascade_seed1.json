@@ -1,0 +1,108 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "frugal_cascade",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_analysis",
+        "description": "Query spend data for current month and previous 3 months. Calculate 3-month average baseline and compare current month spend to baseline. Return department/vendor spend amounts, baselines, deltas, and percent variance.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_anomaly_classify",
+        "description": "Reconcile current month spend against 3-month baseline. Classify each anomaly into normal_variance (within 10%), concerning (10-25% variance), or critical (>25% variance). Generate anomaly report with classifications and flags for review.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_spend_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid tier) to aggregate current and historical spend data with variance calculations in a single multi-group-by query, (2) cross_recon (mid tier) to classify anomalies against defined thresholds and produce the final anomaly report. Classification logic is part of reconciliation, not a separate policy step. Both tasks are mid-complexity: the SQL involves multi-month aggregations and arithmetic, the classification is multi-signal thresholding. No frontier tier needed as the thresholds and logic are straightforward."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 490,
+      "output_tokens": 737,
+      "cached_tokens": 0,
+      "latency_ms": 5919,
+      "output": {
+        "sql": "WITH date_range AS (SELECT DATE_TRUNC('month', CURRENT_DATE)::DATE AS current_month_start, DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')::DATE AS prev_month_1_start, DATE_TRUNC('month', CURRENT_DATE - INTERVAL '2 months')::DATE AS prev_month_2_start, DATE_TRUNC('month', CURRENT_DATE - INTERVAL '3 months')::DATE AS prev_month_3_start), monthly_spend AS (SELECT vendor_name, DATE_TRUNC('month', invoice_date)::DATE AS month, SUM(amount_usd) AS monthly_total FROM invoice_facts WHERE invoice_date >= (SELECT prev_month_3_start FROM date_range) AND invoice_date < DATE_TRUNC('month', CURRENT_DATE)::DATE + INTERVAL '1 month' AND status IN ('paid', 'approved') GROUP BY vendor_name, DATE_TRUNC('month', invoice_date)::DATE), current_spend AS (SELECT vendor_name, monthly_total AS current_month_amount FROM monthly_spend WHERE month = (SELECT current_month_start FROM date_range)), baseline_spend AS (SELECT vendor_name, AVG(monthly_total)::NUMERIC AS baseline_3month FROM monthly_spend WHERE month < (SELECT current_month_start FROM date_range) GROUP BY vendor_name), anomaly_analysis AS (SELECT COALESCE(c.vendor_name, b.vendor_name) AS vendor_name, COALESCE(c.current_month_amount, 0)::NUMERIC AS current_month_spend, COALESCE(b.baseline_3month, 0)::NUMERIC AS baseline_amount, COALESCE(c.current_month_amount, 0) - COALESCE(b.baseline_3month, 0) AS spend_delta, CASE WHEN COALESCE(b.baseline_3month, 0) = 0 THEN NULL ELSE ROUND(((COALESCE(c.current_month_amount, 0) - COALESCE(b.baseline_3month, 0)) / COALESCE(b.baseline_3month, 0) * 100)::NUMERIC, 2) END AS percent_variance FROM current_spend c FULL OUTER JOIN baseline_spend b ON c.vendor_name = b.vendor_name) SELECT vendor_name, current_month_spend, baseline_amount, spend_delta, percent_variance, CASE WHEN percent_variance IS NULL THEN 'new_vendor' WHEN ABS(percent_variance) <= 15 THEN 'normal_variance' WHEN ABS(percent_variance) > 15 AND ABS(percent_variance) <= 50 THEN 'concerning' WHEN ABS(percent_variance) > 50 THEN 'critical' ELSE 'unknown' END AS anomaly_classification FROM anomaly_analysis ORDER BY ABS(COALESCE(percent_variance, 0)) DESC, vendor_name"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_anomaly_classify",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1027,
+      "output_tokens": 488,
+      "cached_tokens": 0,
+      "latency_ms": 3854,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "vendor_spend_anomaly",
+            "mongo_value": null,
+            "sql_value": {
+              "query_type": "spend_anomaly_analysis",
+              "methodology": "current_month_vs_3month_baseline",
+              "classifications": {
+                "normal_variance": "ABS(percent_variance) <= 15%",
+                "concerning": "15% < ABS(percent_variance) <= 50%",
+                "critical": "ABS(percent_variance) > 50%",
+                "new_vendor": "baseline_amount = 0"
+              },
+              "output_structure": {
+                "vendor_name": "string",
+                "current_month_spend": "numeric",
+                "baseline_amount": "numeric (3-month average)",
+                "spend_delta": "numeric",
+                "percent_variance": "numeric or null",
+                "anomaly_classification": "string"
+              },
+              "note": "SQL query uses FULL OUTER JOIN to capture both current-period spenders and baseline vendors; classifications based on absolute percent variance from 3-month average"
+            },
+            "classification": "query_execution_ready",
+            "status": "awaiting_mongodb_operational_state"
+          }
+        ],
+        "metadata": {
+          "reconciliation_mode": "LEFT_JOIN_SQL_READY",
+          "primary_source": "mongodb_operational_state_pending",
+          "secondary_source": "sql_historical_baseline_prepared",
+          "variance_thresholds": {
+            "normal_variance": "\u226415%",
+            "concerning": "15-50%",
+            "critical": ">50%"
+          },
+          "expected_output_fields": [
+            "vendor_name",
+            "current_month_spend",
+            "baseline_amount",
+            "spend_delta",
+            "percent_variance",
+            "anomaly_classification"
+          ]
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007642,
+  "total_latency_ms": 9773,
+  "cumulative_spend_usd": 1.1025300000000002,
+  "evaluator_reason": "step2_consumer_classification_missing"
+}

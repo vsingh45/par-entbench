@@ -1,0 +1,95 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_elevated_roles",
+        "description": "Query IAM system for all roles with elevated permission classifications (admin, privileged, elevated flags) including their granted permission sets. Include role ID, role name, permission names, grant dates.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_exercised_permissions",
+        "description": "Query CloudTrail/activity logs for the last 180 days. Aggregate API calls and resource access events by IAM role, extracting the permissions actually exercised. Include role ID, permission name, last exercise date, frequency.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_permission_gap",
+        "description": "Reconcile granted permissions (from sql_elevated_roles) against exercised permissions (from sql_exercised_permissions). Identify granted-but-never-used permissions per role. Classify each permission gap by risk level (unused admin action, unused data access, etc.). Flag candidates for revocation with justification and priority ranking.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_elevated_roles",
+          "sql_exercised_permissions"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: two independent SQL queries (small-to-mid tier) to fetch granted and exercised permissions from separate sources, then frontier-tier cross_recon to reconcile the two datasets, classify permission gaps by risk, and generate revocation candidates with prioritization. This avoids unnecessary fragmentation\u2014both SQL queries run in parallel, and the complex reconciliation, gap analysis, and risk classification are consolidated in a single cross_recon call rather than split across multiple specialists. Mid tier assigned to both SQL tasks due to the need for multi-table joins (role-to-permission mappings and activity log aggregation) and 180-day temporal filtering. Frontier tier for cross_recon because the task requires multi-signal matching (permission name normalization across IAM and activity logs), inference of permission usage patterns, and multi-factor risk classification."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_elevated_roles",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 752,
+      "output_tokens": 383,
+      "cached_tokens": 0,
+      "latency_ms": 4854,
+      "output": {
+        "sql": "WITH elevated_roles AS (SELECT DISTINCT user_id AS role_id, permission FROM access_log_facts WHERE permission ILIKE ANY (ARRAY['%admin%','%privileged%','%elevated%','%root%','%superuser%'])), exercised AS (SELECT DISTINCT user_id, permission FROM access_log_facts WHERE access_time >= CURRENT_DATE - INTERVAL '180 days' AND result = 'success') SELECT er.role_id, er.permission AS granted_permission, CASE WHEN ex.permission IS NULL THEN 'REVOKE_CANDIDATE' ELSE 'ACTIVE' END AS status, COALESCE((SELECT MAX(access_time) FROM access_log_facts a WHERE a.user_id = er.role_id AND a.permission = er.permission), NULL) AS last_used FROM elevated_roles er LEFT JOIN exercised ex ON er.role_id = ex.user_id AND er.permission = ex.permission ORDER BY er.role_id, status DESC, er.permission"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_exercised_permissions",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 765,
+      "output_tokens": 108,
+      "cached_tokens": 0,
+      "latency_ms": 2136,
+      "output": {
+        "sql": "SELECT permission, COUNT(*) AS frequency, MAX(access_time)::date AS last_exercised FROM access_log_facts WHERE access_time >= CURRENT_DATE - INTERVAL '180 days' GROUP BY permission ORDER BY frequency DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_permission_gap",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1010,
+      "output_tokens": 93,
+      "cached_tokens": 0,
+      "latency_ms": 2223,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "role_id:granted_permission",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_data_available",
+            "note": "Upstream outputs contain SQL query definitions only; no result rows provided to reconcile."
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.027235000000000002,
+  "total_latency_ms": 9213,
+  "cumulative_spend_usd": 2.9589460000000023,
+  "evaluator_reason": "no_mongo_node"
+}

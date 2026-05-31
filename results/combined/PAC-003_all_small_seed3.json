@@ -1,0 +1,54 @@
+{
+  "task_id": "PAC-003",
+  "task_class": "policy_action",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_eval_emergency_access",
+        "description": "Evaluate emergency access request for u_9981 (senior-engineer) to db-payments-primary against access control policies. Verify on-call status, role-based permissions, incident severity (P1), and generate approval decision with audit trail requirements.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask at mid tier. This is an explicit governance decision requiring policy evaluation: the query asks for emergency access approval, which requires checking access control policies, role-based permissions, incident severity thresholds, and on-call status against the policy registry. Mid tier is appropriate because the decision involves multiple signals (role, incident severity, on-call status) and may require evaluating multiple applicable rules (general access control + emergency escalation exceptions). No cross_recon needed since we're evaluating policy, not reconciling operational state. No additional subtasks needed\u2014the policy evaluation itself generates the approval decision."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_eval_emergency_access",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 559,
+      "output_tokens": 264,
+      "cached_tokens": 0,
+      "latency_ms": 2586,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-501": "pass",
+          "POL-502": "pass_conditional",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "Emergency access granted under P1 incident exception. User has senior-engineer role with active P1 incident ticket (INC-20241215-0042). POL-502 dual-approval requirement waived for declared P1 incidents. POL-503 audit and review requirements apply.",
+        "applied_constraints": [
+          "access_duration: limited to 4 hours or incident resolution, whichever is first",
+          "audit_logging: all queries and database modifications must be logged",
+          "incident_tracking: access tied to ticket INC-20241215-0042",
+          "review_requirement: mandatory security review within 24 hours",
+          "access_scope: read_write limited to db-payments-primary only",
+          "session_monitoring: real-time monitoring of active session required"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001879,
+  "total_latency_ms": 2586,
+  "cumulative_spend_usd": 5.013882000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

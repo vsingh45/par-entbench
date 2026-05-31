@@ -1,0 +1,153 @@
+{
+  "task_id": "MTP-007",
+  "task_class": "multitool_plan",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "cloudtrail_audit",
+        "description": "Query CloudTrail logs to extract authentication events, policy violations, and suspicious activities. Aggregate by user, principal, action, and result status.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "iam_policy_scan",
+        "description": "Extract and analyze IAM policies from the enterprise policy registry. Evaluate each policy against baseline security standards (least privilege, explicit deny patterns, service-level restrictions).",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "violation_detection",
+        "description": "Cross-reconcile CloudTrail audit events with IAM policy definitions to identify violations, unauthorized access attempts, and policy drift. Classify findings by severity and recommend remediation.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "cloudtrail_audit",
+          "iam_policy_scan"
+        ]
+      },
+      {
+        "id": "compliance_report",
+        "description": "Generate comprehensive security audit and compliance report including: violation summary, risk assessment, policy coverage analysis, remediation roadmap, and executive summary.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": [
+          "violation_detection"
+        ]
+      }
+    ],
+    "cost_rationale": "This workflow requires 4 subtasks to fully execute the security audit pipeline. (1) CloudTrail audit is a mid-tier SQL query aggregating access logs across multiple dimensions. (2) IAM policy extraction is mid-tier because it requires parsing and validating multiple policy documents against a schema. (3) Violation detection is frontier-tier because it performs cross-source reconciliation (CloudTrail events vs. IAM definitions), anomaly classification, and derives remediation recommendations—all multi-signal reasoning. (4) Compliance report generation is a policy_action subtask (mid-tier) that evaluates the violation findings against compliance frameworks and governance policies, producing the final audit report. This plan avoids unnecessary decomposition by combining all CloudTrail analysis into one query and all policy extraction into one call."
+  },
+  "node_results": [
+    {
+      "subtask_id": "cloudtrail_audit",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 470,
+      "output_tokens": 81,
+      "cached_tokens": 0,
+      "latency_ms": 1105,
+      "output": {
+        "sql": "SELECT user_id, permission, action, result, COUNT(*) as event_count, MIN(access_time) as first_event, MAX(access_time) as last_event FROM access_log_facts GROUP BY user_id, permission, action, result ORDER BY event_count DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "iam_policy_scan",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 254,
+      "output_tokens": 244,
+      "cached_tokens": 0,
+      "latency_ms": 1849,
+      "output": {
+        "task_type": "IAM_policy_extraction_and_analysis",
+        "workflow_type": "security_audit",
+        "components": [
+          {
+            "component": "IAM_policy_scan",
+            "status": null,
+            "policies_found": null
+          },
+          {
+            "component": "CloudTrail_audit",
+            "status": null,
+            "logs_analyzed": null
+          },
+          {
+            "component": "policy_violation_check",
+            "status": null,
+            "violations_found": null
+          },
+          {
+            "component": "compliance_report",
+            "status": null,
+            "report_generated": null
+          }
+        ],
+        "baseline_security_standards": [
+          "least_privilege",
+          "explicit_deny_patterns",
+          "service_level_restrictions"
+        ],
+        "evaluation_results": null,
+        "compliance_status": null,
+        "timestamp": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "violation_detection",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 521,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 5131,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"IAM_policy_scan\",\n      \"mongo_value\": {\n        \"task_type\": \"IAM_policy_extraction_and_analysis\",\n        \"workflow_type\": \"security_audit\",\n        \"baseline_security_standards\": [\"least_privilege\", \"explicit_deny_patterns\", \"service_level_restrictions\"]\n      },\n      \"sql_value\": null,\n      \"classification\": \"incomplete_execution\",\n      \"severity\": \"high\",\n      \"findings\": {\n        \"status\": \"not_executed\",\n        \"policies_found\": null,\n        \"violations_found\": null,\n        \"compliance_status\": null\n      },\n      \"recommendation\": \"Execute IAM policy scan component before reconciliation can proceed\"\n    },\n    {\n      \"entity_key\": \"CloudTrail_audit\",\n      \"mongo_value\": {\n        \"component\": \"CloudTrail_audit\",\n        \"status\": null,\n        \"logs_analyzed\": null\n      },\n      \"sql_value\": {\n        \"query_executed\": true,\n        \"source\": \"access_log_facts\",\n        \"dimensions\": [\"user_id\", \"permission\", \"action\", \"result\"],\n        \"metrics\": [\"event_count\", \"first_event\", \"last_event\"]\n      },\n      \"classification\": \"partial_data_availability\",\n      \"severity\": \"medium\",\n      \"findings\": {\n        \"sql_data_available\": true,\n        \"mongodb_status_missing\": true,\n        \"audit_logs_aggregated\": true\n      },\n      \"recommendation\": \"CloudTrail logs available via SQL; populate MongoDB audit status and correlate with IAM policies\"\n    },\n    {\n      \"entity_key\": \"policy_violation_check\",\n      \"mongo_value\": {\n        \"component\": \"policy_violation_check\",\n        \"status\": null,\n        \"violations_found\": null\n      },\n      \"sql_value\": null,\n      \"classification\": \"unexecuted\",\n      \"severity\": \"critical\",\n      \"findings\": {\n        \"violation_analysis_status\": \"pending\",\n        \"cross_reference_status\": \"cannot_execute\",\n        \"baseline_standards\": [\"least_privilege\", \"explicit_deny_patterns\", \"service_level_restrictions\"]\n      },\n      \"recommendation\": \"Execute policy violation check after IAM policies are scanned and CloudTrail logs are analyzed\"\n    },\n    {\n      \"entity_key\": \"compliance_report\",\n      \"mongo_value\": {\n        \"component\": \"compliance_report\",\n        \"status\": null,\n        \"report_generated\": null,\n        \"timestamp\": null\n      },\n      \"sql_value\": null,\n      \"classification\": \"not_generated\",\n      \"severity\": \"high\",\n      \"findings\": {\n        \"audit_prerequisites_met\": false,\n        \"policy_scan_required\": true,\n        \"violation_check_required\": true\n      },\n      \"recommendation\": \"Generate compliance report only after all upstream audit components complete successfully\"\n    }\n  ],\n  \"summary\": {\n    \"total_entities\": 4,\n    \"reconciled\": 4,\n    \"critical_issues\": 1,\n    \"high_severity\": 2,\n    \"medium_severity\": 1,\n    \"workflow_status\": \"stalled\",\n    \""
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "compliance_report",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1910,
+      "output_tokens": 228,
+      "cached_tokens": 0,
+      "latency_ms": 5517,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-001": "fail",
+          "POL-002": "fail",
+          "POL-003": "not_applicable"
+        },
+        "reason": "Upstream audit prerequisites are incomplete: IAM policy scan not executed, CloudTrail audit only partially available, and policy violation check pending. Critical and high-severity gaps prevent generation of a reliable compliance report.",
+        "applied_constraints": [
+          "Require execution of IAM policy scan before report generation",
+          "Require completion of policy violation check",
+          "Populate MongoDB audit status and correlate with SQL CloudTrail data",
+          "Defer compliance report generation until all upstream components succeed"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.02212,
+  "total_latency_ms": 13602,
+  "cumulative_spend_usd": 7.731860000000004
+}

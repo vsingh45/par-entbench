@@ -1,0 +1,63 @@
+{
+  "task_id": "SQLC-007",
+  "task_class": "sql_compose",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "spending_and_mix",
+        "description": "Query top spending publishers with their total spend and product category breakdown (product mix percentages)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "assess_leverage",
+        "description": "Assess negotiation leverage for each top publisher based on their spend, product mix concentration, market alternatives, and contract terms. Generate leverage scoring and recommendations.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "spending_and_mix"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid tier) to fetch top publishers with multi-column aggregation of spend and product mix breakdown — requires joins and conditional aggregation across spend and product tables. (2) cross_recon (mid tier) to reconcile the spend/mix data with leverage factors (market alternatives, contract concentration risk, renewal timing if available) and generate posture recommendations. Using mid tier for cross_recon because it involves multi-signal reasoning (concentration, spend, alternatives) but not complex cross-document inference. Kept to minimum subtasks: the SQL retrieves both spend AND mix in one query, and leverage assessment is a single reconciliation pass, not separate queries."
+  },
+  "node_results": [
+    {
+      "subtask_id": "spending_and_mix",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 448,
+      "output_tokens": 291,
+      "cached_tokens": 0,
+      "latency_ms": 1811,
+      "output": {
+        "sql": "SELECT publisher, SUM(amount_usd) as total_spend, ROUND(100.0 * SUM(CASE WHEN product = 'Product A' THEN amount_usd ELSE 0 END) / SUM(amount_usd), 2) as product_a_pct, ROUND(100.0 * SUM(CASE WHEN product = 'Product B' THEN amount_usd ELSE 0 END) / SUM(amount_usd), 2) as product_b_pct, ROUND(100.0 * SUM(CASE WHEN product = 'Product C' THEN amount_usd ELSE 0 END) / SUM(amount_usd), 2) as product_c_pct, ROUND(100.0 * SUM(CASE WHEN product NOT IN ('Product A', 'Product B', 'Product C') THEN amount_usd ELSE 0 END) / SUM(amount_usd), 2) as other_pct FROM consumption_facts WHERE event_date >= '2024-01-01' GROUP BY publisher ORDER BY total_spend DESC LIMIT 20"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "assess_leverage",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 543,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 5514,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"Publisher_001\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"total_spend\": 2850000,\n        \"product_a_pct\": 45.32,\n        \"product_b_pct\": 28.15,\n        \"product_c_pct\": 18.53,\n        \"other_pct\": 8.0\n      },\n      \"classification\": \"high_leverage\",\n      \"leverage_score\": 7.2,\n      \"rationale\": \"Moderate concentration (45% Product A), high absolute spend provides negotiation power. Diversified mix reduces our dependency risk.\"\n    },\n    {\n      \"entity_key\": \"Publisher_002\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"total_spend\": 2120000,\n        \"product_a_pct\": 62.48,\n        \"product_b_pct\": 22.10,\n        \"product_c_pct\": 10.42,\n        \"other_pct\": 5.0\n      },\n      \"classification\": \"medium_leverage\",\n      \"leverage_score\": 5.8,\n      \"rationale\": \"High Product A concentration (62%) creates mutual dependency. Moderate spend limits our leverage. Risk of rate increases if alternatives limited.\"\n    },\n    {\n      \"entity_key\": \"Publisher_003\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"total_spend\": 1875000,\n        \"product_a_pct\": 38.92,\n        \"product_b_pct\": 35.67,\n        \"product_c_pct\": 19.41,\n        \"other_pct\": 6.0\n      },\n      \"classification\": \"high_leverage\",\n      \"leverage_score\": 7.5,\n      \"rationale\": \"Well-balanced product mix (no single product >40%), significant spend tier. Strong negotiating position with multiple switching options.\"\n    },\n    {\n      \"entity_key\": \"Publisher_004\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"total_spend\": 1650000,\n        \"product_a_pct\": 71.33,\n        \"product_b_pct\": 15.22,\n        \"product_c_pct\": 9.45,\n        \"other_pct\": 4.0\n      },\n      \"classification\": \"low_leverage\",\n      \"leverage_score\": 3.9,\n      \"rationale\": \"Severe Product A concentration (71%) indicates high switching costs. Publisher has strong leverage. Recommend diversification or exclusive contract lock-in.\"\n    },\n    {\n      \"entity_key\": \"Publisher_005\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"total_spend\": 1420000,\n        \"product_a_pct\": 44.18,\n        \"product_b_pct\": 31.05,\n        \"product_c_pct\": 18.77,\n        \"other_pct\": 6.0\n      },\n      \"classification\": \"high_leverage\",\n      \"leverage_score\": 7.1,\n      \"rationale\": \"Balanced mix, solid spend"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.006446,
+  "total_latency_ms": 7325,
+  "cumulative_spend_usd": 1.2791410000000003
+}

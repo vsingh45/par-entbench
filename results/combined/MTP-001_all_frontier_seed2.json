@@ -1,0 +1,187 @@
+{
+  "task_id": "MTP-001",
+  "task_class": "multitool_plan",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_ms_licenses",
+        "description": "Query MongoDB to count total Microsoft licenses in inventory",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_ms_spend",
+        "description": "Query Snowflake for last month's Microsoft spend aggregated by month and/or vendor",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_summarize",
+        "description": "Reconcile license count from MongoDB with spend data from Snowflake, generate executive summary for SAM team, and format for email delivery",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "mongo_ms_licenses",
+          "sql_ms_spend"
+        ]
+      },
+      {
+        "id": "send_email",
+        "description": "Send summary email to SAM team with license count, last month's spend, and reconciliation insights",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "reconcile_and_summarize"
+        ]
+      }
+    ],
+    "cost_rationale": "Four subtasks required: (1) mongo_query to count Microsoft licenses is simple, single-collection query (small tier); (2) sql_gen to pull last month's Microsoft spend is a straightforward single-table or simple join query (small tier); (3) cross_recon to reconcile both data sources, identify deltas, and produce a summary narrative (mid tier\u2014requires synthesis and contextual understanding); (4) multitool_plan to orchestrate the email send via the enterprise tool registry (small tier\u2014a standard email delivery). Dependencies chain from data retrieval \u2192 reconciliation \u2192 email dispatch. No policy_action needed since this is reporting, not governance/compliance."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_ms_licenses",
+      "specialist": "mongo_query",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1730,
+      "output_tokens": 110,
+      "cached_tokens": 0,
+      "latency_ms": 1752,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Microsoft"
+            }
+          },
+          {
+            "$count": "total_microsoft_licenses"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_ms_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 710,
+      "output_tokens": 184,
+      "cached_tokens": 0,
+      "latency_ms": 2467,
+      "output": {
+        "sql": "SELECT DATE_TRUNC('month', event_date) AS month, publisher, SUM(amount_usd) AS total_spend_usd FROM consumption_facts WHERE publisher = 'Microsoft' AND event_date >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AND event_date < DATE_TRUNC('month', CURRENT_DATE) GROUP BY DATE_TRUNC('month', event_date), publisher ORDER BY month"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_summarize",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 691,
+      "output_tokens": 86,
+      "cached_tokens": 0,
+      "latency_ms": 1579,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "Microsoft",
+            "mongo_value": {
+              "total_microsoft_licenses": null
+            },
+            "sql_value": {
+              "total_spend_usd": null,
+              "month": null
+            },
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "send_email",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 721,
+      "output_tokens": 721,
+      "cached_tokens": 0,
+      "latency_ms": 8858,
+      "output": {
+        "plan": [
+          {
+            "tool": "mongo.aggregate",
+            "arguments": {
+              "collection": "licenses",
+              "pipeline": [
+                {
+                  "$match": {
+                    "vendor": "Microsoft"
+                  }
+                },
+                {
+                  "$group": {
+                    "_id": null,
+                    "total_microsoft_licenses": {
+                      "$sum": "$seats"
+                    }
+                  }
+                }
+              ]
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "sql.snowflake.query",
+            "arguments": {
+              "query": "SELECT SUM(amount_usd) AS total_spend_usd, TO_CHAR(DATE_TRUNC('month', DATEADD('month', -1, CURRENT_DATE())), 'YYYY-MM') AS month FROM finance.vendor_spend WHERE vendor = 'Microsoft' AND DATE_TRUNC('month', spend_date) = DATE_TRUNC('month', DATEADD('month', -1, CURRENT_DATE()))"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "email.send",
+            "arguments": {
+              "to": "sam-team@company.com",
+              "subject": "Microsoft SAM Summary - License Count & Last Month Spend",
+              "body": "Hello SAM Team,\n\nHere is the latest Microsoft summary:\n\n- Total Microsoft Licenses (Mongo): $1.results\n- Last Month Microsoft Spend (Snowflake): $2.results\n\nReconciliation Insights:\n- Entity: Microsoft\n- Classification: no_recent_activity\n- Mongo value: total_microsoft_licenses=null\n- SQL value: total_spend_usd=null, month=null\n\nNote: Reconciliation indicates no recent activity detected for Microsoft. Please review whether data ingestion pipelines for Mongo licenses and Snowflake spend are up to date.\n\nRegards,\nSAM Automation"
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "email.send",
+              "resource": "sam-team@company.com",
+              "details": "Sent Microsoft SAM summary email with license count, last month spend, and reconciliation insights.",
+              "status": "$3.status"
+            },
+            "depends_on": [
+              3
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.04678500000000001,
+  "total_latency_ms": 14656,
+  "cumulative_spend_usd": 3.773845000000005,
+  "evaluator_reason": "missing_tools: {'mongo.find'}"
+}

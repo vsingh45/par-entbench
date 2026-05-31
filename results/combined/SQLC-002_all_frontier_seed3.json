@@ -1,0 +1,100 @@
+{
+  "task_id": "SQLC-002",
+  "task_class": "sql_compose",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_1",
+        "description": "Query TPC-H schema to identify top 10 customers by lifetime value (sum of order totals) filtered to market segment 'BUILDING'. Return customer ID, customer name, market segment, total lifetime value, and order count.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_2",
+        "description": "Query TPC-H schema to fetch detailed order patterns for the top 10 customers identified in sql_1. Return order dates, order values, order frequency by time period, and product categories purchased to support narrative generation.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": [
+          "sql_1"
+        ]
+      },
+      {
+        "id": "cross_recon_1",
+        "description": "Reconcile customer lifetime value data with order pattern details. For each of the top 10 customers, synthesize a personalized retention narrative that references their specific order behavior, purchase trends, spending trajectory, and engagement patterns. Include risk signals and value proposition tailored to their segment.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_1",
+          "sql_2"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) Initial SQL to identify top 10 customers by LTV in BUILDING segment (mid tier for multi-table aggregate with filtering), (2) SQL to fetch detailed order patterns for those customers (mid tier for multi-table temporal analysis), (3) Cross-recon (frontier tier) to synthesize personalized retention narratives that reconcile customer value metrics with behavioral patterns, requiring inference and contextual narrative generation for each customer. The cross_recon agent handles the downstream synthesis and classification work that would normally require a separate narrative generation step, avoiding unnecessary subtask proliferation. No multitool_plan or policy_action needed\u2014this is pure analytics and narrative synthesis, not governance or multi-tool orchestration."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 760,
+      "output_tokens": 184,
+      "cached_tokens": 0,
+      "latency_ms": 2102,
+      "output": {
+        "sql": "SELECT c.c_custkey, c.c_name, c.c_mktsegment, SUM(o.o_totalprice) AS lifetime_value, COUNT(o.o_orderkey) AS order_count FROM customer c JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name, c.c_mktsegment ORDER BY lifetime_value DESC LIMIT 10"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_2",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 940,
+      "output_tokens": 551,
+      "cached_tokens": 0,
+      "latency_ms": 5739,
+      "output": {
+        "sql": "WITH top_customers AS (SELECT c.c_custkey, c.c_name, c.c_mktsegment, SUM(o.o_totalprice) AS lifetime_value, COUNT(o.o_orderkey) AS order_count FROM customer c JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name, c.c_mktsegment ORDER BY lifetime_value DESC LIMIT 10) SELECT tc.c_custkey, tc.c_name, o.o_orderkey, o.o_orderdate, o.o_totalprice, o.o_orderpriority, o.o_orderstatus, EXTRACT(YEAR FROM o.o_orderdate) AS order_year, EXTRACT(QUARTER FROM o.o_orderdate) AS order_quarter, COUNT(l.l_linenumber) AS line_item_count, SUM(l.l_quantity) AS total_quantity, SUM(l.l_extendedprice * (1 - l.l_discount)) AS net_revenue FROM top_customers tc JOIN orders o ON tc.c_custkey = o.o_custkey JOIN lineitem l ON o.o_orderkey = l.l_orderkey GROUP BY tc.c_custkey, tc.c_name, o.o_orderkey, o.o_orderdate, o.o_totalprice, o.o_orderpriority, o.o_orderstatus ORDER BY tc.c_custkey, o.o_orderdate"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_1",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1224,
+      "output_tokens": 214,
+      "cached_tokens": 0,
+      "latency_ms": 4261,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "customer_top_building_segment",
+            "mongo_value": null,
+            "sql_value": {
+              "sql_1_summary": "Top 10 BUILDING segment customers by lifetime value with order counts",
+              "sql_2_summary": "Detailed order-level breakdown with quarterly/yearly patterns, line items, quantities, and net revenue per order"
+            },
+            "classification": "no_mongo_data_available"
+          }
+        ],
+        "note": "No MongoDB upstream output provided; only SQL results available. Reconciliation requires MongoDB operational data to perform LEFT JOIN semantics and generate per-customer retention narratives."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.038345000000000004,
+  "total_latency_ms": 12102,
+  "cumulative_spend_usd": 0.8000479999999996,
+  "evaluator_reason": "step2_consumer_narrative_check_failed"
+}

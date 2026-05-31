@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-007",
+  "task_class": "sql_gen",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "Identify publishers with declining spend from Q3 to Q4 2024. Show publishers where Q4 spend is less than Q3 spend.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 721,
+      "output_tokens": 431,
+      "cached_tokens": 0,
+      "latency_ms": 4376,
+      "output": {
+        "sql": "SELECT publisher, SUM(CASE WHEN event_date >= '2024-07-01' AND event_date < '2024-10-01' THEN amount_usd ELSE 0 END) AS q3_spend, SUM(CASE WHEN event_date >= '2024-10-01' AND event_date < '2025-01-01' THEN amount_usd ELSE 0 END) AS q4_spend FROM consumption_facts WHERE event_date >= '2024-07-01' AND event_date < '2025-01-01' GROUP BY publisher HAVING SUM(CASE WHEN event_date >= '2024-10-01' AND event_date < '2025-01-01' THEN amount_usd ELSE 0 END) < SUM(CASE WHEN event_date >= '2024-07-01' AND event_date < '2024-10-01' THEN amount_usd ELSE 0 END) ORDER BY (SUM(CASE WHEN event_date >= '2024-07-01' AND event_date < '2024-10-01' THEN amount_usd ELSE 0 END) - SUM(CASE WHEN event_date >= '2024-10-01' AND event_date < '2025-01-01' THEN amount_usd ELSE 0 END)) DESC"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01438,
+  "total_latency_ms": 4376,
+  "cumulative_spend_usd": 0.25909799999999994,
+  "evaluator_reason": "result_bag_mismatch"
+}

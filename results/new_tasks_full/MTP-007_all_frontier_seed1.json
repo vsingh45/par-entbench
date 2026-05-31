@@ -1,0 +1,108 @@
+{
+  "task_id": "MTP-007",
+  "task_class": "multitool_plan",
+  "router": "all_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "iam_scan",
+        "description": "Scan and extract IAM policies from the enterprise IAM system, identifying principals, resource permissions, and policy statements for compliance analysis",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cloudtrail_audit",
+        "description": "Query CloudTrail logs to identify API calls, authentication events, and access patterns for the audit period, extracting principal, action, resource, and timestamp fields",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "violation_check",
+        "description": "Reconcile IAM policies against CloudTrail activity logs and check for violations including unauthorized actions, privilege escalation attempts, root account usage, and policy drift. Classify violations by severity and type.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "iam_scan",
+          "cloudtrail_audit"
+        ]
+      },
+      {
+        "id": "compliance_report",
+        "description": "Generate comprehensive security audit and compliance report including policy violations, risk classification, remediation recommendations, and compliance posture summary",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "violation_check"
+        ]
+      }
+    ],
+    "cost_rationale": "Four subtasks are required to execute the complete security audit workflow: (1) IAM policy extraction (mid-tier for handling complex policy structures across multiple principals), (2) CloudTrail SQL query to aggregate audit logs (mid-tier for multi-table joins on access events), (3) Cross-reconciliation of policies vs. actual activity with violation classification (frontier-tier due to multi-signal analysis, anomaly detection, and severity classification logic), and (4) Compliance report generation via multitool orchestration (mid-tier to coordinate report formatting, policy lookups, and output distribution). This is the minimum decomposition—policy violation checking is integrated into cross_recon rather than a separate policy_action subtask, since the query does not request explicit policy registry evaluation but rather evidence-based violation detection and posture assessment."
+  },
+  "node_results": [
+    {
+      "subtask_id": "iam_scan",
+      "specialist": "extract",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 361,
+      "output_tokens": 6,
+      "cached_tokens": 0,
+      "latency_ms": 1323,
+      "output": {},
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cloudtrail_audit",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 725,
+      "output_tokens": 83,
+      "cached_tokens": 0,
+      "latency_ms": 1913,
+      "output": {
+        "sql": "SELECT user_id AS principal, action, resource, access_time AS event_timestamp, permission, result FROM access_log_facts WHERE access_time >= '2024-01-01' ORDER BY access_time DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "violation_check",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 545,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 952,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "compliance_report",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 648,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9713,
+      "output": {
+        "raw_output": "{\"plan\":[{\"tool\":\"iam.check_permission\",\"arguments\":{\"action\":\"security.audit\",\"resource\":\"organization\"},\"depends_on\":[]},{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT user_id, role, policy_name, last_modified FROM iam_policies WHERE status='active'\"},\"depends_on\":[1]},{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT event_time, event_name, user_identity, source_ip, resource FROM cloudtrail_logs WHERE event_time >= DATEADD(day, -30, CURRENT_TIMESTAMP) AND (error_code IS NOT NULL OR event_name IN ('DeleteBucket','PutBucketPolicy','AttachUserPolicy','CreateAccessKey'))\"},\"depends_on\":[1]},{\"tool\":\"mongo.find\",\"arguments\":{\"collection\":\"policy_violations\",\"filter\":{\"status\":\"open\",\"detected_at\":{\"$gte\":\"2024-01-01\"}}},\"depends_on\":[1]},{\"tool\":\"mongo.aggregate\",\"arguments\":{\"collection\":\"policy_violations\",\"pipeline\":[{\"$match\":{\"status\":\"open\"}},{\"$group\":{\"_id\":\"$severity\",\"count\":{\"$sum\":1},\"violations\":{\"$push\":{\"policy\":\"$policy_name\",\"user\":\"$user_id\",\"resource\":\"$resource\"}}}},{\"$sort\":{\"_id\":1}}]},\"depends_on\":[4]},{\"tool\":\"datadog.query_metric\",\"arguments\":{\"metric\":\"security.compliance.score\",\"from\":\"now-30d\",\"to\":\"now\"},\"depends_on\":[1]},{\"tool\":\"datadog.list_alerts\",\"arguments\":{\"tags\":[\"security\",\"compliance\"],\"status\":\"triggered\"},\"depends_on\":[1]},{\"tool\":\"file.write\",\"arguments\":{\"path\":\"/reports/security_audit_compliance_report.md\",\"content\":\"# Security Audit & Compliance Report\\n\\n## IAM Policies: $2.results\\n\\n## CloudTrail Suspicious Events: $3.results\\n\\n## Open Policy Violations: $4.results\\n\\n## Risk Classification by Severity: $5.results\\n\\n## Compliance Score Trend: $6.results\\n\\n## Active Security Alerts: $7.results\\n\\n## Remediation Recommendations\\n- Review and"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.03397,
+  "total_latency_ms": 13901,
+  "cumulative_spend_usd": 7.604468000000005
+}

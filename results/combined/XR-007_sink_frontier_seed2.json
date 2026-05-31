@@ -1,0 +1,64 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "aws_commit_sql",
+        "description": "Query SQL warehouse to extract AWS contracted commit levels (by service, region, term) and aggregate actual monthly spend over the contract period. Include variance calculations (commit vs. actual) to flag overcommitment or underutilization.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_posture",
+        "description": "Reconcile contracted commitment data with actual spend patterns. Classify each commitment as overcommitted (actual < commit by >threshold), underutilized (commit >> actual), or well-matched. Generate recommendations for commitment adjustments, sizing changes, or renegotiation opportunities.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "aws_commit_sql"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid-tier) to join contract commitment table with spend history, calculate variance metrics, and aggregate by service/region/term\u2014moderately complex multi-table query requiring window functions or CTEs for rolling/period comparisons. (2) cross_recon (mid-tier) to classify posture (overcommit vs. underutilize), identify patterns, and recommend actions (resizing, term changes, or discount program adjustments). Both mid-tier because the queries involve multiple dimensions and the reconciliation requires multi-signal reasoning, but neither requires frontier-level inference or complex cross-collection logic. No policy_action needed since this is analysis and recommendation, not governance approval."
+  },
+  "node_results": [
+    {
+      "subtask_id": "aws_commit_sql",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 481,
+      "output_tokens": 309,
+      "cached_tokens": 0,
+      "latency_ms": 3709,
+      "output": {
+        "raw_output": "{\n  \"sql\": \"SELECT 'AWS commitment analysis not available' as note, 'The EntBench warehouse schema does not contain AWS contract commitment data, service-level details, regional breakdowns, or term structures. Available tables (consumption_facts, invoice_facts, access_log_facts, customer, orders, lineitem) do not include AWS-specific contract metadata such as commit levels by service, region, or term length. To perform this analysis, you would need tables such as: aws_commitments(commitment_id, service, region, term_months, committed_amount_usd, start_date, end_date) and aws_monthly_spend(month_date, service, region, actual_spend_usd) or similar AWS Cost Explorer export tables.' as explanation\"\n}\n```\n\n**Note:** The EntBench Postgres warehouse schema provided does not contain AWS contract commitment data. To execute the requested analysis comparing contracted commit levels vs. actual spend with variance calculations, you would need to:\n\n1. Create tables to store AWS commitment reservations and savings plans\n2. Import AWS Cost Explorer or billing data with service/region/term dimensions\n3. Link actual monthly consumption to these commitments\n\nIf you have AWS billing data in another system, please provide the relevant schema, or clarify if this analysis should use the available `consumption_facts` and `invoice_facts` tables with different comparison logic."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 959,
+      "output_tokens": 13,
+      "cached_tokens": 0,
+      "latency_ms": 1216,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0071460000000000004,
+  "total_latency_ms": 4925,
+  "cumulative_spend_usd": 4.301929000000001,
+  "evaluator_reason": "no_mongo_node"
+}

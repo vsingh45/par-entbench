@@ -1,0 +1,53 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_eval_contractor_access",
+        "description": "Evaluate the contractor's download request against access control policies: verify contractor status (temporary vs. permanent), scope of data access rights, compliance with data protection regulations (GDPR, CCPA, etc.), and whether full database backup access is permitted for local analysis vs. restricted to on-premise/cloud environments.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single subtask (policy_action, mid tier): This is a straightforward access control and governance decision. The query explicitly asks to evaluate a request against policy constraints\u2014contractor status, data access scope, and regulatory compliance. Mid tier is appropriate because the decision involves multiple policy signals (temporary status, data protection regulations, environment restrictions) but does not require cross-source reconciliation or complex conditional logic. No SQL/MongoDB queries are needed; the input is the contractor's identity and request characteristics, and the output is a policy decision (approve/deny with rationale). No additional subtasks are needed\u2014this is purely a policy compliance check, not a data retrieval or reconciliation task.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_eval_contractor_access",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 535,
+      "output_tokens": 285,
+      "cached_tokens": 0,
+      "latency_ms": 3634,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "Contractor-dave's request to download full production database backup violates three critical access control policies: POL-701 restricts database backups to full-time DBA employees (contractor does not qualify), POL-702 explicitly prohibits raw data exports for contractors (limiting to de-identified query results only), and POL-703 requires explicit project manager approval with 7-day advance notice (no evidence of approval provided). Full database backup access for local analysis is not permitted under current policy framework.",
+        "applied_constraints": [
+          "Request denied: contractor status prohibits direct backup downloads",
+          "Recommend: de-identified query results via secure query interface instead",
+          "If raw data access required: obtain project manager written approval and provide 7-day notice before resubmission",
+          "Alternative: on-premise/cloud sandbox environment analysis with access logging",
+          "Escalation required to project manager and compliance team for approval decision"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.00196,
+  "total_latency_ms": 3634,
+  "cumulative_spend_usd": 8.799027000000006,
+  "evaluator_reason": "selected_action_mismatch"
+}

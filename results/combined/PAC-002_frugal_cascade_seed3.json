@@ -1,0 +1,50 @@
+{
+  "task_id": "PAC-002",
+  "task_class": "policy_action",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "Engineer 'u_7732' attempts to deploy a hotfix to production environment 'prod-us-east-1' outside of the approved maintenance window (current time: 2:15 AM UTC Tuesday).",
+        "specialist": "policy_action",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 540,
+      "output_tokens": 203,
+      "cached_tokens": 0,
+      "latency_ms": 1956,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-401": "pass",
+          "POL-402": "fail",
+          "POL-403": "fail"
+        },
+        "reason": "Deployment denied. User has engineer role meeting POL-401 requirements. However, current time (Tuesday 02:15 UTC) falls outside approved maintenance window (Saturday 10 PM \u2013 Sunday 6 AM UTC per POL-403). POL-402 requires CAB approval for production deployments outside maintenance windows, which has not been obtained.",
+        "applied_constraints": [
+          "Deployment blocked until Change Advisory Board (CAB) approval obtained",
+          "Engineer must submit CAB request with business justification for out-of-window hotfix deployment"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001555,
+  "total_latency_ms": 1956,
+  "cumulative_spend_usd": 4.948033000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

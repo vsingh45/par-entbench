@@ -1,0 +1,103 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_publishers",
+        "description": "Query SQL warehouse to identify publishers with declining quarterly spend trends in 2024 (Q1 > Q2 > Q3 > Q4 or similar declining pattern). Return publisher ID, name, and quarterly spend amounts.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "generate_recommendations",
+        "description": "Reconcile publisher decline data with contract status, historical renewal patterns, and market positioning. For each declining publisher, classify renewal posture and generate recommendation (hold, expand, reduce) based on trend severity, contract value at risk, and strategic importance.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "fetch_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid tier) to fetch publishers with declining Q1-Q4 2024 trends \u2014 multi-quarter windowed aggregation across spend tables justifies mid tier; (2) cross_recon (mid tier) to reconcile decline trends with contract metadata and generate hold/expand/reduce recommendations \u2014 classification and posture decision are inherent to cross_recon, not a separate policy_action, because the query does not ask for compliance or governance approval, just business recommendations. No separate policy_action needed. No multitool_plan needed \u2014 the work is contained within SQL and business logic."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 756,
+      "output_tokens": 347,
+      "cached_tokens": 0,
+      "latency_ms": 3735,
+      "output": {
+        "sql": "WITH quarterly AS (SELECT publisher, SUM(CASE WHEN fiscal_quarter=1 THEN amount_usd ELSE 0 END) AS q1, SUM(CASE WHEN fiscal_quarter=2 THEN amount_usd ELSE 0 END) AS q2, SUM(CASE WHEN fiscal_quarter=3 THEN amount_usd ELSE 0 END) AS q3, SUM(CASE WHEN fiscal_quarter=4 THEN amount_usd ELSE 0 END) AS q4 FROM consumption_facts WHERE event_date >= '2024-01-01' AND event_date < '2025-01-01' GROUP BY publisher) SELECT publisher AS publisher_id, publisher AS publisher_name, q1, q2, q3, q4 FROM quarterly WHERE q1 > q2 AND q2 > q3 AND q3 > q4 ORDER BY (q1 - q4) DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "generate_recommendations",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 520,
+      "output_tokens": 460,
+      "cached_tokens": 0,
+      "latency_ms": 4690,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "publisher_decline_analysis",
+            "note": "Cannot execute reconciliation - no MongoDB operational state provided",
+            "status": "incomplete_input",
+            "required_data": {
+              "mongodb_source": "current publisher contracts, renewal dates, contract values, strategic tier",
+              "sql_source": "quarterly consumption trends (q1>q2>q3>q4)",
+              "missing": "MongoDB query output with operational contract state"
+            },
+            "schema_expected": {
+              "mongo_result": [
+                {
+                  "publisher_id": "string",
+                  "current_contract_value_usd": "number",
+                  "renewal_date": "date",
+                  "strategic_tier": "string",
+                  "contract_status": "string"
+                }
+              ],
+              "sql_result": [
+                {
+                  "publisher_id": "string",
+                  "q1": "number",
+                  "q2": "number",
+                  "q3": "number",
+                  "q4": "number",
+                  "decline_rate": "number"
+                }
+              ]
+            },
+            "reconciliation_logic": {
+              "step1": "LEFT JOIN mongo contracts ON sql.publisher_id = mongo.publisher_id",
+              "step2": "Calculate decline_severity = (q1-q4)/q1, trend_momentum = (q3-q4)/q3",
+              "step3": "Classify by: contract_value_at_risk * decline_severity + strategic_tier weight",
+              "step4": "Recommendation: reduce if (decline>30% AND value_at_risk>high), hold if (decline<15%), expand if (strategic_tier=1 AND reversible_decline)"
+            }
+          }
+        ],
+        "error": "MongoDB operational state required - received only SQL historical query definition"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.015275,
+  "total_latency_ms": 8425,
+  "cumulative_spend_usd": 1.2331939999999997,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

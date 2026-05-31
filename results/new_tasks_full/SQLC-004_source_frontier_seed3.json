@@ -1,0 +1,90 @@
+{
+  "task_id": "SQLC-004",
+  "task_class": "sql_compose",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "query_vendor_risk",
+        "description": "Query vendor reliability data to retrieve vendor IDs, incident counts, mean time to recovery (MTTR), uptime percentage, and other risk indicators from the data warehouse",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "classify_vendor_risk",
+        "description": "Reconcile vendor reliability metrics and classify each vendor into low_risk, medium_risk, or high_risk categories based on incident history thresholds, MTTR, and uptime targets. Apply risk classification logic and produce final risk scores with posture assignments",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "query_vendor_risk"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks are necessary and sufficient: (1) sql_gen at mid tier to query vendor reliability data across potentially multiple tables (vendors, incidents, reliability metrics) with aggregations; (2) cross_recon at mid tier to apply classification logic against incident thresholds and produce risk scores. We avoid unnecessary decomposition—the classification logic is part of cross_recon's responsibility, not a separate policy_action (no policy governance is requested). Mid tier is appropriate for both because the SQL involves multi-table joins and aggregation, and the classification requires multi-signal reasoning across incident history, MTTR, and uptime metrics. Small tier would be insufficient for the SQL complexity and the nuanced risk classification logic."
+  },
+  "node_results": [
+    {
+      "subtask_id": "query_vendor_risk",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 739,
+      "output_tokens": 357,
+      "cached_tokens": 0,
+      "latency_ms": 4104,
+      "output": {
+        "sql": "SELECT vendor_name, COUNT(*) AS invoice_count, SUM(CASE WHEN status = 'overdue' THEN 1 ELSE 0 END) AS overdue_count, AVG(CASE WHEN paid_date IS NOT NULL THEN paid_date - invoice_date END) AS avg_days_to_pay, SUM(amount_usd) AS total_amount, CASE WHEN SUM(CASE WHEN status = 'overdue' THEN 1 ELSE 0 END)::NUMERIC / NULLIF(COUNT(*),0) > 0.3 THEN 'high_risk' WHEN SUM(CASE WHEN status = 'overdue' THEN 1 ELSE 0 END)::NUMERIC / NULLIF(COUNT(*),0) > 0.1 THEN 'medium_risk' ELSE 'low_risk' END AS risk_classification FROM invoice_facts GROUP BY vendor_name ORDER BY overdue_count DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "classify_vendor_risk",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 542,
+      "output_tokens": 300,
+      "cached_tokens": 0,
+      "latency_ms": 2782,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "vendor_risk_metrics",
+            "mongo_value": null,
+            "sql_value": {
+              "query_type": "vendor_risk_analysis",
+              "metrics": [
+                "invoice_count",
+                "overdue_count",
+                "avg_days_to_pay",
+                "total_amount",
+                "risk_classification"
+              ],
+              "classification_thresholds": {
+                "high_risk": "overdue_ratio > 0.3",
+                "medium_risk": "overdue_ratio > 0.1 AND <= 0.3",
+                "low_risk": "overdue_ratio <= 0.1"
+              }
+            },
+            "classification": "query_definition",
+            "note": "No MongoDB operational data provided for reconciliation. SQL query defines vendor risk classification framework using invoice overdue ratios."
+          }
+        ],
+        "execution_status": "incomplete",
+        "missing_data": {
+          "mongo_results": "No MongoDB query output provided",
+          "recommendation": "Execute MongoDB vendor reliability query to obtain operational state, then perform LEFT JOIN reconciliation with SQL historical invoice data"
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.014662000000000001,
+  "total_latency_ms": 6886,
+  "cumulative_spend_usd": 0.5921770000000001
+}

@@ -1,0 +1,91 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_contractor_access",
+        "description": "Evaluate whether a contractor with temporary access is authorized to download full customer database backups. Check against data governance, access control, and contractor onboarding policies.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_contractor_posture",
+        "description": "Reconcile contractor's current access credentials and activity log (from access control system) with their onboarding profile (contractor management records) to determine actual authorization level, detect anomalies, and recommend action.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "policy_check_contractor_access"
+        ]
+      }
+    ],
+    "cost_rationale": "This is a security and governance scenario requiring policy evaluation and access reconciliation, not a data retrieval task. We need two subtasks: (1) policy_action to evaluate the contractor's request against data governance and access control policies (mid tier due to multiple policy vectors: contractor status, temporary access duration, data sensitivity, backup download restrictions); (2) cross_recon to reconcile the contractor's actual current access state from two sources (credential/activity records + contractor profile) and recommend remediation. Both are mid-tier because they involve multiple policy rules and data sources, but neither requires frontier-level complexity. We do not add sql_gen or mongo_query since the focus is governance evaluation, not data extraction. We do not add multitool_plan unless the user asks for execution steps across the tool registry."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_contractor_access",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 503,
+      "output_tokens": 233,
+      "cached_tokens": 0,
+      "latency_ms": 2182,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "Contractor-dave is not authorized to download full customer database backups. POL-701 restricts database backups to full-time employees with DBA role; contractor does not meet employment status requirement. POL-702 explicitly limits contractors to de-identified query results only, prohibiting raw data exports. POL-703 requires explicit project manager approval and 7-day advance notice for any contractor data access, which has not been documented or satisfied.",
+        "applied_constraints": [
+          "Access to production_backup.tar.gz denied for role: contractor",
+          "Raw database backup downloads prohibited for non-employee users",
+          "Required approvals missing: project manager authorization and 7-day notice period"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_contractor_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 891,
+      "output_tokens": 111,
+      "cached_tokens": 0,
+      "latency_ms": 2152,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "contractor-dave",
+            "mongo_value": {
+              "role": "contractor",
+              "attempted_action": "download",
+              "resource": "production_backup.tar.gz",
+              "policy_violations": [
+                "POL-701",
+                "POL-702",
+                "POL-703"
+              ]
+            },
+            "sql_value": null,
+            "classification": "at_risk"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.008898,
+  "total_latency_ms": 4334,
+  "cumulative_spend_usd": 8.757120000000006,
+  "evaluator_reason": "selected_action_mismatch"
+}

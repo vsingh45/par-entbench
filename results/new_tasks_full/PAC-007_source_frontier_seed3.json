@@ -1,0 +1,105 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check",
+        "description": "Evaluate contractor temporary access request against access control and data governance policies. Determine if full database backup download is permitted for contractors, what constraints apply (e.g., data masking, time limits, approval requirements), and whether this action violates any compliance rules (SOX, GDPR, HIPAA if applicable).",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "access_decision",
+        "description": "Based on policy evaluation, render a final decision: approve with conditions (e.g., require approval, implement data masking, log access), deny, or escalate to governance. Include any required audit logging directives and recommended mitigating controls.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": [
+          "policy_check"
+        ]
+      }
+    ],
+    "cost_rationale": "This query is explicitly a governance/compliance scenario requiring policy evaluation and access control decision-making. Two policy_action subtasks are needed: (1) initial policy assessment against contractor access rules and data governance frameworks, and (2) final decision rendering with conditions or denial. Both are assigned 'mid' tier because they require reasoning across multiple policy dimensions (contractor status, data sensitivity, compliance frameworks, and approval chains), not just a single rule lookup. No SQL, MongoDB, or reconciliation is required—the decision is policy-driven. The downstream mitigation actions (logging, masking) are recommendations within the policy decision, not separate subtasks."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 785,
+      "output_tokens": 202,
+      "cached_tokens": 0,
+      "latency_ms": 3637,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "Contractor role is prohibited from accessing full database backups (POL-701 restricts to FTE DBAs), raw data exports violate POL-702 (de-identified results only), and no PM approval or 7-day notice is on file per POL-703.",
+        "applied_constraints": [
+          "Block download of production_backup.tar.gz",
+          "Redirect contractor to de-identified query interface",
+          "Require project manager approval and 7-day notice before any future data access"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "access_decision",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 682,
+      "output_tokens": 530,
+      "cached_tokens": 0,
+      "latency_ms": 5239,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "final_decision": "DENY",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "Contractor role is prohibited from accessing full database backups under POL-701 (restricted to FTE DBAs only). Raw data export violates POL-702 (contractors limited to de-identified results). No documented project manager approval or 7-day advance notice on file per POL-703. Multiple policy violations warrant immediate denial.",
+        "applied_constraints": [
+          "Block download of production_backup.tar.gz",
+          "Terminate current download attempt",
+          "Redirect contractor to de-identified query interface for legitimate data needs",
+          "Require project manager approval with documented business justification",
+          "Implement 7-day notice period before any future contractor data access",
+          "Restrict contractor-dave's access credentials pending approval workflow completion"
+        ],
+        "audit_logging_directives": [
+          "Log failed access attempt with timestamp, user, resource, and denial reason",
+          "Record all three policy violations in compliance audit trail",
+          "Flag contractor-dave's account for review of existing access grants",
+          "Generate incident report for security team",
+          "Notify project manager of access denial and policy violations"
+        ],
+        "recommended_mitigating_controls": [
+          "Implement role-based access control (RBAC) enforcement at download endpoints",
+          "Deploy data loss prevention (DLP) rules to block unencrypted backup file transfers by contractors",
+          "Require multi-factor authentication for any contractor data access requests",
+          "Establish automated workflow requiring PM approval with 7-day calendar hold before access provisioning",
+          "Conduct access review of all active contractor accounts within 14 days",
+          "Implement data masking proxy for contractor queries to enforce de-identification at query layer"
+        ],
+        "escalation_recommendation": "No escalation required. Decision is clear based on policy registry. If contractor disputes denial, escalate to Data Governance Committee for policy exception review only after PM approval and 7-day notice requirements are met."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.012307,
+  "total_latency_ms": 8876,
+  "cumulative_spend_usd": 8.793472000000007
+}

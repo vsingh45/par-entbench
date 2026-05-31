@@ -1,0 +1,56 @@
+{
+  "task_id": "PAC-006",
+  "task_class": "policy_action",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "An infrastructure engineer proposes rolling out Docker image changes to all microservices in production without prior staging validation.",
+        "specialist": "policy_action",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 501,
+      "output_tokens": 260,
+      "cached_tokens": 0,
+      "latency_ms": 2275,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-601": "fail",
+          "POL-602": "fail",
+          "POL-603": "fail"
+        },
+        "reason": "Proposed action violates three critical policies: (1) POL-601 requires mandatory 48-hour staging validation before production rollout; (2) POL-602 requires change board approval and monitoring setup which have not been obtained; (3) POL-603 requires automated rollback capability and traffic monitoring configuration as prerequisites. Direct production rollout without staging validation is not permitted.",
+        "applied_constraints": [],
+        "required_actions": [
+          "Submit change request to change board for approval",
+          "Deploy Docker image changes to staging environment",
+          "Execute 48-hour validation period in staging",
+          "Configure automated rollback mechanism for production",
+          "Establish traffic monitoring and alerting for rollout",
+          "Document rollout strategy and monitoring plan",
+          "Obtain change board approval before production deployment"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001801,
+  "total_latency_ms": 2275,
+  "cumulative_spend_usd": 8.560651000000005,
+  "evaluator_reason": "selected_action_mismatch"
+}

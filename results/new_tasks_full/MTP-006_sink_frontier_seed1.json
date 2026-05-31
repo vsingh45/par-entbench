@@ -1,0 +1,183 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "sink_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sam_contracts",
+        "description": "Extract active contracts from SAM system with renewal dates, vendor info, and current license counts. Parse contract documents to identify renewal windows and alert thresholds.",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "consumption_sql",
+        "description": "Query license consumption database for usage trends (last 12 months), seats deployed, peak utilization, and cost-per-seat metrics for each vendor. Generate aggregated monthly consumption metrics.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "risk_reconcile",
+        "description": "Reconcile SAM renewal dates with consumption trends. Classify renewal risk (critical/high/medium/low) based on proximity to renewal date, usage velocity, budget impact, and compliance gaps. Generate renewal recommendations and priority rankings. Output alert payload for procurement.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sam_contracts",
+          "consumption_sql"
+        ]
+      },
+      {
+        "id": "notify_procurement",
+        "description": "Invoke notification tool from registry to send structured renewal alerts to procurement team with vendor name, renewal date, risk level, consumption summary, and recommended actions.",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "risk_reconcile"
+        ]
+      }
+    ],
+    "cost_rationale": "Four subtasks minimum: (1) Extract contracts from SAM—straightforward document parsing, small tier. (2) SQL query for consumption trends—multi-table aggregation with time-series, mid tier. (3) Risk reconciliation—combines two data sources, classifies renewal posture, and prioritizes alerts; this includes decision logic that justifies frontier tier for reliable multi-signal reasoning. (4) Notification—invoking external tools requires multitool_plan to orchestrate the alert dispatch, mid tier. No policy_action needed—this is risk assessment and recommendation, not compliance enforcement. Dependencies: extraction and SQL run in parallel, both feed the reconciliation, reconciliation feeds the notification."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sam_contracts",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 252,
+      "output_tokens": 177,
+      "cached_tokens": 0,
+      "latency_ms": 1646,
+      "output": {
+        "error": "No document provided",
+        "message": "Task requires document content to extract contract fields. Please provide the SAM system document or contract file for parsing.",
+        "expected_fields": {
+          "contract_id": null,
+          "vendor_name": null,
+          "renewal_date": null,
+          "expiration_date": null,
+          "current_license_count": null,
+          "contract_value_usd": null,
+          "renewal_window_days": null,
+          "alert_threshold_status": null,
+          "consumption_trend": null,
+          "risk_level": null,
+          "procurement_contact": null,
+          "contract_status": null
+        }
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "consumption_sql",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 479,
+      "output_tokens": 269,
+      "cached_tokens": 0,
+      "latency_ms": 2115,
+      "output": {
+        "sql": "SELECT DATE_TRUNC('month', cf.event_date)::DATE AS month, cf.publisher AS vendor, COUNT(DISTINCT cf.license_id) AS license_count, SUM(cf.daily_active_seats) AS total_seats_deployed, MAX(cf.daily_active_seats) AS peak_seats_utilized, AVG(cf.daily_active_seats) AS avg_seats_deployed, SUM(cf.amount_usd) AS total_consumption_usd, ROUND(SUM(cf.amount_usd) / NULLIF(SUM(cf.daily_active_seats), 0), 2) AS cost_per_seat, COUNT(DISTINCT cf.user_id) AS unique_users FROM consumption_facts cf WHERE cf.event_date >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '12 months')::DATE AND cf.event_date < DATE_TRUNC('month', CURRENT_DATE)::DATE GROUP BY DATE_TRUNC('month', cf.event_date), cf.publisher ORDER BY month DESC, vendor ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "risk_reconcile",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 691,
+      "output_tokens": 699,
+      "cached_tokens": 0,
+      "latency_ms": 4894,
+      "output": {
+        "reconciled": [],
+        "error": "INCOMPLETE_DATA_SET",
+        "details": {
+          "mongo_status": "No SAM contracts document provided",
+          "sql_status": "Query defined but no result data provided",
+          "missing_inputs": [
+            "SAM contracts collection/document with fields: contract_id, vendor_name, renewal_date, expiration_date, current_license_count, contract_value_usd, renewal_window_days, alert_threshold_status, consumption_trend, risk_level, procurement_contact, contract_status",
+            "SQL consumption_facts result set with monthly aggregated metrics"
+          ],
+          "required_to_proceed": {
+            "from_mongodb": "Document from sam_contracts collection or equivalent source",
+            "from_sql": "Result set from consumption_facts query execution",
+            "format_expected": {
+              "mongo_input": {
+                "contract_id": "string",
+                "vendor_name": "string",
+                "renewal_date": "date",
+                "expiration_date": "date",
+                "current_license_count": "integer",
+                "contract_value_usd": "decimal"
+              },
+              "sql_input": {
+                "month": "date",
+                "vendor": "string",
+                "license_count": "integer",
+                "total_seats_deployed": "integer",
+                "peak_seats_utilized": "integer",
+                "avg_seats_deployed": "decimal",
+                "total_consumption_usd": "decimal",
+                "cost_per_seat": "decimal",
+                "unique_users": "integer"
+              }
+            }
+          },
+          "alert_payload_template": {
+            "alert_id": "SAM_RENEWAL_{{contract_id}}",
+            "alert_type": "LICENSE_RENEWAL_RISK",
+            "risk_classification": "critical|high|medium|low",
+            "contract_key": "{{contract_id}}",
+            "vendor": "{{vendor_name}}",
+            "renewal_date": "{{renewal_date}}",
+            "days_to_renewal": "{{days_until_renewal}}",
+            "risk_factors": [
+              "renewal_proximity",
+              "usage_velocity",
+              "budget_impact",
+              "compliance_gaps"
+            ],
+            "current_metrics": {
+              "licensed_count": "{{current_license_count}}",
+              "deployed_count": "{{peak_seats_utilized}}",
+              "utilization_rate": "{{(peak_seats_utilized/current_license_count)*100}}%",
+              "monthly_consumption_trend": "{{trend_direction}}"
+            },
+            "recommendation": "expand|hold|reduce|renew_as_is",
+            "recipient": "{{procurement_contact}}",
+            "priority_rank": 1
+          }
+        }
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "notify_procurement",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1461,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9094,
+      "output": {
+        "raw_output": "{\"plan\":[{\"tool\":\"iam.check_permission\",\"arguments\":{\"resource\":\"sam_contracts\",\"action\":\"read\",\"role\":\"renewal_workflow\"},\"depends_on\":[]},{\"tool\":\"mongo.find\",\"arguments\":{\"collection\":\"sam_contracts\",\"filter\":{\"contract_status\":\"active\",\"renewal_window_days\":{\"$lte\":90}},\"projection\":{\"contract_id\":1,\"vendor_name\":1,\"renewal_date\":1,\"expiration_date\":1,\"current_license_count\":1,\"contract_value_usd\":1,\"renewal_window_days\":1,\"alert_threshold_status\":1,\"consumption_trend\":1,\"risk_level\":1,\"procurement_contact\":1}},\"depends_on\":[1]},{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT DATE_TRUNC('month', usage_date) AS month, vendor, license_count, SUM(seats_deployed) AS total_seats_deployed, MAX(seats_deployed) AS peak_seats_utilized, AVG(seats_deployed) AS avg_seats_deployed, SUM(consumption_usd) AS total_consumption_usd, SUM(consumption_usd)/NULLIF(SUM(seats_deployed),0) AS cost_per_seat, COUNT(DISTINCT user_id) AS unique_users FROM consumption_facts WHERE usage_date >= DATEADD(month, -12, CURRENT_DATE) GROUP BY 1,2,3 ORDER BY month DESC, vendor\"},\"depends_on\":[1]},{\"tool\":\"mongo.aggregate\",\"arguments\":{\"collection\":\"sam_contracts\",\"pipeline\":[{\"$match\":{\"contract_id\":{\"$in\":\"$2.results.contract_id\"}}},{\"$addFields\":{\"days_until_renewal\":{\"$dateDiff\":{\"startDate\":\"$$NOW\",\"endDate\":\"$renewal_date\",\"unit\":\"day\"}},\"consumption_data\":\"$3.results\",\"utilization_rate\":{\"$multiply\":[{\"$divide\":[\"$peak_seats_utilized\",\"$current_license_count\"]},100]},\"risk_classification\":{\"$switch\":{\"branches\":[{\"case\":{\"$lte\":[\"$days_until_renewal\",30]},\"then\":\"critical\"},{\"case\":{\"$lte\":[\"$days_until_renewal\",60]},\"then\":\"high\"},{"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.034452,
+  "total_latency_ms": 17749,
+  "cumulative_spend_usd": 7.2017620000000075
+}

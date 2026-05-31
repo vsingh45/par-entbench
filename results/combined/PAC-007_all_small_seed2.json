@@ -1,0 +1,52 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_access",
+        "description": "Evaluate contractor's temporary access request against data governance policies. Check if downloading full customer database backups is permitted for contractors, validate access tier restrictions, and determine if policy exception or escalation is required.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask (mid tier). This query explicitly asks for a governance/access control decision \u2014 whether a contractor with temporary access should be allowed to download a full customer database backup. This requires evaluation against a policy registry (data governance, access tiers, contractor restrictions, backup download policies). Mid tier is appropriate because the decision involves multi-policy reasoning: contractor status vs. temporary access vs. full database scope vs. backup download restrictions. No additional subtasks needed \u2014 the policy evaluation is the entire work product here."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_access",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 511,
+      "output_tokens": 244,
+      "cached_tokens": 0,
+      "latency_ms": 2546,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "Contractor attempting to download full production database backup violates three critical data governance policies. POL-701 restricts backup access to full-time DBA employees only. POL-702 explicitly prohibits contractors from raw data exports, limiting them to de-identified query results. POL-703 requires explicit project manager approval with 7-day advance notice for any contractor data access, which has not been obtained. Action cannot proceed without satisfying all three policy requirements.",
+        "applied_constraints": [
+          "Access denied until project manager approval obtained",
+          "Access denied until 7-day notice period satisfied",
+          "Contractor must use de-identified query interface instead",
+          "Escalation required to data governance team for exception consideration if business justification exists"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0017310000000000001,
+  "total_latency_ms": 2546,
+  "cumulative_spend_usd": 8.732869000000006,
+  "evaluator_reason": "selected_action_mismatch"
+}

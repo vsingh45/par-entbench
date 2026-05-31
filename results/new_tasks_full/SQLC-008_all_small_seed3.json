@@ -1,0 +1,74 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "1_budget_sql",
+        "description": "Generate SQL query to analyze budget allocation by product category, including total budget, spend, variance, and cost trend metrics (YoY change, trend slope) across categories",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "2_reallocation_analysis",
+        "description": "Reconcile budget allocation data with cost trends; classify categories by spend efficiency and growth velocity; generate reallocation recommendations with prioritized moves (reduce, maintain, increase) and supporting rationale",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "1_budget_sql"
+        ]
+      }
+    ],
+    "cost_rationale": "Two-subtask plan: (1) sql_gen (mid tier) to extract budget and cost data with trend calculations—multi-table joins and window functions for YoY comparison are moderate complexity. (2) cross_recon (frontier tier) to reconcile budget targets vs. actual spend, classify categories by ROI/efficiency signals, and synthesize reallocation strategy—this requires multi-signal reasoning (efficiency, growth, variance, strategic fit) and generation of a coherent prioritized plan. Frontier tier justified because recommendation quality depends on inferring category health from overlapping signals (budget variance, trend direction, category maturity). No policy_action subtask added because reallocation strategy is a business recommendation, not a governance/compliance decision. No multitool_plan needed since the query does not request external tool registry lookup."
+  },
+  "node_results": [
+    {
+      "subtask_id": "1_budget_sql",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 466,
+      "output_tokens": 510,
+      "cached_tokens": 0,
+      "latency_ms": 3721,
+      "output": {
+        "sql": "WITH product_metrics AS (SELECT product, fiscal_year, SUM(amount_usd) AS total_spend, COUNT(DISTINCT daily_active_seats) AS active_seats, COUNT(DISTINCT event_id) AS transaction_count FROM consumption_facts WHERE event_date >= '2023-01-01' GROUP BY product, fiscal_year), yearly_comparison AS (SELECT product, fiscal_year, total_spend, active_seats, transaction_count, LAG(total_spend) OVER (PARTITION BY product ORDER BY fiscal_year) AS prior_year_spend FROM product_metrics), yoy_metrics AS (SELECT product, fiscal_year, total_spend, active_seats, transaction_count, prior_year_spend, CASE WHEN prior_year_spend > 0 THEN ROUND(((total_spend - prior_year_spend) / prior_year_spend * 100)::NUMERIC, 2) ELSE 0 END AS yoy_change_pct FROM yearly_comparison), trend_analysis AS (SELECT product, ROUND(REGR_SLOPE(total_spend, fiscal_year)::NUMERIC, 2) AS trend_slope, ROUND(AVG(total_spend)::NUMERIC, 2) AS avg_spend, MAX(total_spend) AS max_spend, MIN(total_spend) AS min_spend FROM product_metrics GROUP BY product), budget_summary AS (SELECT m.product, m.fiscal_year, ROUND(m.total_spend::NUMERIC, 2) AS total_spend, m.active_seats, m.transaction_count, y.yoy_change_pct, t.trend_slope, t.avg_spend, ROUND((m.total_spend - t.avg_spend)::NUMERIC, 2) AS variance_from_avg FROM yoy_metrics m LEFT JOIN trend_analysis t ON m.product = t.product) SELECT product, fiscal_year, total_spend, active_seats, transaction_count, yoy_change_pct, trend_slope, avg_spend, variance_from_avg FROM budget_summary ORDER BY fiscal_year DESC, total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "2_reallocation_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 772,
+      "output_tokens": 218,
+      "cached_tokens": 0,
+      "latency_ms": 2780,
+      "output": {
+        "error": "Incomplete input data",
+        "details": "MongoDB query results (mongo_value) are missing from upstream_outputs. Reconciliation requires both sources: operational state from MongoDB and historical data from SQL. Currently only SQL query definition is provided without actual result data.",
+        "required_inputs": {
+          "mongo_results": "Missing - expected key in upstream_outputs (e.g., '2_budget_mongo' or similar)",
+          "sql_results": "Provided as query definition only, actual result set needed"
+        },
+        "next_steps": [
+          "Provide MongoDB aggregation pipeline results with current budget allocations by product/category",
+          "Execute SQL query and provide result dataset",
+          "Include fields: product_id/name, current_budget, fiscal_year, total_spend, active_seats, transaction_count, trend metrics"
+        ],
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.004878,
+  "total_latency_ms": 6501,
+  "cumulative_spend_usd": 1.590243000000001
+}

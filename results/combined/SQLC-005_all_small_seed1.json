@@ -1,0 +1,92 @@
+{
+  "task_id": "SQLC-005",
+  "task_class": "sql_compose",
+  "router": "all_small",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_licenses",
+        "description": "Query Postgres for licenses expiring in the next 6 months. Return license ID, name, expiration date, vendor, cost, and any other renewal-relevant fields.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "gen_recommendations",
+        "description": "Generate renewal recommendations for each retrieved license based on expiration proximity, cost, usage patterns, and vendor stability. Output structured recommendations with renewal priority, rationale, and suggested actions.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_licenses"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (small tier) for a straightforward single-table or simple join query filtering licenses by expiration date within 6 months\u2014no CTEs or complex aggregations needed. (2) cross_recon (mid tier) to synthesize the license data and generate recommendations incorporating multiple decision signals (expiration urgency, cost, vendor factors). This is not a policy_action because the user is asking for recommendations and prioritization, not compliance evaluation. The recommendation generation is part of the reconciliation/analysis step, not a separate downstream task."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_licenses",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 473,
+      "output_tokens": 122,
+      "cached_tokens": 0,
+      "latency_ms": 2531,
+      "output": {
+        "sql": "SELECT i.invoice_id as license_id, i.vendor_name as name, i.due_date as expiration_date, i.vendor_name as vendor, i.amount_usd as cost, i.status, i.contract_id FROM invoice_facts i WHERE i.due_date >= CURRENT_DATE AND i.due_date <= CURRENT_DATE + INTERVAL '6 months' AND i.status != 'paid' ORDER BY i.due_date ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "gen_recommendations",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 388,
+      "output_tokens": 394,
+      "cached_tokens": 0,
+      "latency_ms": 3715,
+      "output": {
+        "reconciled": [],
+        "note": "Cannot reconcile - MongoDB query output not provided. SQL query specified but no actual MongoDB operational data supplied for comparison. Please provide both MongoDB and SQL result sets to perform LEFT JOIN reconciliation.",
+        "expected_format": {
+          "mongo_input_required": {
+            "description": "Operational state from MongoDB",
+            "example_fields": [
+              "license_id",
+              "name",
+              "expiration_date",
+              "vendor",
+              "cost",
+              "status",
+              "usage_metrics"
+            ]
+          },
+          "sql_input_provided": {
+            "query": "SELECT i.invoice_id as license_id, i.vendor_name as name, i.due_date as expiration_date, i.vendor_name as vendor, i.amount_usd as cost, i.status, i.contract_id FROM invoice_facts i WHERE i.due_date >= CURRENT_DATE AND i.due_date <= CURRENT_DATE + INTERVAL '6 months' AND i.status != 'paid' ORDER BY i.due_date ASC",
+            "source": "SQL/Postgres"
+          }
+        },
+        "recommendation_framework": {
+          "classification_criteria": {
+            "critical_renewal": "Expires < 30 days, high usage, cost > threshold",
+            "priority_renewal": "Expires 30-90 days, medium-high usage",
+            "standard_renewal": "Expires 90-180 days, stable usage",
+            "hold_evaluation": "Low usage, cost concerns, vendor stability issues",
+            "no_action_needed": "Recently renewed or payment pending"
+          }
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.003441,
+  "total_latency_ms": 6246,
+  "cumulative_spend_usd": 0.7342060000000001,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

@@ -1,0 +1,145 @@
+{
+  "task_id": "XR-006",
+  "task_class": "cross_recon",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_slack_contracts",
+        "description": "Query MongoDB SAM database to retrieve Slack contract records with renewal dates, license counts, contract terms, and renewal status",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_slack_consumption",
+        "description": "Query SQL warehouse to extract Slack usage consumption trends over time, including active users, message volume, and feature utilization metrics",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_reconcile_renewal",
+        "description": "Reconcile contract renewal dates and license allocations from SAM against consumption trends; analyze trajectory alignment, identify over/under-utilization, and recommend renewal posture (renew, negotiate, reduce, optimize)",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "mongo_slack_contracts",
+          "sql_slack_consumption"
+        ]
+      }
+    ],
+    "cost_rationale": "3 subtasks, minimum decomposition: (1) MongoDB SAM query for contract state (mid tier\u2014requires aggregation across contract records), (2) SQL consumption query for trend analysis (mid tier\u2014likely requires time-series aggregation), (3) cross_recon to reconcile both sources and generate renewal trajectory recommendations (frontier tier\u2014requires multi-signal reasoning, posture classification, and forward-looking trajectory analysis across heterogeneous data). No policy_action added because renewal recommendations and posture classification are part of cross_recon reconciliation, not separate governance approval. No multitool_plan needed because the query does not require orchestration of the enterprise tool registry."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_slack_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1737,
+      "output_tokens": 89,
+      "cached_tokens": 0,
+      "latency_ms": 1519,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Slack"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_slack_consumption",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 708,
+      "output_tokens": 147,
+      "cached_tokens": 0,
+      "latency_ms": 2369,
+      "output": {
+        "sql": "SELECT event_date, SUM(daily_active_seats) AS active_seats, SUM(amount_usd) AS total_spend, COUNT(DISTINCT user_id) AS active_users, COUNT(*) AS event_count FROM consumption_facts WHERE product ILIKE '%slack%' AND event_date >= '2024-01-01' GROUP BY event_date ORDER BY event_date"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_reconcile_renewal",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 408,
+      "output_tokens": 665,
+      "cached_tokens": 0,
+      "latency_ms": 6355,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "slack_license_allocation_vs_consumption",
+            "mongo_value": {
+              "source": "sam_licenses",
+              "collection": "sam_licenses",
+              "filter": {
+                "publisher": "Slack"
+              },
+              "expected_fields": [
+                "contract_id",
+                "renewal_date",
+                "allocated_seats",
+                "license_type",
+                "contract_value"
+              ]
+            },
+            "sql_value": {
+              "source": "consumption_facts",
+              "date_range": "2024-01-01 onwards",
+              "metrics": {
+                "daily_active_seats": "aggregated by event_date",
+                "total_spend": "sum by event_date",
+                "active_users": "distinct count by event_date",
+                "event_count": "transaction count by event_date"
+              }
+            },
+            "classification": "data_structure_mismatch",
+            "reconciliation_notes": "Cannot execute without actual data. Framework requires: (1) MongoDB contract records with renewal_dates and allocated_seats, (2) SQL consumption time-series for utilization trending"
+          },
+          {
+            "entity_key": "renewal_posture_assessment",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "pending_execution",
+            "required_analysis": {
+              "trajectory_alignment": "Compare month-over-month active_seats growth against contract renewal cycle",
+              "utilization_ratio": "(actual_active_seats / allocated_seats) - flag >90% as at_risk, <50% as over_provisioned",
+              "spend_trend": "Analyze total_spend trajectory vs contract_value for negotiation baseline",
+              "user_adoption": "Track active_users growth to validate seat allocation assumptions"
+            },
+            "recommended_classifications": {
+              "renew": "utilization 75-95%, positive trend, growth trajectory justifies current allocation",
+              "negotiate": "utilization 85%+, negotiation upside if usage continues; seek volume discount",
+              "reduce": "utilization <40%, declining trend, recommend seat reduction at renewal",
+              "optimize": "utilization 50-75%, stable; consolidate licenses or negotiate tiered pricing",
+              "no_recent_activity": "active_users = 0 or null for 30+ days",
+              "at_risk": "utilization >95% or spike in event_count with declining seat availability"
+            }
+          }
+        ],
+        "execution_note": "Provide actual MongoDB and SQL query results to complete reconciliation. Expected MongoDB output: array of contract documents. Expected SQL output: time-series dataframe with event_date, active_seats, total_spend, active_users, event_count columns."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.021858000000000002,
+  "total_latency_ms": 10243,
+  "cumulative_spend_usd": 3.7643050000000016,
+  "evaluator_reason": "stage2_sql_fail: result_bag_mismatch"
+}

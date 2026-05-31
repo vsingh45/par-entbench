@@ -1,0 +1,306 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "router": "par_no_rationale",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_commitments",
+        "description": "Extract AWS Savings Plans and Reserved Instance commitments from AWS billing/procurement data",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "extract_spend",
+        "description": "Extract actual AWS spending data from cost and usage reports for comparison period",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "normalize_data",
+        "description": "Normalize commitment levels and spending data by service, region, instance type, and time period for accurate comparison",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "extract_commitments",
+          "extract_spend"
+        ]
+      },
+      {
+        "id": "analyze_variance",
+        "description": "Calculate variance between committed vs actual spend, identify overcommitment (commits > spend) and underutilization (unused commit capacity)",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "normalize_data"
+        ]
+      },
+      {
+        "id": "generate_metrics",
+        "description": "Generate key metrics: commitment coverage ratio, utilization rate, cost avoidance achieved, and forecast future needs",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": [
+          "analyze_variance"
+        ]
+      },
+      {
+        "id": "reconciliation_report",
+        "description": "Produce comprehensive reconciliation report with findings, visualizations of gaps, and recommendations for commitment adjustments",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "generate_metrics"
+        ]
+      },
+      {
+        "id": "actionable_policy",
+        "description": "Generate policy recommendations for optimizing commitment levels based on utilization patterns and spending trends",
+        "specialist": "policy_action",
+        "tier": "frontier",
+        "depends_on": [
+          "reconciliation_report"
+        ]
+      }
+    ],
+    "cost_rationale": "Frontier tier needed for strategic policy recommendations requiring complex analysis of commitment optimization strategies. Mid-tier agents handle data extraction, normalization, analysis and reporting. Small tier for straightforward data extraction tasks."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_commitments",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 230,
+      "output_tokens": 124,
+      "cached_tokens": 0,
+      "latency_ms": 1219,
+      "output": {
+        "aws_savings_plans": null,
+        "aws_reserved_instances": null,
+        "total_commitment_usd": null,
+        "actual_spend_usd": null,
+        "commitment_utilization_percent": null,
+        "overcommitment_amount_usd": null,
+        "underutilization_amount_usd": null,
+        "analysis_period_start_date": null,
+        "analysis_period_end_date": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "extract_spend",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 227,
+      "output_tokens": 107,
+      "cached_tokens": 0,
+      "latency_ms": 1205,
+      "output": {
+        "contracted_commit_levels_usd": null,
+        "actual_spend_usd": null,
+        "comparison_period_start_date": null,
+        "comparison_period_end_date": null,
+        "overcommitment_usd": null,
+        "underutilization_usd": null,
+        "utilization_percentage": null,
+        "currency": "USD"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "normalize_data",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 440,
+      "output_tokens": 623,
+      "cached_tokens": 0,
+      "latency_ms": 5914,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "aws_savings_plans",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "aws_reserved_instances",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "total_commitment_usd",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "actual_spend_usd",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "commitment_utilization_percent",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "overcommitment_amount_usd",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "underutilization_amount_usd",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "analysis_period_start_date",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "analysis_period_end_date",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "contracted_commit_levels_usd",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "comparison_period_start_date",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "comparison_period_end_date",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "overcommitment_usd",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "underutilization_usd",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "utilization_percentage",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "currency",
+            "mongo_value": null,
+            "sql_value": "USD",
+            "classification": "stable"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "analyze_variance",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1060,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9940,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"action\": \"read\",\n        \"resource\": \"cloud_cost_data\",\n        \"context\": \"variance_analysis_committed_vs_actual_spend\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT date_trunc('month', usage_date) AS period, SUM(committed_spend_usd) AS total_committed_usd, SUM(actual_spend_usd) AS total_actual_usd, SUM(committed_spend_usd) - SUM(actual_spend_usd) AS variance_usd, ROUND(SUM(actual_spend_usd) / NULLIF(SUM(committed_spend_usd), 0) * 100, 2) AS utilization_pct, CASE WHEN SUM(committed_spend_usd) > SUM(actual_spend_usd) THEN SUM(committed_spend_usd) - SUM(actual_spend_usd) ELSE 0 END AS overcommitment_usd, CASE WHEN SUM(actual_spend_usd) > SUM(committed_spend_usd) THEN SUM(actual_spend_usd) - SUM(committed_spend_usd) ELSE 0 END AS underutilization_usd FROM cloud_cost.aws_commitment_spend WHERE usage_date >= DATEADD('month', -12, CURRENT_DATE()) GROUP BY 1 ORDER BY 1 DESC\"\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT commitment_type, contract_id, contracted_amount_usd, actual_usage_usd, contracted_amount_usd - actual_usage_usd AS variance_usd, ROUND(actual_usage_usd / NULLIF(contracted_amount_usd, 0) * 100, 2) AS utilization_pct, contract_start_date, contract_end_date, CASE WHEN contracted_amount_usd > actual_usage_usd THEN 'overcommitment' WHEN actual_usage_usd > contracted_amount_usd THEN 'underutilization' ELSE 'balanced' END AS commitment_status FROM cloud_cost.aws_contracts WHERE commitment_type IN ('savings_plans', 'reserved_instances') AND contract_status = 'active' ORDER BY ABS(contracted_amount_usd - actual_usage_usd) DESC\"\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"cloud_cost_commitments\",\n        \"filter\": {\n          \"provider\": \"aws\",\n          \"type\": {\"$in\": [\"savings_plans\", \"reserved_instances\"]},\n          \"status\": \"active\"\n        },\n        \"projection\": {\n          \"entity_key\": 1,\n          \"committed_amount_usd\": 1,\n          \"actual_spend_usd\": 1,\n          \"utilization_percent\": 1"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "generate_metrics",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1340,
+      "output_tokens": 788,
+      "cached_tokens": 0,
+      "latency_ms": 11306,
+      "output": {
+        "sql": "SELECT\n  cf.publisher,\n  cf.product,\n  cf.fiscal_year,\n  cf.fiscal_quarter,\n\n  -- Commitment Coverage Ratio: invoiced (committed) amount vs actual consumption\n  SUM(inv.amount_usd) AS total_committed_usd,\n  SUM(cf.amount_usd) AS total_actual_usd,\n\n  ROUND(\n    SUM(inv.amount_usd) / NULLIF(SUM(cf.amount_usd), 0),\n    4\n  ) AS commitment_coverage_ratio,\n\n  -- Utilization Rate: actual spend as % of committed\n  ROUND(\n    SUM(cf.amount_usd) / NULLIF(SUM(inv.amount_usd), 0) * 100,\n    2\n  ) AS utilization_rate_pct,\n\n  -- Cost Avoidance: how much committed spend exceeded actual (savings from commitment pricing)\n  GREATEST(SUM(inv.amount_usd) - SUM(cf.amount_usd), 0) AS cost_avoidance_usd,\n\n  -- Overrun: actual spend exceeding commitment (undercommitment)\n  GREATEST(SUM(cf.amount_usd) - SUM(inv.amount_usd), 0) AS commitment_overrun_usd,\n\n  -- Average Daily Active Seats for capacity/forecast signal\n  ROUND(AVG(cf.daily_active_seats), 2) AS avg_daily_active_seats,\n\n  -- Forecast Future Needs: project next period spend based on trailing trend\n  ROUND(\n    SUM(cf.amount_usd) / NULLIF(COUNT(DISTINCT cf.event_date), 0) * 90,\n    2\n  ) AS forecasted_next_quarter_spend_usd,\n\n  -- Commitment status classification\n  CASE\n    WHEN SUM(inv.amount_usd) > SUM(cf.amount_usd) * 1.10 THEN 'overcommitted'\n    WHEN SUM(cf.amount_usd) > SUM(inv.amount_usd) * 1.10 THEN 'undercommitted'\n    ELSE 'balanced'\n  END AS commitment_status\n\nFROM consumption_facts cf\nINNER JOIN invoice_facts inv\n  ON cf.license_id = inv.contract_id\n  AND cf.publisher = inv.vendor_name\n\nWHERE\n  cf.event_date >= CURRENT_DATE - INTERVAL '12 months'\n  AND inv.invoice_date >= CURRENT_DATE - INTERVAL '12 months'\n  AND inv.status IN ('paid', 'approved', 'pending')\n\nGROUP BY\n  cf.publisher,\n  cf.product,\n  cf.fiscal_year,\n  cf.fiscal_quarter\n\nORDER BY\n  cf.fiscal_year DESC,\n  cf.fiscal_quarter DESC,\n  total_actual_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconciliation_report",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1037,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 11517,
+      "output": {
+        "raw_output": "{\"reconciled\": [{\"entity_key\": \"NO_MONGO_SOURCE_DETECTED\", \"mongo_value\": null, \"sql_value\": null, \"classification\": \"at_risk\", \"note\": \"No MongoDB operational state was provided in the upstream_outputs. Only a SQL query definition was supplied. Cannot perform LEFT JOIN reconciliation without a MongoDB result set. Returning structural placeholder to signal pipeline gap.\"}, {\"entity_key\": \"SQL_RESULT_PENDING\", \"mongo_value\": null, \"sql_value\": {\"query_status\": \"definition_only\", \"sql_template\": \"SELECT cf.publisher, cf.product, cf.fiscal_year, cf.fiscal_quarter, SUM(inv.amount_usd) AS total_committed_usd, SUM(cf.amount_usd) AS total_actual_usd, ROUND(SUM(inv.amount_usd)/NULLIF(SUM(cf.amount_usd),0),4) AS commitment_coverage_ratio, ROUND(SUM(cf.amount_usd)/NULLIF(SUM(inv.amount_usd),0)*100,2) AS utilization_rate_pct, GREATEST(SUM(inv.amount_usd)-SUM(cf.amount_usd),0) AS cost_avoidance_usd, GREATEST(SUM(cf.amount_usd)-SUM(inv.amount_usd),0) AS commitment_overrun_usd, ROUND(AVG(cf.daily_active_seats),2) AS avg_daily_active_seats, ROUND(SUM(cf.amount_usd)/NULLIF(COUNT(DISTINCT cf.event_date),0)*90,2) AS forecasted_next_quarter_spend_usd, CASE WHEN SUM(inv.amount_usd)>SUM(cf.amount_usd)*1.10 THEN 'overcommitted' WHEN SUM(cf.amount_usd)>SUM(inv.amount_usd)*1.10 THEN 'undercommitted' ELSE 'balanced' END AS commitment_status FROM consumption_facts cf INNER JOIN invoice_facts inv ON cf.license_id=inv.contract_id AND cf.publisher=inv.vendor_name WHERE cf.event_date>=CURRENT_DATE-INTERVAL '12 months' AND inv.invoice_date>=CURRENT_DATE-INTERVAL '12 months' AND inv.status IN ('paid','approved','pending') GROUP BY cf.publisher,cf.product,cf.fiscal_year,cf.fiscal_quarter ORDER BY cf.fiscal_year DESC,cf.fiscal_quarter DESC,total_actual_usd DESC\", \"rows_returned\": null, \"execution_time_ms\": null}, \"classification\": \"no_recent_activity\", \"note\": \"SQL query was provided as a definition string, not an executed result set. No rows available to reconcile.\"}], \"reconciliation_meta\": {\"status\": \"incomplete\", \"reason\": \"upstream_outputs contained a SQL query definition and a task description but no executed MongoDB document set and no executed SQL result rows. Reconciliation requires both a MongoDB cursor result array and a SQL rows array.\", \"mongo_source_present\": false, \"sql_source_present\": false, \"total_mongo_entities\": 0, \"total_sql_entities\": 0, \"matched\": 0, \"mongo_only\": 0, \"sql_only\": 0, \"recommendations\": [{\"priority"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "actionable_policy",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1838,
+      "output_tokens": 264,
+      "cached_tokens": 0,
+      "latency_ms": 5194,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-DATA-001": "fail",
+          "POL-FIN-001": "pending_review",
+          "POL-GOV-001": "fail"
+        },
+        "reason": "Upstream reconciliation is incomplete: no MongoDB result set and no executed SQL rows were provided. Generating policy recommendations on commitment optimization without reconciled actual-vs-committed data would produce unreliable financial guidance. Re-run upstream data extraction and reconciliation before proceeding.",
+        "applied_constraints": [
+          "Require executed MongoDB cursor result and SQL rows before generating recommendations",
+          "Require reconciliation_meta.status = 'complete' with matched > 0",
+          "Financial recommendations must be reviewed by FinOps before release"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.074198,
+  "total_latency_ms": 46295,
+  "cumulative_spend_usd": 0.6138129999999998,
+  "evaluator_reason": "no_mongo_node"
+}

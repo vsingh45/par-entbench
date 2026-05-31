@@ -1,0 +1,63 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "salesforce_seats_query",
+        "description": "Query Salesforce licensing database to extract licensed seats (by license type/edition) and actual seat assignments (by user status, role, department). Calculate utilization metrics: assigned vs licensed, gap analysis, and identify inactive/suspended accounts.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "utilization_analysis",
+        "description": "Analyze seat utilization results to identify unutilized licenses, classify unused seats by reason (inactive users, suspended accounts, unassigned licenses), and generate actionable recommendations for license optimization and cost savings.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "salesforce_seats_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks with mid-tier assignment: (1) sql_gen (mid) handles a moderately complex query requiring joins across license tables and user/assignment tables with multiple metrics and status filtering—more than a simple single-table lookup but not requiring advanced window functions or CTEs. (2) cross_recon (mid) takes the query output and performs utilization classification and gap analysis with recommendation generation—standard multi-signal reconciliation without frontier-level complexity. This minimal 2-subtask plan avoids unnecessary splits; both the data retrieval and analysis-with-recommendations are consolidated into their respective agents' scope."
+  },
+  "node_results": [
+    {
+      "subtask_id": "salesforce_seats_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 486,
+      "output_tokens": 477,
+      "cached_tokens": 0,
+      "latency_ms": 6913,
+      "output": {
+        "sql": "SELECT publisher, product, SUM(daily_active_seats) AS total_active_seats, SUM(amount_usd) AS total_spend, COUNT(DISTINCT user_id) AS distinct_users, COUNT(DISTINCT license_id) AS distinct_licenses, AVG(daily_active_seats) AS avg_daily_active_seats, MAX(daily_active_seats) AS max_daily_active_seats, MIN(daily_active_seats) AS min_daily_active_seats, SUM(CASE WHEN event_type = 'activation' THEN 1 ELSE 0 END) AS activation_events, SUM(CASE WHEN event_type = 'deactivation' THEN 1 ELSE 0 END) AS deactivation_events, SUM(CASE WHEN event_type = 'suspension' THEN 1 ELSE 0 END) AS suspension_events, COUNT(DISTINCT CASE WHEN daily_active_seats = 0 THEN license_id END) AS zero_usage_licenses, COUNT(DISTINCT license_id) - COUNT(DISTINCT CASE WHEN daily_active_seats > 0 THEN license_id END) AS unutilized_licenses, ROUND(100.0 * COUNT(DISTINCT CASE WHEN daily_active_seats > 0 THEN license_id END) / NULLIF(COUNT(DISTINCT license_id), 0), 2) AS utilization_rate_pct, ROUND(SUM(amount_usd) / NULLIF(COUNT(DISTINCT CASE WHEN daily_active_seats > 0 THEN license_id END), 0), 2) AS cost_per_active_license, ROUND(SUM(amount_usd) / NULLIF(SUM(daily_active_seats), 0), 2) AS cost_per_active_seat FROM consumption_facts WHERE publisher ILIKE '%salesforce%' GROUP BY publisher, product ORDER BY unutilized_licenses DESC, total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "utilization_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 758,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 11392,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"salesforce | Sales Cloud\",\n      \"mongo_value\": {\n        \"publisher\": \"Salesforce\",\n        \"product\": \"Sales Cloud\",\n        \"total_licensed_seats\": 500,\n        \"assigned_seats\": 420,\n        \"unassigned_seats\": 80,\n        \"suspended_accounts\": 35,\n        \"inactive_users_90d\": 60,\n        \"contract_value_usd\": 180000\n      },\n      \"sql_value\": {\n        \"publisher\": \"Salesforce\",\n        \"product\": \"Sales Cloud\",\n        \"total_active_seats\": 3150,\n        \"total_spend\": 180000,\n        \"distinct_users\": 310,\n        \"distinct_licenses\": 500,\n        \"avg_daily_active_seats\": 310.5,\n        \"max_daily_active_seats\": 420,\n        \"min_daily_active_seats\": 180,\n        \"activation_events\": 540,\n        \"deactivation_events\": 95,\n        \"suspension_events\": 35,\n        \"zero_usage_licenses\": 80,\n        \"unutilized_licenses\": 190,\n        \"utilization_rate_pct\": 62.0,\n        \"cost_per_active_license\": 580.65,\n        \"cost_per_active_seat\": 57.14\n      },\n      \"classification\": \"reduce\",\n      \"unutilized_breakdown\": {\n        \"inactive_users_90d\": 60,\n        \"suspended_accounts\": 35,\n        \"unassigned_licenses\": 80,\n        \"total_unutilized\": 175,\n        \"unutilized_spend_usd\": 63000,\n        \"utilization_rate_pct\": 62.0\n      },\n      \"recommendations\": [\n        \"Reclaim 80 unassigned licenses immediately — zero activation history detected\",\n        \"Review 35 suspended accounts; deprovision if inactive >30 days to recover ~$20,300/yr\",\n        \"Audit 60 inactive users (no activity in 90d); downgrade or remove to save ~$34,800/yr\",\n        \"Negotiate contract reduction of ~175 seats at next renewal for estimated $101,500 annual savings\",\n        \"Implement auto-deprovision policy triggered at 60-day inactivity threshold\"\n      ]\n    },\n    {\n      \"entity_key\": \"salesforce | Service Cloud\",\n      \"mongo_value\": {\n        \"publisher\": \"Salesforce\",\n        \"product\": \"Service Cloud\",\n        \"total_licensed_seats\": 300,\n        \"assigned_seats\": 275,\n        \"unassigned_seats\": 25,\n        \"suspended_accounts\": 12,\n        \"inactive_users_90d\": 40,\n        \"contract_value_usd\": 120000\n      },\n      \"sql_value\": {\n        \"publisher\": \"Salesforce\",\n        \"product\": \"Service Cloud\",\n        \"total_active_seats\": 2100,\n        \"total_spend\": 120000,\n        \"distinct_users\": 223,\n        \"distinct_licenses\": 300,\n        \"avg_daily_active_seats\": 223.4,\n        \"max_daily_active"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.022886999999999998,
+  "total_latency_ms": 18305,
+  "cumulative_spend_usd": 3.0439490000000013
+}

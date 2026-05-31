@@ -1,0 +1,56 @@
+{
+  "task_id": "MGO-007",
+  "task_class": "mongo_gen",
+  "router": "sink_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "Find licenses renewing in the next 90 days. Filter by term_end date within 90 days from today.",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "mongo_query",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1734,
+      "output_tokens": 140,
+      "cached_tokens": 0,
+      "latency_ms": 1999,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "term_end": {
+                "$gte": "$$NOW",
+                "$lte": {
+                  "$dateAdd": {
+                    "startDate": "$$NOW",
+                    "unit": "day",
+                    "amount": 90
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.01217,
+  "total_latency_ms": 1999,
+  "cumulative_spend_usd": 2.213925999999999,
+  "evaluator_reason": "ok"
+}

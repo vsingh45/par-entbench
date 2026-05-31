@@ -1,0 +1,146 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "router": "par_no_rationale",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "datadog_allocations",
+        "description": "Query license allocation data from Datadog configuration/billing system to identify current and historical license assignments by service/team",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "datadog_usage_metrics",
+        "description": "Extract actual usage metrics from Datadog (hosts monitored, custom metrics, logs ingested, spans processed, etc.) and retrieve historical usage patterns",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "usage_growth_analysis",
+        "description": "Analyze growth trends across usage metrics over time, identify acceleration/deceleration patterns, and calculate growth rates by metric type",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "allocation_vs_usage_reconciliation",
+        "description": "Cross-reconcile license allocations against actual usage to identify over-provisioned, under-provisioned, and optimally-utilized segments",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "trends_and_insights",
+        "description": "Synthesize findings into actionable insights including utilization efficiency, cost optimization opportunities, forecast future needs based on growth patterns, and policy recommendations",
+        "specialist": "policy_action",
+        "tier": "frontier",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Multi-stage analysis requiring data extraction from multiple sources (licensing and usage systems), comparative analysis with reconciliation, growth pattern analysis, and strategic recommendations. Frontier tier justified for final synthesis to ensure comprehensive insights and actionable policy guidance."
+  },
+  "node_results": [
+    {
+      "subtask_id": "datadog_allocations",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 458,
+      "output_tokens": 177,
+      "cached_tokens": 0,
+      "latency_ms": 3381,
+      "output": {
+        "sql": "SELECT publisher, product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS total_amount_usd, SUM(daily_active_seats) AS total_daily_active_seats, COUNT(DISTINCT license_id) AS distinct_licenses, COUNT(DISTINCT user_id) AS distinct_users, COUNT(event_id) AS total_events, AVG(daily_active_seats) AS avg_daily_active_seats, MIN(event_date) AS earliest_event, MAX(event_date) AS latest_event FROM consumption_facts WHERE publisher ILIKE '%datadog%' GROUP BY publisher, product, fiscal_year, fiscal_quarter ORDER BY fiscal_year DESC, fiscal_quarter DESC, total_amount_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "datadog_usage_metrics",
+      "specialist": "extract",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 245,
+      "output_tokens": 121,
+      "cached_tokens": 0,
+      "latency_ms": 2742,
+      "output": {
+        "actual_usage_metrics": null,
+        "hosts_monitored": null,
+        "custom_metrics": null,
+        "logs_ingested": null,
+        "spans_processed": null,
+        "historical_usage_patterns": null,
+        "license_allocations": null,
+        "growth_patterns": null,
+        "note": "No document or data source containing Datadog usage metrics was provided. All fields are null due to absence of input data."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "usage_growth_analysis",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 439,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9932,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"datadog.query_metric\",\n      \"arguments\": {\n        \"metric\": \"datadog.estimated_usage.hosts\",\n        \"from\": \"now-90d\",\n        \"to\": \"now\",\n        \"interval\": \"1d\",\n        \"aggregation\": \"avg\",\n        \"group_by\": [\"env\", \"team\"]\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"datadog.query_metric\",\n      \"arguments\": {\n        \"metric\": \"datadog.estimated_usage.custom_metrics\",\n        \"from\": \"now-90d\",\n        \"to\": \"now\",\n        \"interval\": \"1d\",\n        \"aggregation\": \"avg\",\n        \"group_by\": [\"env\", \"team\"]\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"datadog.query_metric\",\n      \"arguments\": {\n        \"metric\": \"datadog.estimated_usage.logs.ingested_bytes\",\n        \"from\": \"now-90d\",\n        \"to\": \"now\",\n        \"interval\": \"1d\",\n        \"aggregation\": \"sum\",\n        \"group_by\": [\"env\", \"service\"]\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"datadog.query_metric\",\n      \"arguments\": {\n        \"metric\": \"datadog.estimated_usage.apm_hosts\",\n        \"from\": \"now-90d\",\n        \"to\": \"now\",\n        \"interval\": \"1d\",\n        \"aggregation\": \"avg\",\n        \"group_by\": [\"env\", \"service\"]\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"datadog.query_metric\",\n      \"arguments\": {\n        \"metric\": \"datadog.estimated_usage.containers\",\n        \"from\": \"now-90d\",\n        \"to\": \"now\",\n        \"interval\": \"1d\",\n        \"aggregation\": \"avg\",\n        \"group_by\": [\"env\", \"cluster_name\"]\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"datadog.list_alerts\",\n      \"arguments\": {\n        \"filter\": {\n          \"tags\": [\"usage\", \"quota\", \"license\"],\n          \"status\": \"all\"\n        }\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"license_allocations\",\n        \"filter\": {\n          \"period\": { \"$gte\": \"now-90d\" },\n          \"vendor\": \"datadog\"\n        },\n        \"projection\": {\n          \"metric_type\": 1,\n          \"allocated_quota\": 1,\n          \"team\": 1,\n          \"env\": 1,\n          \"period\": 1,\n          \"cost_per_unit\": 1\n        },\n        \"sort\": { \"period\": 1 }\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT metric_type, team, env, DATE_TRUNC('week', report_date)"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "allocation_vs_usage_reconciliation",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 261,
+      "output_tokens": 50,
+      "cached_tokens": 0,
+      "latency_ms": 1611,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "no_data_available",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "trends_and_insights",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 568,
+      "output_tokens": 90,
+      "cached_tokens": 0,
+      "latency_ms": 2187,
+      "output": {
+        "selected_action": "allow",
+        "policy_compliance": {},
+        "reason": "Analytical synthesis task on Datadog usage data; no policy registry provided, action is read/analyze only with no sensitive data exposure indicated.",
+        "applied_constraints": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.026519,
+  "total_latency_ms": 19853,
+  "cumulative_spend_usd": 0.8425900000000001,
+  "evaluator_reason": "no_mongo_node"
+}

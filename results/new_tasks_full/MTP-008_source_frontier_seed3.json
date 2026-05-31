@@ -1,0 +1,93 @@
+{
+  "task_id": "MTP-008",
+  "task_class": "multitool_plan",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "multi_tool_orchestrate",
+        "description": "Orchestrate multi-tool workflow: retrieve project requirements from Jira, check team availability from calendar API, schedule standup meeting, and share agenda via Slack. Generate a coordinated tool-call plan that sequences these four operations across the enterprise tool registry.",
+        "specialist": "multitool_plan",
+        "tier": "frontier",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This query explicitly asks for multi-step tool orchestration across four distinct enterprise tools (Jira, calendar API, meeting scheduler, Slack). This is the canonical use case for multitool_plan, which generates a coordinated execution plan from the 25-tool registry. A single frontier-tier multitool_plan subtask is sufficient to produce the full orchestration strategy with proper sequencing and dependencies (e.g., requirements must be fetched before agenda is created, availability must be checked before meeting is scheduled). No additional subtasks are needed; the multitool_plan output will include the specific tool calls, parameters, and sequencing logic for all four operations."
+  },
+  "node_results": [
+    {
+      "subtask_id": "multi_tool_orchestrate",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 692,
+      "output_tokens": 342,
+      "cached_tokens": 0,
+      "latency_ms": 6867,
+      "output": {
+        "plan": [
+          {
+            "tool": "jira.list_tickets",
+            "arguments": {
+              "filter": {
+                "project": "current",
+                "type": "requirement",
+                "status": "open"
+              }
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "team": "project_team",
+              "time_range": "next_7_days"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.create_event",
+            "arguments": {
+              "title": "Project Standup",
+              "description": "Standup covering requirements: $1.results",
+              "attendees_availability": "$2.results",
+              "duration_minutes": 30
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "calendar.create_event",
+              "resource": "$3.event_id",
+              "details": "Standup scheduled based on Jira requirements and team availability"
+            },
+            "depends_on": [
+              3
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#project-team",
+              "message": "Standup scheduled: $3.event_id\nAgenda based on requirements: $1.results"
+            },
+            "depends_on": [
+              3
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01201,
+  "total_latency_ms": 6867,
+  "cumulative_spend_usd": 8.193608000000001
+}

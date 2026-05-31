@@ -1,0 +1,63 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "budget_allocation_analysis",
+        "description": "Query budget allocation by product category including current spend, percentage of total budget, and historical cost trends (month-over-month or year-over-year variance)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reallocation_strategy",
+        "description": "Analyze budget allocation trends and cost patterns to classify categories by performance (high-growth, declining, stable, underutilized), identify reallocation opportunities, and generate data-driven recommendations for budget shifts across categories",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "budget_allocation_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks are minimal for this query. First, sql_gen (mid tier) retrieves budget and cost trend data across product categories from the warehouse — this requires joins across budget and transaction tables with aggregation and trending calculations, justifying mid tier. Second, cross_recon (frontier tier) takes the output and performs multi-signal analysis: category performance classification, variance interpretation, utilization assessment, and strategic recommendations. The frontier tier is warranted because reallocation strategy requires weighing competing signals (growth vs. current spend, risk vs. opportunity) and generating prioritized recommendations — this is classification and decision-making work that mid tier would struggle with. The plan avoids unnecessary subtasks: no separate policy_action (no policy check requested), no multitool_plan (no registry-based orchestration needed)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "budget_allocation_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 704,
+      "output_tokens": 661,
+      "cached_tokens": 0,
+      "latency_ms": 7244,
+      "output": {
+        "sql": "WITH monthly_spend AS (SELECT product, DATE_TRUNC('month', event_date) AS month, SUM(amount_usd) AS spend FROM consumption_facts WHERE event_date >= '2023-01-01' GROUP BY product, DATE_TRUNC('month', event_date)), product_totals AS (SELECT product, SUM(amount_usd) AS total_spend FROM consumption_facts WHERE event_date >= '2024-01-01' GROUP BY product), grand_total AS (SELECT SUM(amount_usd) AS overall FROM consumption_facts WHERE event_date >= '2024-01-01'), latest_two AS (SELECT product, month, spend, LAG(spend) OVER (PARTITION BY product ORDER BY month) AS prev_month_spend, LAG(spend, 12) OVER (PARTITION BY product ORDER BY month) AS prev_year_spend FROM monthly_spend) SELECT pt.product, pt.total_spend AS current_spend_ytd, ROUND((pt.total_spend / NULLIF(gt.overall, 0)) * 100, 2) AS pct_of_total_budget, lt.month AS latest_month, lt.spend AS latest_month_spend, ROUND(((lt.spend - lt.prev_month_spend) / NULLIF(lt.prev_month_spend, 0)) * 100, 2) AS mom_variance_pct, ROUND(((lt.spend - lt.prev_year_spend) / NULLIF(lt.prev_year_spend, 0)) * 100, 2) AS yoy_variance_pct FROM product_totals pt CROSS JOIN grand_total gt JOIN latest_two lt ON lt.product = pt.product WHERE lt.month = (SELECT MAX(month) FROM monthly_spend WHERE product = pt.product) ORDER BY pt.total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reallocation_strategy",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1105,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 912,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.02592,
+  "total_latency_ms": 8156,
+  "cumulative_spend_usd": 1.5714860000000008
+}

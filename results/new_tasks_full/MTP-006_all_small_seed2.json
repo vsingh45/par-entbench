@@ -1,0 +1,110 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "task_1_sam_query",
+        "description": "Query SAM system to retrieve contract renewal dates, current license counts, and vendor information",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "task_2_consumption_trends",
+        "description": "Query consumption database to retrieve usage trends over the last 6-12 months (monthly or quarterly aggregation) and forecast trajectory",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "task_3_risk_reconciliation",
+        "description": "Reconcile SAM contract renewal dates with consumption trends; classify renewal risk (critical, high, medium, low) based on renewal window, usage growth, and cost trajectory; generate renewal recommendations",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "task_1_sam_query",
+          "task_2_consumption_trends"
+        ]
+      },
+      {
+        "id": "task_4_notify_procurement",
+        "description": "Generate and send renewal alert notifications to procurement team with risk classification, recommended action, and timeline",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "task_3_risk_reconciliation"
+        ]
+      }
+    ],
+    "cost_rationale": "Four subtasks required: (1) SAM query (sql_gen, small) - straightforward single-source contract retrieval; (2) consumption trends (sql_gen, mid) - aggregation with historical windowing requires moderate complexity; (3) risk reconciliation (cross_recon, mid) - reconciles two sources (contracts + consumption) and includes risk classification and recommendations as part of reconciliation output; (4) notification dispatch (multitool_plan, small) - explicit multi-tool orchestration request (email/messaging to procurement). No separate policy_action needed as risk classification is integrated into cross_recon. Minimized to one specialist call per distinct data domain plus final action dispatch."
+  },
+  "node_results": [
+    {
+      "subtask_id": "task_1_sam_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 458,
+      "output_tokens": 188,
+      "cached_tokens": 0,
+      "latency_ms": 1780,
+      "output": {
+        "sql": "SELECT i.contract_id, i.vendor_name, i.due_date, i.invoice_date, COUNT(DISTINCT c.license_id) as current_license_count, SUM(c.daily_active_seats) as total_active_seats, MAX(c.event_date) as last_consumption_date, SUM(c.amount_usd) as total_consumption_usd FROM invoice_facts i LEFT JOIN consumption_facts c ON i.vendor_name = c.publisher WHERE i.status IN ('open', 'pending', 'overdue') AND i.due_date >= CURRENT_DATE GROUP BY i.contract_id, i.vendor_name, i.due_date, i.invoice_date ORDER BY i.due_date ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_2_consumption_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 467,
+      "output_tokens": 617,
+      "cached_tokens": 0,
+      "latency_ms": 4312,
+      "output": {
+        "sql": "WITH consumption_trends AS (SELECT DATE_TRUNC('month', event_date)::DATE AS month, license_id, publisher, product, SUM(amount_usd) AS monthly_revenue, AVG(daily_active_seats) AS avg_seats, COUNT(DISTINCT user_id) AS unique_users FROM consumption_facts WHERE event_date >= CURRENT_DATE - INTERVAL '12 months' GROUP BY DATE_TRUNC('month', event_date), license_id, publisher, product), trend_analysis AS (SELECT month, license_id, publisher, product, monthly_revenue, avg_seats, unique_users, LAG(monthly_revenue) OVER (PARTITION BY license_id ORDER BY month) AS prev_month_revenue, ROUND(((monthly_revenue - LAG(monthly_revenue) OVER (PARTITION BY license_id ORDER BY month)) / LAG(monthly_revenue) OVER (PARTITION BY license_id ORDER BY month) * 100)::NUMERIC, 2) AS mom_growth_pct FROM consumption_trends), renewal_risk AS (SELECT i.contract_id, i.vendor_name, i.invoice_date, i.due_date, i.amount_usd, ta.license_id, ta.publisher, ta.product, ta.monthly_revenue, ta.avg_seats, ta.unique_users, ta.mom_growth_pct, CASE WHEN ta.mom_growth_pct < -10 THEN 'HIGH_RISK' WHEN ta.mom_growth_pct BETWEEN -10 AND 0 THEN 'MEDIUM_RISK' WHEN ta.mom_growth_pct > 0 THEN 'LOW_RISK' ELSE 'UNKNOWN' END AS renewal_risk_level FROM trend_analysis ta LEFT JOIN invoice_facts i ON ta.license_id::TEXT = i.contract_id::TEXT AND i.due_date >= CURRENT_DATE AND i.status IN ('OPEN', 'PENDING') WHERE ta.month = (SELECT MAX(month) FROM consumption_trends)) SELECT contract_id, vendor_name, license_id, publisher, product, ROUND(monthly_revenue::NUMERIC, 2) AS last_month_consumption_usd, ROUND(avg_seats::NUMERIC, 2) AS avg_active_seats, unique_users, mom_growth_pct, renewal_risk_level, invoice_date, due_date, ROUND(amount_usd::NUMERIC, 2) AS invoice_amount FROM renewal_risk ORDER BY renewal_risk_level DESC, due_date ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_3_risk_reconciliation",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1080,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 5921,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"contract_renewal_workflow\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"source\": \"task_1_sam_query + task_2_consumption_trends\",\n        \"workflow_status\": \"pending_execution\"\n      },\n      \"classification\": \"workflow_setup_required\",\n      \"recommendation\": \"Execute SAM contract query and consumption trend analysis sequentially\"\n    },\n    {\n      \"entity_key\": \"data_integration_status\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"invoice_facts\": \"queryable\",\n        \"consumption_facts\": \"queryable\",\n        \"join_key\": \"vendor_name/publisher + contract_id/license_id\"\n      },\n      \"classification\": \"data_sources_ready\",\n      \"recommendation\": \"Proceed with LEFT JOIN reconciliation using invoice_facts as primary source\"\n    },\n    {\n      \"entity_key\": \"renewal_risk_assessment_framework\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"risk_factors\": [\n          \"mom_growth_pct < -10% = HIGH_RISK\",\n          \"mom_growth_pct between -10% and 0% = MEDIUM_RISK\",\n          \"mom_growth_pct > 0% = LOW_RISK\"\n        ],\n        \"renewal_window_filter\": \"due_date >= CURRENT_DATE\",\n        \"contract_status_filter\": \"open|pending|overdue\"\n      },\n      \"classification\": \"risk_model_defined\",\n      \"recommendation\": \"Apply growth-rate-based risk classification to all active contracts\"\n    },\n    {\n      \"entity_key\": \"consumption_trend_aggregation\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"aggregation_period\": \"12_months_history\",\n        \"granularity\": \"monthly\",\n        \"metrics\": [\n          \"monthly_revenue_usd\",\n          \"avg_active_seats\",\n          \"unique_users_count\",\n          \"mom_growth_pct\"\n        ],\n        \"latest_data_month\": \"CURRENT_DATE - INTERVAL 1 month\"\n      },\n      \"classification\": \"aggregation_configured\",\n      \"recommendation\": \"Use latest complete month for trend analysis; handle in-progress month separately\"\n    },\n    {\n      \"entity_key\": \"procurement_notification_triggers\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"critical_risk\": \"renewal_risk_level = HIGH_RISK AND due_date < CURRENT_DATE + INTERVAL 30 days\",\n        \"high_risk\": \"renewal_risk_level = HIGH_RISK AND due_date < CURRENT_DATE + INTERVAL 60 days\",\n        \"medium_risk\": \"renewal_risk_level = MEDIUM_RISK AND due_date < CURRENT_DATE + INTERVAL 90 days\",\n        \"low_risk\": \"renewal_risk_level = LOW_RISK (no urgent alert)\"\n      },\n      \"classification\": \"notification_rules_configured\",\n      \"recommendation\": \"Implement alert routing based on risk_level + renewal_window intersection\"\n    }\n  ],\n  \"workflow_execution_plan\": {\n    \"step"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_4_notify_procurement",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1386,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 5648,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"resource\": \"procurement_notifications\",\n        \"action\": \"send_alerts\",\n        \"scope\": \"procurement_team\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT c.contract_id, c.vendor_name, c.due_date, ct.mom_growth_pct, ct.monthly_revenue_usd, ct.avg_active_seats, ct.unique_users_count FROM contracts c LEFT JOIN consumption_trends ct ON c.contract_id = ct.license_id AND c.vendor_name = ct.publisher WHERE c.contract_status IN ('open', 'pending', 'overdue') AND c.due_date >= CURRENT_DATE ORDER BY c.due_date ASC\"\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"renewal_alerts\",\n        \"filter\": {\n          \"status\": \"pending\",\n          \"generated_at\": {\"$gte\": {\"$subtract\": [{\"$currentDate\": {}}, 86400000]}}\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"mongo.update\",\n      \"arguments\": {\n        \"collection\": \"contract_renewals\",\n        \"filter\": {},\n        \"update\": {\n          \"$set\": {\n            \"risk_classification\": {\n              \"HIGH_RISK\": \"$2.results[mom_growth_pct < -10% AND due_date < CURRENT_DATE + 60 days]\",\n              \"MEDIUM_RISK\": \"$2.results[mom_growth_pct between -10% and 0% AND due_date < CURRENT_DATE + 90 days]\",\n              \"LOW_RISK\": \"$2.results[mom_growth_pct > 0%]\"\n            },\n            \"recommended_action\": {\n              \"HIGH_RISK\": \"Immediate renewal negotiation required; escalate to vendor management\",\n              \"MEDIUM_RISK\": \"Schedule renewal review meeting; prepare negotiation strategy\",\n              \"LOW_RISK\": \"Monitor consumption trends; routine renewal process\"\n            },\n            \"alert_generated_at\": \"CURRENT_TIMESTAMP\"\n          }\n        },\n        \"upsert\": true\n      },\n      \"depends_on\": [2]\n    },\n    {\n      \"tool\": \"slack.post_message\",\n      \"arguments\": {\n        \"channel\": \"#procurement-team\",\n        \"message\": \"🔔 **License Renewal Alert Notifications Generated**\\n\\n**CRITICAL RISK ALERTS** (Action Required < 30 days):\\n$4.modified_count contracts requiring immediate attention\\n\\n**HIGH RISK** (Renewal < 60 days):\\nMoM Growth < -10% | Recommended: Immediate vendor negotiation\\n\\n**MEDIUM RISK** (Renewal < 90 days):\\nMoM Growth -10% to 0% | Recommended: Schedule renewal review\\n\\n**LOW RISK** (No urgent action):\\nMoM Growth >"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.015416000000000001,
+  "total_latency_ms": 17661,
+  "cumulative_spend_usd": 7.157860000000007
+}

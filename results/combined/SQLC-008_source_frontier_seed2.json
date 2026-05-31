@@ -1,0 +1,91 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "budget_analysis",
+        "description": "Query budget allocation by product category with year-over-year cost trends (current allocation, historical spend, growth rates, variance from target). Include all product categories and monthly/quarterly trend data.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reallocation_recommendation",
+        "description": "Reconcile budget allocation data with cost trends to identify underperforming/overperforming categories, classify budget efficiency (high-waste, optimal, underutilized), apply prioritization heuristics (ROI, growth potential, risk), and generate a reallocation strategy with specific category-level recommendations and rationale.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "budget_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks needed: (1) sql_gen for multi-table budget/spend analysis with aggregation and trend calculation\u2014mid tier due to multiple joins, window functions for YoY comparison, and trend derivation across time periods; (2) cross_recon to reconcile budget data with cost trends, classify categories by efficiency, and generate prioritized reallocation recommendations\u2014mid tier because it combines budget analysis with heuristic-driven strategy generation (not requiring frontier-level inference). No extract, policy_action, or multitool_plan needed: the query does not ask for document extraction, governance approval, or multi-tool orchestration. Cost is optimized by combining all budget metrics into a single SQL query rather than separate queries per metric."
+  },
+  "node_results": [
+    {
+      "subtask_id": "budget_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 719,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8790,
+      "output": {
+        "raw_output": "{\"sql\": \"WITH monthly AS (SELECT product, DATE_TRUNC('month', event_date) AS month, fiscal_year, fiscal_quarter, SUM(amount_usd) AS monthly_spend FROM consumption_facts GROUP BY product, DATE_TRUNC('month', event_date), fiscal_year, fiscal_quarter), quarterly AS (SELECT product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS quarterly_spend FROM consumption_facts GROUP BY product, fiscal_year, fiscal_quarter), yearly AS (SELECT product, fiscal_year, SUM(amount_usd) AS yearly_spend FROM consumption_facts GROUP BY product, fiscal_year), yoy AS (SELECT product, fiscal_year, yearly_spend, LAG(yearly_spend) OVER (PARTITION BY product ORDER BY fiscal_year) AS prior_year_spend, CASE WHEN LAG(yearly_spend) OVER (PARTITION BY product ORDER BY fiscal_year) > 0 THEN (yearly_spend - LAG(yearly_spend) OVER (PARTITION BY product ORDER BY fiscal_year)) / LAG(yearly_spend) OVER (PARTITION BY product ORDER BY fiscal_year) * 100 ELSE NULL END AS yoy_growth_pct FROM yearly), current_alloc AS (SELECT product, SUM(amount_usd) AS current_allocation FROM consumption_facts WHERE event_date >= '2024-01-01' GROUP BY product), total_current AS (SELECT SUM(amount_usd) AS total FROM consumption_facts WHERE event_date >= '2024-01-01') SELECT ca.product, ca.current_allocation, ca.current_allocation / tc.total * 100 AS pct_of_total_budget, y.fiscal_year, y.yearly_spend, y.prior_year_spend, y.yoy_growth_pct, ca.current_allocation - COALESCE(y.prior_year_spend, 0) AS variance_from_prior, (SELECT JSON_AGG(JSON_BUILD_OBJECT('month', month, 'spend', monthly_spend) ORDER BY month) FROM monthly m WH"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reallocation_recommendation",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 800,
+      "output_tokens": 304,
+      "cached_tokens": 0,
+      "latency_ms": 8022,
+      "output": {
+        "error": "incomplete_upstream_data",
+        "message": "SQL query output is truncated/malformed",
+        "status": "cannot_reconcile",
+        "details": {
+          "issue": "The SQL query in upstream_outputs appears to be cut off mid-execution",
+          "missing_data": [
+            "MongoDB/operational state (expected as primary source)",
+            "Complete SQL result set",
+            "Cost trend metrics",
+            "Budget allocation baseline"
+          ],
+          "required_inputs": {
+            "mongodb_result": {
+              "format": "array of {product, current_allocation, allocated_budget, efficiency_score, risk_level, ...}",
+              "source": "operational state"
+            },
+            "sql_result": {
+              "format": "array of {product, yearly_spend, yoy_growth_pct, variance_from_prior, prior_year_spend, ...}",
+              "source": "historical data from consumption_facts"
+            }
+          },
+          "next_steps": [
+            "Provide complete MongoDB query result",
+            "Provide complete SQL query result",
+            "Ensure both sources contain matching entity keys (product identifiers)"
+          ]
+        },
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.025915,
+  "total_latency_ms": 16812,
+  "cumulative_spend_usd": 1.678831000000001,
+  "evaluator_reason": "step1_sql_fail: no_sql_in_output"
+}

@@ -1,0 +1,52 @@
+{
+  "task_id": "PAC-005",
+  "task_class": "policy_action",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_pii_export",
+        "description": "Evaluate the bulk PII export request against data governance and privacy policies. Assess whether the analyst has authorization to export customer names, emails, and phone numbers in bulk, check data residency/compliance requirements (GDPR, CCPA, etc.), and determine if access controls permit this action.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This request is fundamentally a governance and access control decision, not a data extraction task. Before any SQL query is generated, the system must verify that the analyst has authorization to export bulk PII. This requires policy_action evaluation against the compliance and access control registry. Tier is \"mid\" because PII export involves multiple policy dimensions (data residency, role-based access, breach risk, regulatory compliance), requiring multi-policy reasoning. Only if policy_action approves should a subsequent sql_gen subtask be created to execute the export. The decomposition is minimal: one subtask to gate the request before any data movement occurs.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_pii_export",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 797,
+      "output_tokens": 264,
+      "cached_tokens": 0,
+      "latency_ms": 4386,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-501": "fail",
+          "POL-502": "fail",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "Bulk PII export by a data-analyst role lacks required Legal/CISO approvals (POL-501) and violates data minimization since no business-critical justification is provided for exporting sensitive identifiers in bulk (POL-502). Audit logging and retention controls (POL-503) can be applied but do not authorize the export on their own.",
+        "applied_constraints": [
+          "Require explicit Legal privacy approval",
+          "Require CISO sign-off",
+          "Require documented business-critical justification for each PII attribute",
+          "Enforce audit logging with 30-day retention if approved",
+          "Apply data minimization review to reduce exported fields"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.010585,
+  "total_latency_ms": 4386,
+  "cumulative_spend_usd": 8.455183000000003
+}

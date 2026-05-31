@@ -1,0 +1,51 @@
+{
+  "task_id": "PAC-002",
+  "task_class": "policy_action",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_1",
+        "description": "Evaluate the engineer's deployment attempt against maintenance window policies and change management governance. Verify whether the 2:15 AM UTC Tuesday timestamp falls within an approved maintenance window for prod-us-east-1, and determine if an exception or escalation is required based on policy rules.",
+        "specialist": "policy_action",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy evaluation task: The query describes a specific governance scenario\u2014a deployment attempt outside an approved maintenance window. This is a straightforward policy compliance check against maintenance window and change management rules. A single policy_action subtask at small tier is sufficient: the decision is binary (in-window or out-of-window) with clear rule applicability. No multi-source reconciliation or complex data retrieval is needed; the policy registry lookup and rule evaluation are the core work."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_1",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 552,
+      "output_tokens": 220,
+      "cached_tokens": 0,
+      "latency_ms": 2334,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-401": "pass",
+          "POL-402": "fail",
+          "POL-403": "fail"
+        },
+        "reason": "Engineer u_7732 has sufficient role permissions (POL-401 pass), but deployment timestamp 2:15 AM UTC Tuesday falls outside approved maintenance windows (POL-403: Saturday 10 PM \u2013 Sunday 6 AM UTC only). POL-402 requires CAB approval for out-of-window production deployments. Escalation and CAB approval are mandatory before proceeding.",
+        "applied_constraints": [
+          "Deployment blocked until Change Advisory Board (CAB) approval obtained",
+          "Document business justification for out-of-window hotfix deployment",
+          "Require explicit CAB exception ticket before execution"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001652,
+  "total_latency_ms": 2334,
+  "cumulative_spend_usd": 4.844919000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

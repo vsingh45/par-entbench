@@ -1,0 +1,68 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sf_seats_query",
+        "description": "Query Salesforce data warehouse to retrieve licensed seat count and actual seat assignments (assigned_users) by seat type/license level, including counts of active and inactive assignments",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "seat_analysis",
+        "description": "Analyze licensed vs assigned seats to calculate utilization rate, identify unused/unutilized licenses, and generate utilization posture (over-licensed, under-licensed, optimized) with seat count gaps and recommendations",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen at mid tier to query Salesforce seat data with grouping and aggregations across license types; (2) cross_recon at mid tier to reconcile licensed vs actual seat assignments and generate utilization analysis with classification. No policy_action needed—utilization analysis is not a governance decision. No extract needed—data comes from Salesforce warehouse, not documents. Minimum count justified: cannot fully analyze without retrieving both dimensions of data first, then reconciling. Cost-efficient: single SQL query with multi-table joins (licensed seats table + assignment table) returns all needed columns; cross_recon performs comparative analysis and posture classification in one pass."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sf_seats_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 730,
+      "output_tokens": 265,
+      "cached_tokens": 0,
+      "latency_ms": 3338,
+      "output": {
+        "sql": "SELECT product AS license_level, license_id, SUM(daily_active_seats) AS licensed_seats, COUNT(DISTINCT user_id) AS assigned_users, COUNT(DISTINCT CASE WHEN event_type = 'active' THEN user_id END) AS active_assignments, COUNT(DISTINCT CASE WHEN event_type = 'inactive' THEN user_id END) AS inactive_assignments, SUM(daily_active_seats) - COUNT(DISTINCT user_id) AS unutilized_licenses FROM consumption_facts WHERE publisher = 'Salesforce' AND event_date >= '2024-01-01' GROUP BY product, license_id ORDER BY unutilized_licenses DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "seat_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 450,
+      "output_tokens": 56,
+      "cached_tokens": 0,
+      "latency_ms": 1270,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "no_data",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.013925000000000002,
+  "total_latency_ms": 4608,
+  "cumulative_spend_usd": 3.167570000000002
+}

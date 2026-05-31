@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-003",
+  "task_class": "sql_gen",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_analysis",
+        "description": "Query spend data for Adobe and Microsoft products across 2024 quarters (Q1-Q4), compute quarter-over-quarter spend change for each product, then rank products within each publisher by Q4 spend",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single sql_gen subtask is sufficient: this is one multi-table query requiring joins across publishers and products, window functions (LAG for QoQ change calculation, RANK for product ranking), and aggregation by quarter. Mid tier is appropriate for the moderate complexity of CTEs with window functions and multiple aggregation levels. No cross-source reconciliation needed\u2014this is single-source SQL warehouse analysis.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 494,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9102,
+      "output": {
+        "raw_output": "{\"sql\": \"WITH quarterly_spend AS (\\n  SELECT\\n    publisher,\\n    product,\\n    fiscal_quarter,\\n    SUM(amount_usd) AS total_spend\\n  FROM consumption_facts\\n  WHERE publisher IN ('Adobe', 'Microsoft')\\n    AND event_date >= '2024-01-01'\\n    AND event_date < '2025-01-01'\\n    AND fiscal_year = 2024\\n    AND fiscal_quarter IN (1, 2, 3, 4)\\n  GROUP BY publisher, product, fiscal_quarter\\n),\\npivoted AS (\\n  SELECT\\n    publisher,\\n    product,\\n    MAX(CASE WHEN fiscal_quarter = 1 THEN total_spend ELSE 0 END) AS q1_spend,\\n    MAX(CASE WHEN fiscal_quarter = 2 THEN total_spend ELSE 0 END) AS q2_spend,\\n    MAX(CASE WHEN fiscal_quarter = 3 THEN total_spend ELSE 0 END) AS q3_spend,\\n    MAX(CASE WHEN fiscal_quarter = 4 THEN total_spend ELSE 0 END) AS q4_spend\\n  FROM quarterly_spend\\n  GROUP BY publisher, product\\n),\\nwith_qoq AS (\\n  SELECT\\n    publisher,\\n    product,\\n    q1_spend,\\n    q2_spend,\\n    q3_spend,\\n    q4_spend,\\n    (q2_spend - q1_spend) AS q1_to_q2_change,\\n    (q3_spend - q2_spend) AS q2_to_q3_change,\\n    (q4_spend - q3_spend) AS q3_to_q4_change,\\n    CASE WHEN q1_spend <> 0 THEN ROUND(((q2_spend - q1_spend) / q1_spend) * 100, 2) ELSE NULL END AS q1_to_q2_pct_change,\\n    CASE WHEN q2_spend <> 0 THEN ROUND(((q3_spend - q2_spend) / q2_spend) * 100, 2) ELSE NULL END AS q2_to_q3_pct_change,\\n    CASE WHEN q3_spend <> 0 THEN ROUND(((q4_spend - q3_spend) / q3_spend) * 100, 2) ELSE NULL END AS q3_to_q4_pct_change,\\n    RANK() OVER (PARTITION BY publisher ORDER BY q4_spend DESC) AS q4_spend_rank_within_publisher\\n  FROM pivoted\\n)\\nSELECT\\n  publisher,\\n  product,\\n  q1_spend,\\n  q2_spend,\\n  q3_spend,\\n  q4_spend,\\n  q1_to_q2_change,\\n  q1_to_q2_pct_change,\\n  q2_to_q3_change,\\n  q2_to_q3_pct_change,\\n  q3_to_q4_change,\\n"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.013482000000000001,
+  "total_latency_ms": 9102,
+  "cumulative_spend_usd": 0.13751699999999997,
+  "evaluator_reason": "no_sql_in_output"
+}

@@ -1,0 +1,70 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_gen_aws_comparison",
+        "description": "Generate SQL query to extract AWS contracted commit levels and actual spend by service/account/period. Join contract terms with spend data, calculate variance (committed vs actual), and identify overcommitment (actual < committed) and underutilization (actual significantly below committed) scenarios.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_aws_posture",
+        "description": "Reconcile contract commitments with spend data to classify commitment posture (overcommitted, optimally committed, undercommitted, underutilized). Generate recommendations for commitment adjustments (increase/decrease reserved instances, negotiate term changes) based on variance patterns and forecast trends.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_gen_aws_comparison"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: SQL query generation is mid-tier (multi-table join of contract and spend data with variance calculations and classification logic). Cross-recon is mid-tier (reconciliation of two data sources—contracts vs spend—with posture classification and recommendation generation). No separate policy_action needed as the query does not ask for governance approval or policy compliance checking, only financial analysis and optimization recommendations. This is minimal decomposition: the SQL handles all data extraction and variance computation in one call; cross_recon handles all downstream reconciliation, classification, and recommendation logic in one call."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_gen_aws_comparison",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 753,
+      "output_tokens": 466,
+      "cached_tokens": 0,
+      "latency_ms": 5229,
+      "output": {
+        "sql": "WITH aws_commits AS (SELECT contract_id, vendor_name, SUM(amount_usd) AS committed_amount FROM invoice_facts WHERE vendor_name ILIKE '%aws%' OR vendor_name ILIKE '%amazon%' GROUP BY contract_id, vendor_name), aws_actuals AS (SELECT publisher, product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS actual_spend FROM consumption_facts WHERE publisher ILIKE '%aws%' OR publisher ILIKE '%amazon%' GROUP BY publisher, product, fiscal_year, fiscal_quarter) SELECT c.contract_id, c.vendor_name, a.product, a.fiscal_year, a.fiscal_quarter, c.committed_amount, a.actual_spend, (a.actual_spend - c.committed_amount) AS variance_usd, CASE WHEN a.actual_spend > c.committed_amount THEN 'OVERCOMMITMENT' WHEN a.actual_spend < (c.committed_amount * 0.7) THEN 'UNDERUTILIZATION' ELSE 'ON_TARGET' END AS status FROM aws_commits c CROSS JOIN aws_actuals a ORDER BY variance_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_aws_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 938,
+      "output_tokens": 82,
+      "cached_tokens": 0,
+      "latency_ms": 1747,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sql_gen_aws_comparison",
+            "mongo_value": null,
+            "sql_value": "AWS commitment vs actual spend comparison query generated",
+            "classification": "no_mongo_data"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.022155,
+  "total_latency_ms": 6976,
+  "cumulative_spend_usd": 4.265766000000002
+}

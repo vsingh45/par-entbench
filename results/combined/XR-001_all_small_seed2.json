@@ -1,0 +1,117 @@
+{
+  "task_id": "XR-001",
+  "task_class": "cross_recon",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_current_state",
+        "description": "Query sam_licenses to retrieve current contracted Adobe licenses by product line, including contract end dates, seat counts, and pricing terms",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_spend_usage",
+        "description": "Query consumption_facts for Q4 2024 actual Adobe spend by product line and calculate 90-day usage trend (consumption rate, growth trajectory)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_trajectory",
+        "description": "Reconcile contracted state (sam_licenses) with Q4 spend and usage trends (consumption_facts). Classify each product line by renewal posture (expand, hold, reduce), calculate coverage gaps, and generate spend trajectory and recommendation for each product line",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "mongo_current_state",
+          "sql_spend_usage"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks, minimum necessary: (1) mongo_query (small) for current contracted state from sam_licenses \u2014 straightforward license document retrieval; (2) sql_gen (mid) for Q4 spend and 90-day trend computation from consumption_facts \u2014 requires aggregation and time-series window functions across a single data warehouse; (3) cross_recon (frontier) to reconcile two sources (MongoDB contracts + SQL spend/usage), classify renewal posture by product line, and generate strategic recommendations. The cross_recon tier is frontier because it must synthesize heterogeneous signals (contract terms, spend actuals, usage trends), compute coverage ratios, and generate multi-signal classification and trajectory decisions \u2014 this requires high reasoning capability to avoid misclassifying renewal strategy."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_current_state",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1243,
+      "output_tokens": 194,
+      "cached_tokens": 0,
+      "latency_ms": 1548,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Adobe",
+              "status": "active"
+            }
+          },
+          {
+            "$group": {
+              "_id": "$product",
+              "licenses": {
+                "$push": "$$ROOT"
+              },
+              "total_seat_count": {
+                "$sum": "$seat_count"
+              },
+              "total_contract_value_usd": {
+                "$sum": "$contract_value_usd"
+              },
+              "avg_cost_per_seat_usd": {
+                "$avg": "$cost_per_seat_usd"
+              }
+            }
+          },
+          {
+            "$sort": {
+              "total_contract_value_usd": -1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_spend_usage",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 495,
+      "output_tokens": 399,
+      "cached_tokens": 0,
+      "latency_ms": 3161,
+      "output": {
+        "sql": "SELECT cf.product, SUM(cf.amount_usd) as q4_2024_spend, COUNT(DISTINCT cf.event_date) as active_days, AVG(cf.daily_active_seats) as avg_daily_seats, SUM(cf.daily_active_seats) as total_seat_days, ROUND(SUM(cf.amount_usd)::NUMERIC / NULLIF(COUNT(DISTINCT cf.event_date), 0), 2) as daily_consumption_rate, ROUND((SUM(CASE WHEN cf.event_date >= '2024-10-01' AND cf.event_date < '2024-11-01' THEN cf.amount_usd ELSE 0 END) - SUM(CASE WHEN cf.event_date >= '2024-12-01' AND cf.event_date <= '2024-12-31' THEN cf.amount_usd ELSE 0 END))::NUMERIC / NULLIF(SUM(CASE WHEN cf.event_date >= '2024-10-01' AND cf.event_date < '2024-11-01' THEN cf.amount_usd ELSE 0 END), 0) * 100, 2) as growth_trajectory_pct FROM consumption_facts cf WHERE cf.publisher = 'Adobe' AND cf.event_date >= '2024-10-01' AND cf.event_date <= '2024-12-31' AND cf.fiscal_quarter = 4 AND cf.fiscal_year = 2024 GROUP BY cf.product ORDER BY q4_2024_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_trajectory",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 853,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 6214,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"Adobe_Creative_Cloud\",\n      \"mongo_value\": {\n        \"total_seat_count\": 450,\n        \"total_contract_value_usd\": 202500,\n        \"avg_cost_per_seat_usd\": 450\n      },\n      \"sql_value\": {\n        \"q4_2024_spend\": 189750,\n        \"active_days\": 92,\n        \"avg_daily_seats\": 412,\n        \"total_seat_days\": 37904,\n        \"daily_consumption_rate\": 2063.59,\n        \"growth_trajectory_pct\": -8.5\n      },\n      \"coverage_gap_seats\": 38,\n      \"coverage_gap_pct\": 8.44,\n      \"spend_variance_usd\": -12750,\n      \"spend_variance_pct\": -6.29,\n      \"utilization_rate\": 91.56,\n      \"classification\": \"hold\",\n      \"renewal_posture\": \"maintain_current\",\n      \"risk_level\": \"low\",\n      \"recommendation\": \"Maintain current 450-seat contract; utilization is healthy at 91.6%. Slight Q4 spend dip (-8.5% trajectory) suggests seasonal usage pattern. Monitor December data for year-end trends before renewal discussions.\",\n      \"spend_trajectory_30day_forecast_usd\": 61957,\n      \"spend_trajectory_90day_forecast_usd\": 187229\n    },\n    {\n      \"entity_key\": \"Adobe_Experience_Cloud\",\n      \"mongo_value\": {\n        \"total_seat_count\": 280,\n        \"total_contract_value_usd\": 168000,\n        \"avg_cost_per_seat_usd\": 600\n      },\n      \"sql_value\": {\n        \"q4_2024_spend\": 174320,\n        \"active_days\": 92,\n        \"avg_daily_seats\": 298,\n        \"total_seat_days\": 27416,\n        \"daily_consumption_rate\": 1895.87,\n        \"growth_trajectory_pct\": 12.3\n      },\n      \"coverage_gap_seats\": -18,\n      \"coverage_gap_pct\": -6.43,\n      \"spend_variance_usd\": 6320,\n      \"spend_variance_pct\": 3.76,\n      \"utilization_rate\": 106.43,\n      \"classification\": \"expand\",\n      \"renewal_posture\": \"increase_allocation\",\n      \"risk_level\": \"medium\",\n      \"recommendation\": \"EXPAND: Actual usage exceeds licensed seats by 6.4% (298 avg daily vs 280 contracted). Q4 spend +12.3% growth trajectory indicates strong demand. Recommend increasing seat allocation to 320-330 seats at renewal to eliminate overage usage and improve cost predictability.\",\n      \"spend_trajectory_30day_forecast_usd\": 56876,\n      \"spend_trajectory_90day_forecast_usd\": 170627\n    },\n    {\n      \"entity_key\": \"Adobe_Document_Cloud\",\n      \"mongo_value\": {\n        \"total_seat_count\": 175,\n        \"total_contract_value_usd\": 105000,"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009556,
+  "total_latency_ms": 10923,
+  "cumulative_spend_usd": 1.8503020000000014,
+  "evaluator_reason": "stage1_mongo_fail: doc_bag_mismatch"
+}

@@ -1,0 +1,241 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_datadog_allocations",
+        "description": "Query SQL warehouse to retrieve Datadog license allocations by product/tier, including contracted seat counts, effective dates, and license type breakdowns",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_datadog_usage_metrics",
+        "description": "Query Datadog API or usage event logs (via MongoDB or data warehouse) to retrieve actual consumption metrics: daily active users, billable hosts, custom metrics usage, and log ingestion volumes over the same period",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_analyze_trends",
+        "description": "Reconcile allocation data with actual usage metrics to identify utilization rates, growth patterns, forecast trends, and gaps. Classify license posture (over-allocated, under-utilized, at-risk for overage) and generate optimization recommendations",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "fetch_datadog_allocations",
+          "fetch_datadog_usage_metrics"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks with minimal decomposition: (1) SQL for allocation data is mid-tier because it requires multi-table joins across contracts and license terms; (2) MongoDB/usage query is mid-tier as it aggregates time-series metrics and usage events; (3) Cross-reconciliation is frontier-tier because it must synthesize two datasets with time-series analysis, detect growth patterns via trend analysis, compute utilization ratios, derive business classifications (posture), and generate actionable optimization recommendations—all requiring multi-signal reasoning. This avoids unnecessary policy_action step since posture classification is part of reconciliation analysis, not governance compliance."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_datadog_allocations",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 463,
+      "output_tokens": 210,
+      "cached_tokens": 0,
+      "latency_ms": 1774,
+      "output": {
+        "sql": "SELECT cf.product, cf.publisher, COUNT(DISTINCT cf.license_id) as license_count, SUM(cf.daily_active_seats) as total_contracted_seats, MIN(cf.event_date) as allocation_start_date, MAX(cf.event_date) as allocation_end_date, cf.event_type as license_type, SUM(cf.amount_usd) as total_revenue_usd, COUNT(DISTINCT cf.user_id) as unique_users, AVG(cf.daily_active_seats) as avg_daily_active_seats FROM consumption_facts cf WHERE cf.publisher = 'Datadog' AND cf.event_date >= '2024-01-01' GROUP BY cf.product, cf.publisher, cf.event_type ORDER BY cf.product, total_contracted_seats DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_datadog_usage_metrics",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1231,
+      "output_tokens": 661,
+      "cached_tokens": 0,
+      "latency_ms": 3276,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Datadog",
+              "status": "active"
+            }
+          },
+          {
+            "$lookup": {
+              "from": "sam_seat_assignments",
+              "localField": "license_id",
+              "foreignField": "license_id",
+              "as": "seat_assignments"
+            }
+          },
+          {
+            "$addFields": {
+              "allocated_seats": "$seat_count",
+              "assigned_seats": {
+                "$size": {
+                  "$filter": {
+                    "input": "$seat_assignments",
+                    "as": "assignment",
+                    "cond": {
+                      "$eq": [
+                        "$$assignment.status",
+                        "active"
+                      ]
+                    }
+                  }
+                }
+              },
+              "unassigned_seats": {
+                "$subtract": [
+                  "$seat_count",
+                  {
+                    "$size": {
+                      "$filter": {
+                        "input": "$seat_assignments",
+                        "as": "assignment",
+                        "cond": {
+                          "$eq": [
+                            "$$assignment.status",
+                            "active"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "$group": {
+              "_id": "$publisher",
+              "total_contracts": {
+                "$sum": 1
+              },
+              "total_allocated_seats": {
+                "$sum": "$allocated_seats"
+              },
+              "total_assigned_seats": {
+                "$sum": "$assigned_seats"
+              },
+              "total_unassigned_seats": {
+                "$sum": "$unassigned_seats"
+              },
+              "total_contract_value": {
+                "$sum": "$contract_value_usd"
+              },
+              "avg_cost_per_seat": {
+                "$avg": "$cost_per_seat_usd"
+              },
+              "seat_utilization_pct": {
+                "$multiply": [
+                  {
+                    "$divide": [
+                      {
+                        "$sum": "$assigned_seats"
+                      },
+                      {
+                        "$sum": "$allocated_seats"
+                      }
+                    ]
+                  },
+                  100
+                ]
+              },
+              "contracts": {
+                "$push": {
+                  "license_id": "$license_id",
+                  "product": "$product",
+                  "contract_value": "$contract_value_usd",
+                  "allocated_seats": "$allocated_seats",
+                  "assigned_seats": "$assigned_seats",
+                  "term_start": "$term_start",
+                  "term_end": "$term_end",
+                  "criticality_tier": "$criticality_tier"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_analyze_trends",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 949,
+      "output_tokens": 556,
+      "cached_tokens": 0,
+      "latency_ms": 4136,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "Datadog_Allocations_Summary",
+            "mongo_value": {
+              "total_contracts": null,
+              "total_allocated_seats": null,
+              "total_assigned_seats": null,
+              "total_unassigned_seats": null,
+              "total_contract_value": null,
+              "avg_cost_per_seat": null,
+              "seat_utilization_pct": null,
+              "contracts_detail": []
+            },
+            "sql_value": {
+              "license_count": null,
+              "total_contracted_seats": null,
+              "unique_users": null,
+              "avg_daily_active_seats": null,
+              "total_revenue_usd": null,
+              "allocation_start_date": null,
+              "allocation_end_date": null,
+              "license_types": []
+            },
+            "classification": "data_unavailable",
+            "gap_analysis": {
+              "missing_mongo_execution": "No operational state provided from fetch_datadog_usage_metrics",
+              "missing_sql_execution": "No historical data provided from fetch_datadog_allocations",
+              "recommendation": "Execute both queries to obtain actual data for reconciliation"
+            }
+          },
+          {
+            "entity_key": "Datadog_Utilization_Gap",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "cannot_classify",
+            "note": "Reconciliation requires actual query results. Current input contains only query definitions without execution results."
+          }
+        ],
+        "reconciliation_status": "incomplete",
+        "reason": "No actual data outputs provided from either MongoDB or SQL queries",
+        "expected_inputs": {
+          "mongo_source": "Execution result from fetch_datadog_usage_metrics pipeline",
+          "sql_source": "Execution result from fetch_datadog_allocations SQL query"
+        },
+        "pending_analysis": [
+          "Seat utilization rate (assigned vs allocated)",
+          "Over-allocation identification",
+          "Under-utilization detection",
+          "Growth trend analysis",
+          "At-risk overage forecast",
+          "Optimization recommendations by product/license type"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009778000000000002,
+  "total_latency_ms": 9186,
+  "cumulative_spend_usd": 4.878497
+}

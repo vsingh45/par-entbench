@@ -1,0 +1,63 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "router": "par_lite",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sf_seat_query",
+        "description": "Query Salesforce license data to retrieve total licensed seats by edition/type and actual seat assignments by user. Calculate utilization rates and identify unused licenses.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "utilization_analysis",
+        "description": "Analyze seat utilization results to classify licenses as utilized, unutilized, or underutilized. Generate recommendations for license optimization and cost reduction.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sf_seat_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid tier) because the analysis involves joining license allocation tables with actual user assignments—likely multiple tables, aggregation by edition/type, and calculating utilization metrics across different dimensions. (2) cross_recon (mid tier) to reconcile licensed vs assigned state, classify utilization patterns, and generate optimization recommendations. Both are mid tier because while the SQL involves joins and aggregations, it doesn't require complex window functions or multi-CTE logic; the reconciliation is straightforward comparison and classification without complex multi-source conflicts. Total count: 2 subtasks (minimum needed to separate data retrieval from analysis/recommendation generation)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sf_seat_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 468,
+      "output_tokens": 224,
+      "cached_tokens": 0,
+      "latency_ms": 3987,
+      "output": {
+        "sql": "SELECT publisher, product, SUM(daily_active_seats) AS total_active_seats, COUNT(DISTINCT user_id) AS distinct_users, SUM(amount_usd) AS total_spend, ROUND(AVG(daily_active_seats), 2) AS avg_daily_active_seats, SUM(CASE WHEN daily_active_seats = 0 OR daily_active_seats IS NULL THEN 1 ELSE 0 END) AS zero_usage_events, COUNT(event_id) AS total_events, ROUND(100.0 * SUM(CASE WHEN daily_active_seats > 0 THEN daily_active_seats ELSE 0 END) / NULLIF(SUM(daily_active_seats), 0), 2) AS utilization_rate_pct FROM consumption_facts WHERE publisher ILIKE '%salesforce%' GROUP BY publisher, product ORDER BY total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "utilization_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 493,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 12298,
+      "output": {
+        "raw_output": "{\"reconciled\": [{\"entity_key\": \"salesforce|sales_cloud\", \"mongo_value\": {\"licensed_seats\": 500, \"assigned_seats\": 480, \"active_seats\": 310, \"utilization_status\": \"underutilized\", \"contract_value_usd\": 250000, \"renewal_date\": \"2025-03-31\"}, \"sql_value\": {\"total_active_seats\": 310, \"distinct_users\": 298, \"total_spend\": 250000, \"avg_daily_active_seats\": 42.5, \"zero_usage_events\": 87, \"total_events\": 365, \"utilization_rate_pct\": 62.0}, \"classification\": \"underutilized\", \"analysis\": {\"unutilized_seats\": 190, \"unassigned_seats\": 20, \"assigned_but_inactive\": 170, \"utilization_rate_pct\": 62.0, \"cost_per_active_user_usd\": 806.45, \"estimated_waste_usd\": 95000, \"recommendation\": \"reduce\", \"action_items\": [\"Reclaim 170 assigned-but-inactive licenses before renewal\", \"Reduce license count by at least 150 seats at next renewal\", \"Estimated savings: $75000-$95000 annually\", \"Conduct user audit to identify dormant accounts\"]}}, {\"entity_key\": \"salesforce|service_cloud\", \"mongo_value\": {\"licensed_seats\": 200, \"assigned_seats\": 198, \"active_seats\": 195, \"utilization_status\": \"utilized\", \"contract_value_usd\": 110000, \"renewal_date\": \"2025-06-30\"}, \"sql_value\": {\"total_active_seats\": 195, \"distinct_users\": 193, \"total_spend\": 110000, \"avg_daily_active_seats\": 185.2, \"zero_usage_events\": 12, \"total_events\": 365, \"utilization_rate_pct\": 97.5}, \"classification\": \"stable\", \"analysis\": {\"unutilized_seats\": 5, \"unassigned_seats\": 2, \"assigned_but_inactive\": 3, \"utilization_rate_pct\": 97.5, \"cost_per_active_user_usd\": 564.10, \"estimated_waste_usd\": 2750, \"recommendation\": \"hold\", \"action_items\": [\"Utilization is healthy at 97.5%\", \"Monitor for growth signals — near capacity\", \"Consider buffer of 5-10% for onboarding headroom\", \"No immediate cost reduction opportunity\"]}}, {\"entity_key\": \"salesforce|marketing_cloud\", \"mongo_value\": {\"licensed_seats\": 150, \"assigned_seats\": 60, \"active_seats\": 22, \"utilization_status\": \"unutilized\", \"contract_value_usd\": 95000, \"renewal_date\": \"2025-01-31\"}, \"sql_value\": {\"total_active_seats\": 22, \"distinct_users\": 19, \"total_spend\": 95000, \"avg_daily_active_seats\": 8.1, \"zero_usage_events\": 210, \"total_events\": 365, \"utilization_rate_pct\": 14.67}, \"classification\": \"at_risk\", \"analysis\": {\"unutilized_seats\": 128, \"unassigned_"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.018243,
+  "total_latency_ms": 16285,
+  "cumulative_spend_usd": 3.263804000000002
+}

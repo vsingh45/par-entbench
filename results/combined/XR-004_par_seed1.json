@@ -1,0 +1,107 @@
+{
+  "task_id": "XR-004",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_sam_licenses",
+        "description": "Extract Microsoft licensed users, product SKUs, and license counts from SAM (Software Asset Management) database/documents. Return structured license inventory with user counts per product.",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_consumption_facts",
+        "description": "Query consumption facts warehouse for active Microsoft users, products consumed, and usage metrics. Aggregate active user counts by product and time period.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_classify",
+        "description": "Reconcile SAM licensed user counts against active consumption users. Calculate over-provisioning (licensed > active), under-provisioning (active > licensed), and licensing gaps. Classify each product as over-licensed, properly-licensed, or under-licensed. Generate cost optimization recommendations.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "extract_sam_licenses",
+          "query_consumption_facts"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) extract_sam_licenses (small) \u2014 SAM extraction is a straightforward document/database field extraction with no inference. (2) query_consumption_facts (mid) \u2014 multi-table join across consumption schema to aggregate active users by product; mid-tier SQL is sufficient for standard warehouse aggregation. (3) reconcile_and_classify (frontier) \u2014 cross-source reconciliation of SAM vs consumption data requiring multi-signal analysis (user count deltas, cost implications, licensing patterns), classification of provisioning posture per product, and recommendation generation with business logic \u2014 justifies frontier tier for high-confidence reconciliation and decision support. This is a true two-source reconciliation; the classification and recommendations are integral to cross_recon output, not separate policy_action calls."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_sam_licenses",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 257,
+      "output_tokens": 197,
+      "cached_tokens": 0,
+      "latency_ms": 2104,
+      "output": {
+        "error": "No document provided",
+        "message": "Unable to extract Microsoft licensed users, product SKUs, and license counts. Please provide the SAM database document or inventory file to analyze.",
+        "expected_fields": {
+          "products": [
+            {
+              "product_name": null,
+              "product_sku": null,
+              "licensed_user_count": null,
+              "active_user_count": null,
+              "provisioning_status": null
+            }
+          ],
+          "reconciliation_summary": {
+            "total_licensed_users": null,
+            "total_active_users": null,
+            "over_provisioned_count": null,
+            "under_provisioned_count": null,
+            "variance_percentage": null
+          }
+        }
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_consumption_facts",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 471,
+      "output_tokens": 158,
+      "cached_tokens": 0,
+      "latency_ms": 3056,
+      "output": {
+        "sql": "SELECT product, fiscal_year, fiscal_quarter, COUNT(DISTINCT user_id) AS active_users, SUM(daily_active_seats) AS total_daily_active_seats, AVG(daily_active_seats) AS avg_daily_active_seats, SUM(amount_usd) AS total_spend, COUNT(DISTINCT license_id) AS distinct_licenses, COUNT(event_id) AS total_events FROM consumption_facts WHERE publisher = 'Microsoft' AND event_type IN ('usage', 'active', 'consumption') GROUP BY product, fiscal_year, fiscal_quarter ORDER BY fiscal_year DESC, fiscal_quarter DESC, total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_classify",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 954,
+      "output_tokens": 70,
+      "cached_tokens": 0,
+      "latency_ms": 1990,
+      "output": {
+        "reconciled": [],
+        "error": "Cannot reconcile: MongoDB extraction failed (no SAM document provided) and SQL query definition was provided without execution results. No entity data available from either source."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.011545,
+  "total_latency_ms": 7150,
+  "cumulative_spend_usd": 0.114386,
+  "evaluator_reason": "no_mongo_node"
+}

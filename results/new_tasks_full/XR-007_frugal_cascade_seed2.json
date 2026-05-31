@@ -1,0 +1,139 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "router": "frugal_cascade",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "aws_commitment_query",
+        "description": "Query AWS contracts/agreements table to extract commitment levels (reserved instances, savings plans) grouped by commitment type and term length, with effective dates",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "aws_spend_query",
+        "description": "Query AWS spend/billing table to aggregate actual monthly/quarterly spend by service and account, matched to commitment periods",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "commitment_vs_spend_analysis",
+        "description": "Reconcile commitment levels against actual spend, calculate utilization rates, identify overcommitment (unused capacity) and underutilization (spending below committed floor), generate posture classification and optimization recommendations",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "aws_commitment_query",
+          "aws_spend_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks minimum: (1) commitment extraction via SQL (mid-tier for multi-table join across contract dimensions), (2) spend aggregation via SQL (mid-tier for time-series billing data grouping), (3) reconciliation and analysis via cross_recon (frontier-tier to handle multi-signal comparison, utilization math, posture classification, and variance explanation). This is a classic two-source reconciliation (contracts + billing) requiring downstream classification and recommendation, which cross_recon handles end-to-end. Separate policy_action is not needed unless governance approval is requested."
+  },
+  "node_results": [
+    {
+      "subtask_id": "aws_commitment_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 462,
+      "output_tokens": 236,
+      "cached_tokens": 0,
+      "latency_ms": 3107,
+      "output": {
+        "raw_output": "{\n  \"sql\": \"SELECT vendor_name, invoice_id, contract_id, invoice_date, due_date, paid_date, amount_usd, status FROM invoice_facts WHERE vendor_name ILIKE '%AWS%' ORDER BY invoice_date DESC\"\n}\n```\n\n**Note:** The current schema does not contain an AWS contracts/agreements table with commitment levels, reserved instances, or savings plans data. The `invoice_facts` table only tracks invoices with basic financial data.\n\nTo properly fulfill this request, the schema would need:\n- A `contracts` table with fields: `contract_id, vendor_name, commitment_type (reserved_instances|savings_plans), commitment_level_usd, term_length_months, effective_date, expiration_date`\n- A `contract_line_items` table linking commitments to actual consumption\n- AWS-specific commitment utilization tracking\n\nThe query above returns AWS vendor invoices as a baseline, but cannot analyze commitment levels or compare reserved vs actual spend without the missing contract structure tables."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "aws_spend_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 456,
+      "output_tokens": 111,
+      "cached_tokens": 0,
+      "latency_ms": 1335,
+      "output": {
+        "sql": "SELECT fiscal_year, fiscal_quarter, publisher, product, SUM(amount_usd) as total_spend, COUNT(DISTINCT user_id) as active_users, SUM(daily_active_seats) as total_seats FROM consumption_facts WHERE event_date >= '2024-01-01' GROUP BY fiscal_year, fiscal_quarter, publisher, product ORDER BY fiscal_year DESC, fiscal_quarter DESC, total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "commitment_vs_spend_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 638,
+      "output_tokens": 507,
+      "cached_tokens": 0,
+      "latency_ms": 4402,
+      "output": {
+        "reconciliation_status": "INCOMPLETE_SCHEMA",
+        "reconciled": [],
+        "gaps": [
+          {
+            "entity_key": "aws_commitment_analysis",
+            "mongo_source": "aws_commitment_query",
+            "sql_source": "aws_spend_query",
+            "issue": "SCHEMA_MISMATCH",
+            "details": "MongoDB source (invoice_facts) contains only transactional invoices without commitment metadata. SQL source (consumption_facts) tracks usage by fiscal period and product but lacks contract commitment terms.",
+            "missing_tables": [
+              {
+                "table": "contracts",
+                "required_fields": [
+                  "contract_id",
+                  "vendor_name",
+                  "commitment_type",
+                  "commitment_level_usd",
+                  "term_length_months",
+                  "effective_date",
+                  "expiration_date"
+                ]
+              },
+              {
+                "table": "contract_line_items",
+                "required_fields": [
+                  "contract_id",
+                  "line_item_id",
+                  "committed_amount_usd",
+                  "utilization_percentage"
+                ]
+              },
+              {
+                "table": "aws_commitment_metrics",
+                "required_fields": [
+                  "contract_id",
+                  "invoice_id",
+                  "reserved_instance_hours",
+                  "savings_plan_utilization",
+                  "on_demand_overage_amount_usd"
+                ]
+              }
+            ],
+            "classification": "no_data",
+            "recommendation": "EXTEND_SCHEMA: Add commitment tracking tables before reconciliation can proceed"
+          }
+        ],
+        "unable_to_reconcile": {
+          "commitment_vs_spend": {
+            "reason": "Primary commitment data source missing",
+            "mongo_available": "invoice_facts (financial records only)",
+            "sql_available": "consumption_facts (usage metrics without commitment context)",
+            "required_join_key": "contract_id or commitment_id (absent from both sources)"
+          }
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0058260000000000004,
+  "total_latency_ms": 8844,
+  "cumulative_spend_usd": 4.431937000000002
+}

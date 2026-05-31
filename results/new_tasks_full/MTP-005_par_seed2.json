@@ -1,0 +1,100 @@
+{
+  "task_id": "MTP-005",
+  "task_class": "multitool_plan",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "check_iam_role",
+        "description": "Query IAM system to retrieve user's current role, permissions, and access groups",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_manager_approval",
+        "description": "Retrieve pending manager approval from workflow system (e.g., task, request state, approval status)",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "orchestrate_provisioning",
+        "description": "Generate multi-step tool invocation plan to: (1) update IAM permissions in identity system, (2) send confirmation email via notification service, (3) log audit trail in compliance system",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "check_iam_role",
+          "fetch_manager_approval"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks with minimal decomposition: (1) check_iam_role is a simple single-table IAM query (small tier); (2) fetch_manager_approval is a straightforward MongoDB document lookup (small tier); (3) orchestrate_provisioning is a multitool_plan that synthesizes both approval and current state to execute the provisioning workflow (3 sequential tool calls: IAM update, email confirmation, audit logging), assigned mid tier because it requires coordinating multiple tools and downstream sequencing. No separate policy_action needed—compliance/audit logging is handled within the tool orchestration plan. No cross_recon needed since each data source is queried independently and the fusion happens within the multitool plan coordination."
+  },
+  "node_results": [
+    {
+      "subtask_id": "check_iam_role",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 461,
+      "output_tokens": 57,
+      "cached_tokens": 0,
+      "latency_ms": 1129,
+      "output": {
+        "sql": "SELECT user_id, permission, resource, action, result, access_time FROM access_log_facts WHERE user_id IS NOT NULL ORDER BY access_time DESC LIMIT 100"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_manager_approval",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1219,
+      "output_tokens": 82,
+      "cached_tokens": 0,
+      "latency_ms": 815,
+      "output": {
+        "collection": "iam_roles",
+        "pipeline": [
+          {
+            "$match": {
+              "$or": [
+                {
+                  "approval_status": "pending"
+                },
+                {
+                  "status": "pending_approval"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "orchestrate_provisioning",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 566,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10221,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"user_id\": \"$upstream.check_iam_role.user_id\",\n        \"resource\": \"$upstream.check_iam_role.resource\",\n        \"action\": \"iam:UpdatePermission\"\n      },\n      \"depends_on\": [],\n      \"step\": 1\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"sql\": \"SELECT user_id, permission, resource, action, result, access_time FROM access_log_facts WHERE user_id IS NOT NULL ORDER BY access_time DESC LIMIT 100\"\n      },\n      \"depends_on\": [1],\n      \"step\": 2\n    },\n    {\n      \"tool\": \"mongo.aggregate\",\n      \"arguments\": {\n        \"collection\": \"iam_roles\",\n        \"pipeline\": [\n          {\n            \"$match\": {\n              \"$or\": [\n                {\"approval_status\": \"pending\"},\n                {\"status\": \"pending_approval\"}\n              ]\n            }\n          }\n        ]\n      },\n      \"depends_on\": [1],\n      \"step\": 3\n    },\n    {\n      \"tool\": \"iam.grant_role\",\n      \"arguments\": {\n        \"user_id\": \"$2.results[0].user_id\",\n        \"role\": \"$3.results[0].role\",\n        \"resource\": \"$2.results[0].resource\",\n        \"approved_by\": \"$3.results[0].approver_id\",\n        \"approval_reference\": \"$3.results[0]._id\"\n      },\n      \"depends_on\": [2, 3],\n      \"step\": 4,\n      \"condition\": \"$1.permitted == true && $3.results[0].approval_status == 'pending'\"\n    },\n    {\n      \"tool\": \"audit.log_action\",\n      \"arguments\": {\n        \"action\": \"iam.grant_role\",\n        \"actor\": \"$1.checked_by\",\n        \"target_user\": \"$2.results[0].user_id\",\n        \"resource\": \"$2.results[0].resource\",\n        \"role_granted\": \"$3.results[0].role\",\n        \"approval_reference\": \"$3.results[0]._id\",\n        \"outcome\": \"$4.status\",\n        \"timestamp\": \"$4.granted_at\"\n      },\n      \"depends_on\": [4],\n      \"step\": 5\n    },\n    {\n      \"tool\": \"mongo.update\",\n      \"arguments\": {\n        \"collection\": \"iam_roles\",\n        \"filter\": {\"_id\": \"$3.results[0]._id\"},\n        \"update\": {\n          \"$set\": {\n            \"approval_status\": \"approved\",\n            \"status\": \"active\",\n            \"provisioned_at\": \"$4.granted_at\",\n            \"audit_log_id\": \"$5.log_id\"\n          }\n        }\n      },\n      \"depends_on\": [5],\n      \"step\": 6\n    },\n    {\n      \"tool\": \"audit.log_action\",\n      \"arguments\": {\n        \"action\": \"mongo.update.iam_roles\",\n        \"actor\": \"$1.checked"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.016073,
+  "total_latency_ms": 12165,
+  "cumulative_spend_usd": 6.297176000000006
+}

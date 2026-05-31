@@ -1,0 +1,71 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_declining_pubs",
+        "description": "Query SQL data warehouse for publishers with declining quarterly spending trends in 2024. Calculate YoY quarter-over-quarter differences (Q1\u2192Q2, Q2\u2192Q3, Q3\u2192Q4) and identify publishers showing consistent decline.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal",
+        "description": "Reconcile publisher spending trends with contract state (from MongoDB) to generate renewal recommendations (hold, expand, reduce) for each declining publisher. Incorporate contract status, historical renewal patterns, and spending trajectory into posture classification.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_declining_pubs"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks with dependency: (1) sql_gen at mid tier to handle multi-quarter aggregation and YoY comparison logic across the 2024 calendar; (2) cross_recon at mid tier to merge SQL spending trends with MongoDB contract data and apply classification logic for renewal posture decisions. Both tasks are moderate complexity\u2014not simple (small) because they require multi-period aggregation and cross-source reasoning, but not frontier-level because they follow standard reconciliation patterns without complex inference. Minimal decomposition: renewal recommendation generation is part of the cross_recon output, not a separate step."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_declining_pubs",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 771,
+      "output_tokens": 575,
+      "cached_tokens": 0,
+      "latency_ms": 6096,
+      "output": {
+        "sql": "WITH quarterly_spend AS (SELECT publisher, fiscal_quarter, SUM(amount_usd) AS total_spend FROM consumption_facts WHERE event_date >= '2024-01-01' AND event_date < '2025-01-01' AND fiscal_year = 2024 GROUP BY publisher, fiscal_quarter), pivoted AS (SELECT publisher, MAX(CASE WHEN fiscal_quarter = 1 THEN total_spend END) AS q1, MAX(CASE WHEN fiscal_quarter = 2 THEN total_spend END) AS q2, MAX(CASE WHEN fiscal_quarter = 3 THEN total_spend END) AS q3, MAX(CASE WHEN fiscal_quarter = 4 THEN total_spend END) AS q4 FROM quarterly_spend GROUP BY publisher) SELECT publisher, q1, q2, q3, q4, (q2 - q1) AS q1_to_q2_diff, (q3 - q2) AS q2_to_q3_diff, (q4 - q3) AS q3_to_q4_diff, CASE WHEN q4 < q1 * 0.5 THEN 'reduce' WHEN q4 < q1 * 0.8 THEN 'hold' ELSE 'expand' END AS renewal_recommendation FROM pivoted WHERE q1 IS NOT NULL AND q2 IS NOT NULL AND q3 IS NOT NULL AND q4 IS NOT NULL AND q2 < q1 AND q3 < q2 AND q4 < q3 ORDER BY (q4 - q1) ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1045,
+      "output_tokens": 74,
+      "cached_tokens": 0,
+      "latency_ms": 1419,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sql_declining_pubs",
+            "mongo_value": null,
+            "sql_value": "declining_publishers_2024",
+            "classification": "no_mongo_data_available"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.025305,
+  "total_latency_ms": 7515,
+  "cumulative_spend_usd": 1.1297329999999997,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

@@ -1,0 +1,94 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "iam_roles_granted_perms",
+        "description": "Query IAM system to retrieve all roles with elevated permissions and their granted permission sets",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "iam_exercised_perms_180d",
+        "description": "Query audit/activity logs to retrieve all permissions actually exercised by IAM roles in the last 180 days",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_flag",
+        "description": "Reconcile granted permissions against exercised permissions from the last 180 days. Identify permissions granted but never exercised and flag them as revocation candidates. Classify risk posture and generate remediation recommendations.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "iam_roles_granted_perms",
+          "iam_exercised_perms_180d"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: Two parallel SQL queries (mid tier each) to fetch granted and exercised permissions from distinct data sources, then one cross_recon (mid tier) to reconcile the two sets, flag unused permissions, and generate revocation recommendations. The SQL queries are mid-tier because they require multi-table joins across role definitions and audit logs. Cross_recon is mid-tier because it combines two result sets with set difference operations and classification logic, but does not require inference-heavy reasoning; the reconciliation is deterministic (granted vs. exercised). No policy_action is needed because the query asks for flagging candidates, not formal policy approval.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "iam_roles_granted_perms",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 471,
+      "output_tokens": 234,
+      "cached_tokens": 0,
+      "latency_ms": 2969,
+      "output": {
+        "raw_output": "{\"sql\": \"SELECT 'IAM system not available in EntBench schema' AS note, NULL AS result WHERE FALSE\"}\n```\n\nThe EntBench Postgres warehouse schema provided does not contain IAM (Identity and Access Management) system tables with role definitions, permission grants, or role assignments. \n\nThe only access-related table available is `access_log_facts`, which records actual permission usage but lacks:\n- Role definitions and hierarchies\n- Granted permission sets per role\n- Role-to-user assignments\n- Permission metadata\n\nTo implement this query, you would need IAM-specific tables such as:\n- `iam_roles(role_id, role_name, elevation_level, ...)`\n- `role_permissions(role_id, permission, grant_date, ...)`\n- `user_roles(user_id, role_id, ...)`\n\nWith those tables, the query would join `access_log_facts` against `role_permissions` to identify granted-but-unused permissions within a 180-day window."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "iam_exercised_perms_180d",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 478,
+      "output_tokens": 99,
+      "cached_tokens": 0,
+      "latency_ms": 4832,
+      "output": {
+        "sql": "SELECT permission, action, result, COUNT(*) as exercise_count, COUNT(DISTINCT user_id) as unique_users, MAX(access_time) as last_exercised FROM access_log_facts WHERE access_time >= CURRENT_DATE - INTERVAL '180 days' GROUP BY permission, action, result ORDER BY exercise_count DESC, last_exercised DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_flag",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 988,
+      "output_tokens": 63,
+      "cached_tokens": 0,
+      "latency_ms": 1517,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "iam_roles_granted_perms",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "data_unavailable"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009129000000000002,
+  "total_latency_ms": 9318,
+  "cumulative_spend_usd": 3.046304000000002,
+  "evaluator_reason": "no_mongo_node"
+}

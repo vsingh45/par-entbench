@@ -1,0 +1,40 @@
+{
+  "task_id": "MTP-008",
+  "task_class": "multitool_plan",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "orchestrate_tools",
+        "description": "Generate a multi-step tool invocation plan to retrieve project requirements from Jira, check team availability from calendar API, schedule standup meeting, and share agenda via Slack",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This query explicitly asks for orchestration of four distinct enterprise tools (Jira, calendar API, meeting scheduler, Slack) in a sequential workflow with dependencies. A single multitool_plan subtask (mid tier) is appropriate because: (1) the request requires composing a tool-call sequence from the enterprise registry, not data retrieval or reconciliation; (2) mid tier is sufficient to handle the moderate complexity of four tool calls with logical sequencing (requirements \u2192 availability \u2192 scheduling \u2192 notification) and conditional outputs; (3) no data reconciliation or policy evaluation is needed\u2014only orchestration. The plan itself will specify the individual tool calls, parameters, and dependencies without requiring separate subtasks per tool.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "orchestrate_tools",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 465,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 11068,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"step\": 1,\n      \"tool\": \"jira.list_tickets\",\n      \"arguments\": {\n        \"project\": \"CURRENT_PROJECT\",\n        \"filters\": {\n          \"issue_type\": [\"Story\", \"Task\", \"Requirement\"],\n          \"status\": [\"Open\", \"In Progress\", \"To Do\"]\n        },\n        \"fields\": [\"summary\", \"description\", \"priority\", \"assignee\", \"labels\", \"acceptance_criteria\"],\n        \"max_results\": 50\n      },\n      \"depends_on\": []\n    },\n    {\n      \"step\": 2,\n      \"tool\": \"calendar.list_events\",\n      \"arguments\": {\n        \"calendar_id\": \"team-calendar\",\n        \"time_min\": \"2025-01-27T08:00:00Z\",\n        \"time_max\": \"2025-01-28T18:00:00Z\",\n        \"attendees\": [\"team-all@company.com\"],\n        \"show_deleted\": false\n      },\n      \"depends_on\": []\n    },\n    {\n      \"step\": 3,\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"principal\": \"current_user\",\n        \"resource\": \"calendar.create_event\",\n        \"action\": \"write\",\n        \"context\": {\n          \"team\": \"cross-team\",\n          \"scope\": \"standup_scheduling\"\n        }\n      },\n      \"depends_on\": [1, 2]\n    },\n    {\n      \"step\": 4,\n      \"tool\": \"calendar.create_event\",\n      \"arguments\": {\n        \"title\": \"Cross-Team Project Standup\",\n        \"description\": \"Daily standup to discuss project requirements and progress. Agenda based on Jira tickets: $1.results\",\n        \"start_time\": \"2025-01-28T09:00:00Z\",\n        \"end_time\": \"2025-01-28T09:30:00Z\",\n        \"attendees\": [\"team-all@company.com\"],\n        \"availability_check\": \"$2.results\",\n        \"recurrence\": \"DAILY\",\n        \"location\": \"Zoom/Virtual\",\n        \"reminders\": [\n          {\"method\": \"email\", \"minutes_before\": 30},\n          {\"method\": \"popup\", \"minutes_before\": 10}\n        ]\n      },\n      \"depends_on\": [3]\n    },\n    {\n      \"step\": 5,\n      \"tool\": \"audit.log_action\",\n      \"arguments\": {\n        \"action\": \"calendar.create_event\",\n        \"actor\": \"current_user\",\n        \"resource\": \"standup_meeting\",\n        \"resource_id\": \"$4.event_id\",\n        \"details\": {\n          \"event_title\": \"Cross-Team Project Standup\",\n          \"scheduled_time\": \"2025-01-28T09:00:00Z\",\n          \"attendees\": \"team-all@company.com\",\n          \"jira_tickets_referenced\": \"$1.total_results\"\n        },\n        \"status\": \"success\",\n        \"timestamp\": \"2025-01-27T00:00:00Z\"\n      },\n      \"depends_on\": [4]\n    },\n    {"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.013395,
+  "total_latency_ms": 11068,
+  "cumulative_spend_usd": 0.3912970000000001,
+  "evaluator_reason": "no_plan_in_output"
+}

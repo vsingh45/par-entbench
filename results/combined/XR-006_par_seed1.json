@@ -1,0 +1,292 @@
+{
+  "task_id": "XR-006",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_slack_contracts",
+        "description": "Query SAM contracts collection for Slack license renewals: extract contract ID, renewal date, license count, and renewal status from current and upcoming renewal records",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_slack_consumption",
+        "description": "Query consumption warehouse for Slack usage trends: daily active users, feature adoption, seat utilization rate over the renewal period window",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_slack_trajectory",
+        "description": "Reconcile SAM contract renewal data with consumption trends; identify alignment/misalignment between license commitment and actual usage; classify renewal posture (optimal, oversized, undersized) and generate trajectory recommendations",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "mongo_slack_contracts",
+          "sql_slack_consumption"
+        ]
+      }
+    ],
+    "cost_rationale": "Three-subtask plan: (1) mongo_query (mid) to fetch Slack contract renewals from SAM with aggregation on renewal dates and license counts. (2) sql_gen (mid) to extract consumption metrics from warehouse\u2014straightforward time-series aggregation of usage over the renewal window. (3) cross_recon (frontier) to reconcile the two sources and classify renewal trajectory; frontier tier assigned because this requires multi-signal reasoning to align contract commitments against actual consumption patterns, infer posture (oversized/undersized), and generate actionable renewal recommendations. The cross_recon step is a single subtask because classification and trajectory recommendations are inherent to the reconciliation task, not separate policy or downstream steps."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_slack_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1221,
+      "output_tokens": 724,
+      "cached_tokens": 0,
+      "latency_ms": 8647,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Slack",
+              "status": {
+                "$in": [
+                  "active",
+                  "pending_renewal",
+                  "up_for_renewal"
+                ]
+              },
+              "term_end": {
+                "$gte": {
+                  "$date": "2024-01-01T00:00:00Z"
+                }
+              }
+            }
+          },
+          {
+            "$lookup": {
+              "from": "billing_contracts",
+              "localField": "license_id",
+              "foreignField": "contract_id",
+              "as": "billing_info"
+            }
+          },
+          {
+            "$unwind": {
+              "path": "$billing_info",
+              "preserveNullAndEmpty": true
+            }
+          },
+          {
+            "$lookup": {
+              "from": "sam_seat_assignments",
+              "localField": "license_id",
+              "foreignField": "license_id",
+              "as": "seat_assignments"
+            }
+          },
+          {
+            "$addFields": {
+              "active_seat_count": {
+                "$size": {
+                  "$filter": {
+                    "input": "$seat_assignments",
+                    "as": "seat",
+                    "cond": {
+                      "$eq": [
+                        "$$seat.status",
+                        "active"
+                      ]
+                    }
+                  }
+                }
+              },
+              "inactive_seat_count": {
+                "$size": {
+                  "$filter": {
+                    "input": "$seat_assignments",
+                    "as": "seat",
+                    "cond": {
+                      "$ne": [
+                        "$$seat.status",
+                        "active"
+                      ]
+                    }
+                  }
+                }
+              },
+              "days_until_renewal": {
+                "$dateDiff": {
+                  "startDate": "$$NOW",
+                  "endDate": "$term_end",
+                  "unit": "day"
+                }
+              },
+              "renewal_urgency": {
+                "$switch": {
+                  "branches": [
+                    {
+                      "case": {
+                        "$lte": [
+                          {
+                            "$dateDiff": {
+                              "startDate": "$$NOW",
+                              "endDate": "$term_end",
+                              "unit": "day"
+                            }
+                          },
+                          30
+                        ]
+                      },
+                      "then": "critical"
+                    },
+                    {
+                      "case": {
+                        "$lte": [
+                          {
+                            "$dateDiff": {
+                              "startDate": "$$NOW",
+                              "endDate": "$term_end",
+                              "unit": "day"
+                            }
+                          },
+                          90
+                        ]
+                      },
+                      "then": "upcoming"
+                    },
+                    {
+                      "case": {
+                        "$gt": [
+                          {
+                            "$dateDiff": {
+                              "startDate": "$$NOW",
+                              "endDate": "$term_end",
+                              "unit": "day"
+                            }
+                          },
+                          90
+                        ]
+                      },
+                      "then": "future"
+                    }
+                  ],
+                  "default": "unknown"
+                }
+              }
+            }
+          },
+          {
+            "$sort": {
+              "term_end": 1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_slack_consumption",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 461,
+      "output_tokens": 274,
+      "cached_tokens": 0,
+      "latency_ms": 4342,
+      "output": {
+        "sql": "SELECT cf.event_date, cf.product, cf.event_type, SUM(cf.daily_active_seats) AS total_daily_active_seats, COUNT(DISTINCT cf.user_id) AS distinct_users, SUM(cf.amount_usd) AS total_spend, AVG(cf.daily_active_seats) AS avg_daily_active_seats, MAX(cf.daily_active_seats) AS peak_daily_active_seats, MIN(cf.daily_active_seats) AS min_daily_active_seats, ROUND( AVG(cf.daily_active_seats) * 100.0 / NULLIF(MAX(cf.daily_active_seats) OVER (PARTITION BY cf.product), 0), 2 ) AS seat_utilization_rate_pct, COUNT(cf.event_id) AS event_count FROM consumption_facts cf WHERE cf.publisher ILIKE '%Slack%' OR cf.product ILIKE '%Slack%' GROUP BY cf.event_date, cf.product, cf.event_type ORDER BY cf.event_date ASC, cf.product, cf.event_type}"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_slack_trajectory",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1562,
+      "output_tokens": 618,
+      "cached_tokens": 0,
+      "latency_ms": 6584,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "slack_license_001",
+            "mongo_value": {
+              "contracted_seats": 500,
+              "active_seat_count": 320,
+              "inactive_seat_count": 180,
+              "days_until_renewal": 25,
+              "renewal_urgency": "critical",
+              "status": "up_for_renewal"
+            },
+            "sql_value": {
+              "avg_daily_active_seats": 315,
+              "peak_daily_active_seats": 340,
+              "seat_utilization_rate_pct": 64.0,
+              "total_spend": 48000
+            },
+            "classification": "oversized_reduce"
+          },
+          {
+            "entity_key": "slack_license_002",
+            "mongo_value": {
+              "contracted_seats": 250,
+              "active_seat_count": 248,
+              "inactive_seat_count": 2,
+              "days_until_renewal": 75,
+              "renewal_urgency": "upcoming",
+              "status": "pending_renewal"
+            },
+            "sql_value": {
+              "avg_daily_active_seats": 245,
+              "peak_daily_active_seats": 250,
+              "seat_utilization_rate_pct": 98.0,
+              "total_spend": 30000
+            },
+            "classification": "optimal_hold"
+          },
+          {
+            "entity_key": "slack_license_003",
+            "mongo_value": {
+              "contracted_seats": 100,
+              "active_seat_count": 100,
+              "inactive_seat_count": 0,
+              "days_until_renewal": 180,
+              "renewal_urgency": "future",
+              "status": "active"
+            },
+            "sql_value": {
+              "avg_daily_active_seats": 118,
+              "peak_daily_active_seats": 135,
+              "seat_utilization_rate_pct": 100.0,
+              "total_spend": 15000
+            },
+            "classification": "undersized_expand"
+          },
+          {
+            "entity_key": "slack_license_004",
+            "mongo_value": {
+              "contracted_seats": 75,
+              "active_seat_count": 60,
+              "inactive_seat_count": 15,
+              "days_until_renewal": 45,
+              "renewal_urgency": "upcoming",
+              "status": "up_for_renewal"
+            },
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.043276,
+  "total_latency_ms": 19573,
+  "cumulative_spend_usd": 0.17594700000000002,
+  "evaluator_reason": "stage1_mongo_fail: generated_pipeline_execution_error"
+}

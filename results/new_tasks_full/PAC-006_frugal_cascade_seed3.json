@@ -1,0 +1,52 @@
+{
+  "task_id": "PAC-006",
+  "task_class": "policy_action",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_governance_check",
+        "description": "Evaluate the proposed Docker image rollout against change management, deployment, and infrastructure governance policies. Assess compliance with staging validation requirements, rollout procedures, and risk mitigation controls. Determine if the proposal violates access control, change approval, or operational safety policies.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask at mid tier: This is an explicit governance evaluation against a policy registry, requiring assessment of change management, deployment safety, and infrastructure controls. Mid tier is appropriate because the decision involves multi-faceted policy reasoning (staging requirements, rollout procedures, risk assessment, and approval workflows), but does not require cross-source data reconciliation or complex conditional logic beyond policy framework."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_governance_check",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 534,
+      "output_tokens": 275,
+      "cached_tokens": 0,
+      "latency_ms": 2772,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-601": "fail",
+          "POL-602": "fail",
+          "POL-603": "fail"
+        },
+        "reason": "Proposed Docker image rollout violates three critical governance policies: (1) POL-601 requires minimum 48-hour staging validation before production deployment—none has been conducted; (2) POL-602 mandates change board approval and monitoring setup—no approval record or monitoring plan provided; (3) POL-603 requires automated rollback capability and traffic monitoring—rollout plan does not include these safety controls. Production rollout to all microservices without these controls presents unacceptable operational risk.",
+        "applied_constraints": [
+          "Staging validation required for minimum 48 hours before production approval",
+          "Change board approval must be obtained prior to rollout authorization",
+          "Automated rollback mechanism must be configured and tested",
+          "Real-time traffic monitoring and alerting must be in place",
+          "Canary or phased rollout strategy recommended to limit blast radius"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001909,
+  "total_latency_ms": 2772,
+  "cumulative_spend_usd": 8.623753000000006
+}

@@ -1,0 +1,53 @@
+{
+  "task_id": "PAC-003",
+  "task_class": "policy_action",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check",
+        "description": "Evaluate emergency access request against IAM and production access policies: verify user role (senior-engineer) eligibility, P1 incident justification, time-limited access grant, audit logging requirements, and any governance exceptions for emergency production database access.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask (mid tier) is appropriate because this query EXPLICITLY asks for a governance decision: emergency access control approval against a policy registry. The mid tier is assigned because the evaluation involves multiple policy dimensions (role eligibility, incident severity classification, time-limiting, audit requirements, and emergency exceptions), requiring multi-policy reasoning rather than a simple single-rule check. No additional subtasks needed\u2014this is purely a compliance/access control gate decision, not a data retrieval or reconciliation task."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 803,
+      "output_tokens": 302,
+      "cached_tokens": 0,
+      "latency_ms": 4355,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-501": "pass",
+          "POL-502": "pass_conditional",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "Senior engineer u_9981 has valid P1 incident ticket INC-20241215-0042 justifying emergency access to db-payments-primary. POL-501 satisfied via active incident ticket. POL-502 dual approval waived under P1 exception. POL-503 requires time-limited grant with audit logging and 24-hour post-access review.",
+        "applied_constraints": [
+          "Time-limited access: 4-hour TTL tied to incident ticket INC-20241215-0042",
+          "All read_write operations logged to immutable audit trail",
+          "Mandatory 24-hour post-incident access review by security/governance team",
+          "Access auto-revokes on incident closure or TTL expiry",
+          "Session recording enabled for production DB queries"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.011565,
+  "total_latency_ms": 4355,
+  "cumulative_spend_usd": 5.035322000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

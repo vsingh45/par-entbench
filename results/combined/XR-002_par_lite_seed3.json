@@ -1,0 +1,108 @@
+{
+  "task_id": "XR-002",
+  "task_class": "cross_recon",
+  "router": "par_lite",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_active_contracts",
+        "description": "Retrieve all active billing contracts with contracted annual value, vendor name, and contract ID from MongoDB",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_2024_invoices",
+        "description": "Query invoices issued in 2024 by vendor/contract, summing total invoice amounts to get actual annual billed value",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_variance",
+        "description": "Reconcile contracted annual values from MongoDB against actual 2024 invoice totals from SQL, calculate variance percentage, identify and flag contracts with >10% variance, and generate a summary report with contract ID, vendor, contracted value, actual billed, variance %, and variance flag",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "mongo_active_contracts",
+          "sql_2024_invoices"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) mongo_query to fetch active contracts from contract store (small tier\u2014straightforward collection scan with filters), (2) sql_gen to aggregate 2024 invoices by vendor/contract (small tier\u2014basic GROUP BY with date filter), (3) cross_recon at mid tier to reconcile two sources, calculate variance percentages, apply the >10% threshold logic, classify variance significance, and produce the flagged report. The mid tier on cross_recon is justified because it involves multi-signal reconciliation (comparing two numeric sources), conditional flagging logic, and generating a synthesized output that requires inference about materiality. This avoids unnecessary complexity while ensuring accurate variance calculation and interpretation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_active_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1220,
+      "output_tokens": 128,
+      "cached_tokens": 0,
+      "latency_ms": 1119,
+      "output": {
+        "collection": "billing_contracts",
+        "pipeline": [
+          {
+            "$match": {
+              "status": "active"
+            }
+          },
+          {
+            "$group": {
+              "_id": "$contract_id",
+              "contract_id": {
+                "$first": "$contract_id"
+              },
+              "vendor_name": {
+                "$first": "$vendor_name"
+              },
+              "annual_value_usd": {
+                "$first": "$annual_value_usd"
+              }
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_2024_invoices",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 473,
+      "output_tokens": 143,
+      "cached_tokens": 0,
+      "latency_ms": 1579,
+      "output": {
+        "sql": "SELECT iv.vendor_name, iv.contract_id, COUNT(iv.invoice_id) as invoice_count, SUM(iv.amount_usd) as total_invoiced_2024, SUM(iv.amount_usd) as actual_annual_billed_value FROM invoice_facts iv WHERE iv.invoice_date >= '2024-01-01' AND iv.invoice_date < '2025-01-01' GROUP BY iv.vendor_name, iv.contract_id ORDER BY iv.vendor_name, iv.contract_id"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_variance",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 538,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8659,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"CONTRACT-1001\",\n      \"mongo_value\": {\n        \"contract_id\": \"CONTRACT-1001\",\n        \"vendor_name\": \"Acme Cloud Services\",\n        \"annual_value_usd\": 120000\n      },\n      \"sql_value\": {\n        \"invoice_count\": 12,\n        \"total_invoiced_2024\": 118500,\n        \"actual_annual_billed_value\": 118500\n      },\n      \"contracted_value_usd\": 120000,\n      \"actual_billed_usd\": 118500,\n      \"variance_usd\": -1500,\n      \"variance_pct\": -1.25,\n      \"variance_flag\": false,\n      \"classification\": \"stable\"\n    },\n    {\n      \"entity_key\": \"CONTRACT-1002\",\n      \"mongo_value\": {\n        \"contract_id\": \"CONTRACT-1002\",\n        \"vendor_name\": \"BetaSoft Licensing\",\n        \"annual_value_usd\": 84000\n      },\n      \"sql_value\": {\n        \"invoice_count\": 10,\n        \"total_invoiced_2024\": 95200,\n        \"actual_annual_billed_value\": 95200\n      },\n      \"contracted_value_usd\": 84000,\n      \"actual_billed_usd\": 95200,\n      \"variance_usd\": 11200,\n      \"variance_pct\": 13.33,\n      \"variance_flag\": true,\n      \"classification\": \"at_risk\"\n    },\n    {\n      \"entity_key\": \"CONTRACT-1003\",\n      \"mongo_value\": {\n        \"contract_id\": \"CONTRACT-1003\",\n        \"vendor_name\": \"CoreNet Telecom\",\n        \"annual_value_usd\": 60000\n      },\n      \"sql_value\": {\n        \"invoice_count\": 6,\n        \"total_invoiced_2024\": 51000,\n        \"actual_annual_billed_value\": 51000\n      },\n      \"contracted_value_usd\": 60000,\n      \"actual_billed_usd\": 51000,\n      \"variance_usd\": -9000,\n      \"variance_pct\": -15.0,\n      \"variance_flag\": true,\n      \"classification\": \"reduce\"\n    },\n    {\n      \"entity_key\": \"CONTRACT-1004\",\n      \"mongo_value\": {\n        \"contract_id\": \"CONTRACT-1004\",\n        \"vendor_name\": \"DataVault Storage\",\n        \"annual_value_usd\": 36000\n      },\n      \"sql_value\": {\n        \"invoice_count\": 12,\n        \"total_invoiced_2024\": 36000,\n        \"actual_annual_billed_value\": 36000\n      },\n      \"contracted_value_usd\": 36000,\n      \"actual_billed_usd\": 36000,\n      \"variance_usd\": 0,\n      \"variance_pct\": 0.0,\n      \"variance_flag\": false,\n      \"classification\": \"stable\"\n    },\n    {\n      \"entity_key\": \"CONTRACT-1005\",\n      \"mongo"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.016662000000000003,
+  "total_latency_ms": 11357,
+  "cumulative_spend_usd": 2.668972000000001,
+  "evaluator_reason": "ok"
+}

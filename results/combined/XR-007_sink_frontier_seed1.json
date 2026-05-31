@@ -1,0 +1,72 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "router": "sink_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "aws_contract_spend",
+        "description": "Query AWS contract database to retrieve committed contract amounts, terms, and commitment levels by service/account. Combine with actual spend data from the billing system to calculate variance (committed vs actual spend), utilization rates, and identify overcommitted or underutilized commitments.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "analyze_utilization",
+        "description": "Reconcile AWS contract commitments with actual spend, classify each commitment as overcommitted, balanced, or underutilized, calculate potential savings/losses, and generate prioritized recommendations for commitment adjustment.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "aws_contract_spend"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid tier) to join contract commitment records with billing spend data across multiple AWS accounts/services and calculate variance metrics\u2014this is multi-table join requiring aggregation. (2) cross_recon (mid tier) to reconcile the commitment vs spend output, classify posture for each commitment, and generate actionable recommendations. Both mid tier: the SQL requires joins and aggregation across contract and billing tables but no complex window functions; the reconciliation involves multi-signal classification and recommendation logic but is not dealing with conflicting data sources requiring fusion. Frontier tier not needed\u2014this is structured reconciliation against a clear schema, not complex inference."
+  },
+  "node_results": [
+    {
+      "subtask_id": "aws_contract_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 489,
+      "output_tokens": 391,
+      "cached_tokens": 0,
+      "latency_ms": 2979,
+      "output": {
+        "sql": "SELECT i.contract_id, i.vendor_name, i.amount_usd AS committed_amount, i.invoice_date AS commitment_start, i.due_date AS commitment_end, COALESCE(SUM(c.amount_usd), 0) AS actual_spend, COALESCE(SUM(c.amount_usd), 0)::NUMERIC / NULLIF(i.amount_usd, 0) * 100 AS utilization_rate, i.amount_usd - COALESCE(SUM(c.amount_usd), 0) AS variance_usd, CASE WHEN COALESCE(SUM(c.amount_usd), 0)::NUMERIC / NULLIF(i.amount_usd, 0) > 1 THEN 'Overcommitted' WHEN COALESCE(SUM(c.amount_usd), 0)::NUMERIC / NULLIF(i.amount_usd, 0) < 0.75 THEN 'Underutilized' ELSE 'Optimized' END AS commitment_status FROM invoice_facts i LEFT JOIN consumption_facts c ON i.vendor_name = c.publisher AND c.event_date >= i.invoice_date AND c.event_date <= i.due_date WHERE i.vendor_name ILIKE '%aws%' AND i.status IN ('active', 'paid') GROUP BY i.contract_id, i.vendor_name, i.amount_usd, i.invoice_date, i.due_date ORDER BY variance_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "analyze_utilization",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 963,
+      "output_tokens": 166,
+      "cached_tokens": 0,
+      "latency_ms": 3164,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "aws_contract_spend_sql",
+            "mongo_value": null,
+            "sql_value": "SQL query provided for AWS contract commitment vs actual spend analysis",
+            "classification": "no_mongo_source_available"
+          }
+        ],
+        "note": "No MongoDB upstream output was provided; only SQL query definition supplied. Reconciliation requires both operational (MongoDB) and historical (SQL) result sets to perform LEFT JOIN classification per contract_id."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.011409,
+  "total_latency_ms": 6143,
+  "cumulative_spend_usd": 4.294783000000002,
+  "evaluator_reason": "no_mongo_node"
+}

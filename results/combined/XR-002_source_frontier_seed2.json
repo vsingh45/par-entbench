@@ -1,0 +1,135 @@
+{
+  "task_id": "XR-002",
+  "task_class": "cross_recon",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_active_contracts",
+        "description": "Query MongoDB for all active billing contracts with contracted annual value",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_2024_invoices",
+        "description": "Query SQL warehouse for all invoices issued in 2024, summed by contract, to get actual billed amounts",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_variance",
+        "description": "Reconcile contracted annual values from MongoDB against 2024 actual invoiced amounts from SQL. Calculate variance percentage for each contract. Flag contracts with material variance >10%. Classify each contract's billing posture (on-track, under-billed, over-billed).",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "mongo_active_contracts",
+          "sql_2024_invoices"
+        ]
+      }
+    ],
+    "cost_rationale": "This plan uses three subtasks: (1) mongo_query (small) to retrieve active contract metadata from the contract system; (2) sql_gen (small) to aggregate 2024 invoice amounts by contract from the billing warehouse \u2014 both data retrieval tasks are straightforward and can run in parallel; (3) cross_recon (mid tier) to join the two datasets, compute variance percentages, flag material deviations >10%, and classify billing posture. The mid tier is assigned to cross_recon because it must reason across two sources, perform variance calculations, and apply a threshold rule to determine flag status. No separate policy_action is needed because variance flagging is a data-driven classification rule, not a governance policy evaluation. The plan is minimal: reconciliation inherently requires fetching both sources and comparing them in a single step."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_active_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1728,
+      "output_tokens": 85,
+      "cached_tokens": 0,
+      "latency_ms": 1431,
+      "output": {
+        "collection": "billing_contracts",
+        "pipeline": [
+          {
+            "$match": {
+              "status": "active"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_2024_invoices",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 714,
+      "output_tokens": 97,
+      "cached_tokens": 0,
+      "latency_ms": 1635,
+      "output": {
+        "sql": "SELECT contract_id, SUM(amount_usd) AS total_invoiced_2024 FROM invoice_facts WHERE invoice_date >= '2024-01-01' AND invoice_date < '2025-01-01' GROUP BY contract_id"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_variance",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 405,
+      "output_tokens": 388,
+      "cached_tokens": 0,
+      "latency_ms": 2763,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "contract_001",
+            "mongo_value": 120000,
+            "sql_value": 115000,
+            "variance_percentage": -4.17,
+            "material_variance_flag": false,
+            "classification": "on-track"
+          },
+          {
+            "entity_key": "contract_002",
+            "mongo_value": 250000,
+            "sql_value": 220000,
+            "variance_percentage": -12.0,
+            "material_variance_flag": true,
+            "classification": "under-billed"
+          },
+          {
+            "entity_key": "contract_003",
+            "mongo_value": 180000,
+            "sql_value": 198500,
+            "variance_percentage": 10.28,
+            "material_variance_flag": true,
+            "classification": "over-billed"
+          },
+          {
+            "entity_key": "contract_004",
+            "mongo_value": 95000,
+            "sql_value": 94200,
+            "variance_percentage": -0.84,
+            "material_variance_flag": false,
+            "classification": "on-track"
+          },
+          {
+            "entity_key": "contract_005",
+            "mongo_value": 300000,
+            "sql_value": 0,
+            "variance_percentage": -100.0,
+            "material_variance_flag": true,
+            "classification": "under-billed"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.019105,
+  "total_latency_ms": 5829,
+  "cumulative_spend_usd": 2.5821680000000007,
+  "evaluator_reason": "ok"
+}

@@ -1,0 +1,107 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "aws_commit_query",
+        "description": "Retrieve AWS contract commitment levels (reserved instances, savings plans, compute commitments) from contract management system with effective dates and commitment amounts",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "aws_spend_query",
+        "description": "Query AWS spend data from cost warehouse for the same time periods as commitments, aggregated by service/instance type to match commitment granularity",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "aws_reconcile_analysis",
+        "description": "Reconcile committed vs actual spend data; calculate utilization ratios, identify overcommitted segments (commitment > spend + buffer) and underutilized segments (spend << commitment); generate posture classification and recommendations for commitment rebalancing",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "aws_commit_query",
+          "aws_spend_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks minimum: (1) mongo_query to fetch commitment metadata from contract system (mid tier for multi-field filtering and date logic), (2) sql_gen to aggregate spend by matching dimensions (mid tier for multi-table joins and time windowing), (3) cross_recon (frontier tier) to reconcile two data streams, compute utilization metrics, classify overcommitment/underutilization patterns, and generate recommendations\u2014this is the complex analytical decision layer that requires inference across signals. No policy_action needed as this is analytical posture assessment, not governance approval. No multitool_plan as the query does not request tool registry orchestration."
+  },
+  "node_results": [
+    {
+      "subtask_id": "aws_commit_query",
+      "specialist": "mongo_query",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1216,
+      "output_tokens": 399,
+      "cached_tokens": 0,
+      "latency_ms": 4735,
+      "output": {
+        "collection": "billing_contracts",
+        "pipeline": [
+          {
+            "$match": {
+              "vendor_name": "AWS",
+              "status": "active"
+            }
+          },
+          {
+            "$sort": {
+              "annual_value_usd": -1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "aws_spend_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 464,
+      "output_tokens": 346,
+      "cached_tokens": 0,
+      "latency_ms": 5006,
+      "output": {
+        "sql": "SELECT publisher, product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS actual_spend, COUNT(DISTINCT license_id) AS active_licenses, AVG(daily_active_seats) AS avg_daily_active_seats, SUM(CASE WHEN event_type = 'usage' THEN amount_usd ELSE 0 END) AS usage_spend, SUM(CASE WHEN event_type = 'commitment' THEN amount_usd ELSE 0 END) AS committed_spend, SUM(CASE WHEN event_type = 'usage' THEN amount_usd ELSE 0 END) - SUM(CASE WHEN event_type = 'commitment' THEN amount_usd ELSE 0 END) AS variance, CASE WHEN SUM(CASE WHEN event_type = 'commitment' THEN amount_usd ELSE 0 END) > 0 THEN ROUND(100.0 * SUM(CASE WHEN event_type = 'usage' THEN amount_usd ELSE 0 END) / SUM(CASE WHEN event_type = 'commitment' THEN amount_usd ELSE 0 END), 2) ELSE NULL END AS utilization_pct FROM consumption_facts WHERE publisher = 'AWS' GROUP BY publisher, product, fiscal_year, fiscal_quarter ORDER BY fiscal_year DESC, fiscal_quarter DESC, publisher, product"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "aws_reconcile_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1047,
+      "output_tokens": 54,
+      "cached_tokens": 0,
+      "latency_ms": 1240,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "AWS",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_data_available"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0228,
+  "total_latency_ms": 10981,
+  "cumulative_spend_usd": 0.19874700000000003,
+  "evaluator_reason": "stage2_sql_fail: gold_sql_execution_error"
+}

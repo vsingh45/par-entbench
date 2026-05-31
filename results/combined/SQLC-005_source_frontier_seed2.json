@@ -1,0 +1,89 @@
+{
+  "task_id": "SQLC-005",
+  "task_class": "sql_compose",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_licenses",
+        "description": "Query Postgres for all licenses with expiration dates within the next 6 months. Return license ID, name, vendor, expiration date, and current status.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "gen_recommendations",
+        "description": "Generate renewal recommendations for each license based on expiration date, vendor criticality, usage patterns, and cost history. Classify each as 'renew', 'renegotiate', or 'consider_alternative' with rationale.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_licenses"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (small tier) to retrieve licenses expiring in 6 months from Postgres with basic filtering on expiration_date; (2) cross_recon (mid tier) to generate renewal recommendations by analyzing the license data for each record and producing posture decisions and recommendations. The cross_recon tier accounts for multi-factor analysis (criticality, usage, cost) needed to generate meaningful recommendations. No policy_action needed\u2014recommendation generation is part of the reconciliation and decision logic, not governance compliance."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_licenses",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 712,
+      "output_tokens": 138,
+      "cached_tokens": 0,
+      "latency_ms": 2076,
+      "output": {
+        "sql": "SELECT DISTINCT license_id, product AS name, publisher AS vendor, MAX(event_date) AS expiration_date, MAX(event_type) AS current_status FROM consumption_facts WHERE event_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '6 months' GROUP BY license_id, product, publisher"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "gen_recommendations",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 366,
+      "output_tokens": 309,
+      "cached_tokens": 0,
+      "latency_ms": 3320,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "license_reconciliation_incomplete",
+            "mongo_value": null,
+            "sql_value": "pending_execution",
+            "classification": "no_recent_activity",
+            "rationale": "MongoDB operational state not provided in upstream_outputs. Only SQL query definition supplied without execution results."
+          }
+        ],
+        "error": "MISSING_OPERATIONAL_STATE",
+        "required_inputs": {
+          "mongodb_state": "Operational license expiration cache/current inventory (required)",
+          "sql_results": "Execution results from consumption_facts query (required)",
+          "supplementary_data": [
+            "vendor_criticality_scores",
+            "usage_metrics_by_license_id",
+            "cost_history_by_license_id",
+            "alternative_product_mappings"
+          ]
+        },
+        "next_steps": [
+          "Execute SQL query against consumption_facts table",
+          "Retrieve MongoDB license inventory with expiration_date, criticality, usage_30d, cost_ytd fields",
+          "LEFT JOIN MongoDB primary \u2192 SQL historical",
+          "Calculate recommendation using: criticality + usage_trend + cost_efficiency + vendor_lock_in"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.008921,
+  "total_latency_ms": 5396,
+  "cumulative_spend_usd": 0.7721509999999999,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

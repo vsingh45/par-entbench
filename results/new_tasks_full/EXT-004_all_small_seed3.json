@@ -1,0 +1,55 @@
+{
+  "task_id": "EXT-004",
+  "task_class": "extract",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_parties",
+        "description": "Extract all parties from the multi-party contract, including party names, their roles (e.g., vendor, buyer, guarantor), and contact addresses. Return structured JSON with party records.",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single extract subtask at mid tier. Multi-field extraction (names, roles, addresses) from a contract document is moderate complexity and requires schema matching across multiple party records. Mid tier is appropriate for handling variable party counts and address parsing. No dependencies, no reconciliation needed — the document itself is the single source.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_parties",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 402,
+      "output_tokens": 168,
+      "cached_tokens": 0,
+      "latency_ms": 1504,
+      "output": {
+        "parties": [
+          {
+            "party_name": "Acme Corporation",
+            "role": "Service Provider",
+            "contact_address": "123 Business Ave, San Francisco, CA 94105"
+          },
+          {
+            "party_name": "TechCorp Inc.",
+            "role": "Primary Client",
+            "contact_address": "456 Innovation Drive, San Jose, CA 95110"
+          },
+          {
+            "party_name": "Global Partners LLC",
+            "role": "Secondary Partner",
+            "contact_address": "789 Enterprise Boulevard, Las Vegas, NV 89101"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001242,
+  "total_latency_ms": 1504,
+  "cumulative_spend_usd": 5.357574000000003
+}

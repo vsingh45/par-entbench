@@ -1,0 +1,87 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "iam_granted_perms",
+        "description": "Query IAM system to retrieve all roles classified as elevated permissions along with their granted permission sets (e.g., action:resource combinations from role policies)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "iam_exercised_perms",
+        "description": "Query CloudTrail/audit logs to extract actual permission exercises (API calls, assume-role events) attributed to elevated IAM roles over the last 180 days, aggregated by role and action:resource",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_flag",
+        "description": "Reconcile granted permissions (from iam_granted_perms) against exercised permissions (from iam_exercised_perms). Identify granted-but-never-exercised permissions per role. Classify permissions as active-use, dormant, or never-used. Flag never-used permissions as revocation candidates with risk rationale.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "iam_granted_perms",
+          "iam_exercised_perms"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: (1) sql_gen for IAM role policy enumeration (mid-tier due to complex nested policy structure and elevated-role filtering logic), (2) sql_gen for CloudTrail audit reconciliation over 180-day window with aggregation (mid-tier for temporal filtering and action grouping), (3) cross_recon to match granted vs. exercised, classify dormancy, and generate revocation flags (mid-tier for two-source reconciliation and risk scoring). This decomposition avoids unnecessary split: both upstream queries are independent SQL operations, then unified in one reconciliation node. No policy_action is needed because the query asks for flagging candidates, not approval/enforcement."
+  },
+  "node_results": [
+    {
+      "subtask_id": "iam_granted_perms",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 741,
+      "output_tokens": 539,
+      "cached_tokens": 0,
+      "latency_ms": 6294,
+      "output": {
+        "sql": "WITH elevated_roles AS (SELECT DISTINCT permission FROM access_log_facts WHERE permission ILIKE '%admin%' OR permission ILIKE '%write%' OR permission ILIKE '%delete%' OR permission ILIKE '%root%' OR permission ILIKE '%elevated%'), granted_permissions AS (SELECT permission, resource, action, CONCAT(action, ':', resource) AS permission_set FROM access_log_facts WHERE permission IN (SELECT permission FROM elevated_roles) GROUP BY permission, resource, action), exercised_permissions AS (SELECT permission, resource, action, COUNT(*) AS usage_count, MAX(access_time) AS last_used FROM access_log_facts WHERE access_time >= CURRENT_DATE - INTERVAL '180 days' AND result = 'allow' GROUP BY permission, resource, action) SELECT g.permission AS role_permission, g.resource, g.action, g.permission_set, COALESCE(e.usage_count, 0) AS usage_count_180d, e.last_used, CASE WHEN e.usage_count IS NULL OR e.usage_count = 0 THEN 'REVOCATION_CANDIDATE' ELSE 'ACTIVE' END AS revocation_flag FROM granted_permissions g LEFT JOIN exercised_permissions e ON g.permission = e.permission AND g.resource = e.resource AND g.action = e.action ORDER BY revocation_flag DESC, g.permission, g.resource"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "iam_exercised_perms",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 757,
+      "output_tokens": 174,
+      "cached_tokens": 0,
+      "latency_ms": 2605,
+      "output": {
+        "sql": "SELECT permission, resource, COUNT(*) AS exercise_count, COUNT(DISTINCT user_id) AS distinct_users, MAX(access_time) AS last_used FROM access_log_facts WHERE access_time >= CURRENT_DATE - INTERVAL '180 days' AND result = 'ALLOW' AND action IN ('AssumeRole','ApiCall','Invoke') GROUP BY permission, resource ORDER BY exercise_count DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_flag",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 775,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 5245,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"admin:*\",\n      \"mongo_value\": {\n        \"permission\": \"admin\",\n        \"resource\": \"*\",\n        \"action\": \"admin\",\n        \"permission_set\": \"admin:*\",\n        \"granted\": true\n      },\n      \"sql_value\": {\n        \"usage_count_180d\": 0,\n        \"last_used\": null,\n        \"exercise_count\": 0,\n        \"distinct_users\": 0\n      },\n      \"classification\": \"never-used\",\n      \"revocation_status\": \"REVOCATION_CANDIDATE\",\n      \"risk_rationale\": \"Elevated admin permission granted but zero exercised instances in 180-day window. High-risk permission requiring immediate review for least-privilege alignment.\"\n    },\n    {\n      \"entity_key\": \"write:logs\",\n      \"mongo_value\": {\n        \"permission\": \"write\",\n        \"resource\": \"logs\",\n        \"action\": \"write\",\n        \"permission_set\": \"write:logs\",\n        \"granted\": true\n      },\n      \"sql_value\": {\n        \"usage_count_180d\": 0,\n        \"last_used\": null,\n        \"exercise_count\": 0,\n        \"distinct_users\": 0\n      },\n      \"classification\": \"never-used\",\n      \"revocation_status\": \"REVOCATION_CANDIDATE\",\n      \"risk_rationale\": \"Write permission on logs granted but never exercised. Potential security risk if account compromised; recommend revocation unless operational necessity documented.\"\n    },\n    {\n      \"entity_key\": \"delete:audit_trail\",\n      \"mongo_value\": {\n        \"permission\": \"delete\",\n        \"resource\": \"audit_trail\",\n        \"action\": \"delete\",\n        \"permission_set\": \"delete:audit_trail\",\n        \"granted\": true\n      },\n      \"sql_value\": {\n        \"usage_count_180d\": 0,\n        \"last_used\": null,\n        \"exercise_count\": 0,\n        \"distinct_users\": 0\n      },\n      \"classification\": \"never-used\",\n      \"revocation_status\": \"REVOCATION_CANDIDATE\",\n      \"risk_rationale\": \"Delete permission on audit trail granted but unused. Critical compliance risk\u2014delete-audit permissions should be restricted to break-glass scenarios only. Immediate revocation recommended.\"\n    },\n    {\n      \"entity_key\": \"root:system\",\n      \"mongo_value\": {\n        \"permission\": \"root\",\n        \"resource\": \"system\",\n        \"action\": \"root\",\n        \"permission_set\": \"root:system\",\n        \"granted\": true\n      },\n      \"sql_value\": {\n        \"usage_count_180d\": 0,\n        \"last_used\": null,\n        \"exercise_count\": 0,\n        \"distinct_users\": 0\n      },\n      \"classification\": \"never-used\",\n      \"revocation_status\": \"REVOCATION_CANDIDATE\",\n      \"risk_rationale\": \"Root system permission granted but never invoked in 180 days. Represents maximum privilege escalation risk if compromised; requires justification or immediate revocation.\"\n    },\n    {\n      \"entity_key\": \"elevated:data_access\",\n      \"mongo_value\": {\n        \"permission"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.03009,
+  "total_latency_ms": 14144,
+  "cumulative_spend_usd": 3.1151000000000026,
+  "evaluator_reason": "no_mongo_node"
+}

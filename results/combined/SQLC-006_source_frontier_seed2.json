@@ -1,0 +1,97 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_analysis",
+        "description": "Query spend data for current month and prior 3 months. Calculate 3-month average spend, current month spend, variance, and percent deviation. Return results with enough detail to support anomaly classification.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_classify",
+        "description": "Receive spend variance data from sql_spend_analysis. Reconcile current month against 3-month baseline. Classify each anomaly as normal_variance (within 1 standard deviation or <15% deviation), concerning (1-2 std dev or 15-30% deviation), or critical (>2 std dev or >30% deviation). Return classification with rationale.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_spend_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen at mid tier to compute 3-month baseline, current month spend, variance metrics across multiple months and spending categories with aggregation and time-window logic. (2) cross_recon at mid tier to apply classification thresholds and reconcile variance data into risk categories\u2014this is a reconciliation+classification task, not a policy decision, so it belongs in cross_recon rather than policy_action. No separate policy_action needed since the query asks for business classification, not governance approval. No multitool_plan needed as both subtasks use native query/analysis agents. Minimal subtask count justified: single SQL pull covers the entire analytics requirement, and classification is naturally part of reconciliation logic."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 734,
+      "output_tokens": 575,
+      "cached_tokens": 0,
+      "latency_ms": 6194,
+      "output": {
+        "sql": "WITH monthly_spend AS (SELECT publisher, product, DATE_TRUNC('month', event_date) AS month, SUM(amount_usd) AS spend FROM consumption_facts WHERE event_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months' GROUP BY publisher, product, DATE_TRUNC('month', event_date)), current_month AS (SELECT publisher, product, spend AS current_spend FROM monthly_spend WHERE month = DATE_TRUNC('month', CURRENT_DATE)), prior_avg AS (SELECT publisher, product, AVG(spend) AS avg_3mo_spend FROM monthly_spend WHERE month < DATE_TRUNC('month', CURRENT_DATE) AND month >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months' GROUP BY publisher, product) SELECT c.publisher, c.product, c.current_spend, p.avg_3mo_spend, (c.current_spend - p.avg_3mo_spend) AS variance, CASE WHEN p.avg_3mo_spend = 0 THEN NULL ELSE ((c.current_spend - p.avg_3mo_spend) / p.avg_3mo_spend) * 100 END AS pct_deviation FROM current_month c JOIN prior_avg p ON c.publisher = p.publisher AND c.product = p.product ORDER BY ABS(COALESCE((c.current_spend - p.avg_3mo_spend) / NULLIF(p.avg_3mo_spend, 0), 0)) DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_classify",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 699,
+      "output_tokens": 364,
+      "cached_tokens": 0,
+      "latency_ms": 2804,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "publisher_product_combination",
+            "mongo_value": null,
+            "sql_value": "current_spend, avg_3mo_spend, variance, pct_deviation",
+            "classification": "awaiting_sql_results",
+            "rationale": "No MongoDB operational data provided. SQL analysis ready to classify spend anomalies once results are received."
+          }
+        ],
+        "classification_framework": {
+          "normal_variance": {
+            "criteria": "Within 1 standard deviation OR <15% absolute deviation",
+            "action": "Monitor routine"
+          },
+          "concerning": {
+            "criteria": "1-2 standard deviations OR 15-30% absolute deviation",
+            "action": "Review and investigate"
+          },
+          "critical": {
+            "criteria": ">2 standard deviations OR >30% absolute deviation",
+            "action": "Immediate escalation required"
+          }
+        },
+        "expected_output_schema": {
+          "publisher": "string",
+          "product": "string",
+          "current_spend": "decimal",
+          "avg_3mo_baseline": "decimal",
+          "absolute_variance": "decimal",
+          "pct_deviation": "decimal",
+          "classification": "string",
+          "rationale": "string"
+        },
+        "note": "Awaiting SQL query results from sql_spend_analysis to perform reconciliation and classification"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.020564000000000002,
+  "total_latency_ms": 8998,
+  "cumulative_spend_usd": 1.076613,
+  "evaluator_reason": "step2_consumer_classification_missing"
+}

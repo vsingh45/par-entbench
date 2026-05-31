@@ -1,0 +1,57 @@
+{
+  "task_id": "EXT-007",
+  "task_class": "extract",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_vendor_details",
+        "description": "Extract company details (name, registration number, address, industry), primary contact information (name, email, phone, title), and banking details (account holder, bank name, account number, routing number, SWIFT code) from the vendor onboarding form document.",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single extract task assigned to small tier: vendor onboarding forms have a standard, well-defined structure with explicit required fields (company info, contact details, banking details). Field extraction is straightforward with no cross-document inference or multi-signal reconciliation needed. One extract call captures all requested fields in one pass."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_vendor_details",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 451,
+      "output_tokens": 209,
+      "cached_tokens": 0,
+      "latency_ms": 2152,
+      "output": {
+        "company_details": {
+          "name": "TechVendor Solutions Inc.",
+          "registration_number": "NV-987654",
+          "address": "999 Tech Lane, Austin, TX 78701",
+          "industry": "Software Development Services"
+        },
+        "primary_contact": {
+          "name": "Sarah Johnson",
+          "email": "sarah.johnson@techvendor.com",
+          "phone": "(512) 555-0123",
+          "title": "VP of Sales"
+        },
+        "banking_details": {
+          "account_holder": "TechVendor Solutions Inc.",
+          "bank_name": "Chase Bank",
+          "account_number": "4567890123",
+          "routing_number": "021000021",
+          "swift_code": null
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0014960000000000002,
+  "total_latency_ms": 2152,
+  "cumulative_spend_usd": 5.632921000000008
+}

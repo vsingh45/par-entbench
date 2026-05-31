@@ -1,0 +1,46 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "all_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_contractor_access",
+        "description": "Evaluate the contractor's access request against data governance and access control policies. Determine whether temporary contractor status allows full database backup downloads, assess data sensitivity classification, and check for compliance violations (GDPR, data residency, confidentiality agreements).",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask (mid tier) because the query explicitly asks for access control evaluation. The contractor's temporary status, the sensitivity of full customer database backups, and potential compliance concerns (GDPR data residency, confidentiality) require multi-policy reasoning across data governance frameworks—this justifies mid tier over small. No additional subtasks are needed: this is an access control gate, not a data reconciliation or multi-tool orchestration scenario. The policy decision output directly answers the user's implicit question of whether to approve or deny the request."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_contractor_access",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 768,
+      "output_tokens": 170,
+      "cached_tokens": 0,
+      "latency_ms": 2458,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "Contractor role violates POL-701 (backups restricted to FTE DBAs), POL-702 (contractors cannot export raw data, only de-identified results), and POL-703 (no evidence of PM approval or 7-day notice). Full backup download additionally raises GDPR and data residency concerns.",
+        "applied_constraints": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.00809,
+  "total_latency_ms": 2458,
+  "cumulative_spend_usd": 8.703902000000006
+}

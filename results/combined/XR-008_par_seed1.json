@@ -1,0 +1,136 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "datadog_usage_sql",
+        "description": "Query Datadog usage database to extract license allocations, actual usage metrics (hosts, synthetics, logs, APM), and growth patterns over time. Include trend calculations (month-over-month, year-over-year) and current utilization rates.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "datadog_reconcile_trends",
+        "description": "Reconcile license allocation data with actual usage metrics. Identify variance between allocated and consumed resources, classify utilization patterns (over-provisioned, optimally-used, under-provisioned), detect growth trends, and generate recommendations for license optimization.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "datadog_usage_sql"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks are necessary: (1) sql_gen (mid-tier) to pull license allocations, usage metrics, and calculate trends from the data warehouse\u2014this requires multi-table joins and window functions for time-series growth analysis; (2) cross_recon (mid-tier) to reconcile allocated vs. actual usage, classify posture, and generate optimization recommendations. Both are mid-tier: the SQL involves standard aggregations and trend calculations, and the reconciliation does not require complex multi-signal inference or exception handling. No multitool_plan is needed since this is sourced from standard enterprise data systems. No policy_action is added because the query asks for analysis and optimization recommendations, not compliance or governance approval."
+  },
+  "node_results": [
+    {
+      "subtask_id": "datadog_usage_sql",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 488,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8626,
+      "output": {
+        "raw_output": "{\"sql\": \"SELECT\\n  cf.publisher,\\n  cf.product,\\n  cf.fiscal_year,\\n  cf.fiscal_quarter,\\n  DATE_TRUNC('month', cf.event_date) AS usage_month,\\n  cf.event_type,\\n  COUNT(DISTINCT cf.license_id) AS license_count,\\n  COUNT(DISTINCT cf.user_id) AS distinct_users,\\n  SUM(cf.amount_usd) AS total_amount_usd,\\n  AVG(cf.amount_usd) AS avg_amount_usd,\\n  SUM(cf.daily_active_seats) AS total_active_seats,\\n  AVG(cf.daily_active_seats) AS avg_daily_active_seats,\\n  MAX(cf.daily_active_seats) AS peak_daily_active_seats,\\n  MIN(cf.daily_active_seats) AS min_daily_active_seats,\\n  -- Month-over-month growth in amount\\n  SUM(cf.amount_usd) - LAG(SUM(cf.amount_usd)) OVER (\\n    PARTITION BY cf.publisher, cf.product, cf.event_type\\n    ORDER BY DATE_TRUNC('month', cf.event_date)\\n  ) AS mom_amount_change,\\n  ROUND(\\n    100.0 * (\\n      SUM(cf.amount_usd) - LAG(SUM(cf.amount_usd)) OVER (\\n        PARTITION BY cf.publisher, cf.product, cf.event_type\\n        ORDER BY DATE_TRUNC('month', cf.event_date)\\n      )\\n    ) / NULLIF(\\n      LAG(SUM(cf.amount_usd)) OVER (\\n        PARTITION BY cf.publisher, cf.product, cf.event_type\\n        ORDER BY DATE_TRUNC('month', cf.event_date)\\n      ), 0\\n    ), 2\\n  ) AS mom_amount_pct_change,\\n  -- Month-over-month growth in active seats\\n  SUM(cf.daily_active_seats) - LAG(SUM(cf.daily_active_seats)) OVER (\\n    PARTITION BY cf.publisher, cf.product, cf.event_type\\n    ORDER BY DATE_TRUNC('month', cf.event_date)\\n  ) AS mom_seats_change,\\n  ROUND(\\n    100.0 * (\\n      SUM(cf.daily_active_seats) - LAG(SUM(cf.daily_active_seats)) OVER (\\n        PARTITION BY cf.publisher, cf.product, cf.event_type\\n        ORDER BY DATE_TRUNC('month', cf.event_date)\\n      )\\n    ) / NULLIF(\\n      LAG(SUM(cf.daily_active_seats)) OVER (\\n        PARTITION BY cf.publisher, cf.product, cf.event_type\\n        ORDER BY DATE_TRUNC('month', cf.event_date)\\n      ), 0\\n    ), 2\\n  ) AS mom_seats_pct_change,\\n  -- Year-over-year growth in amount\\n  SUM(cf.amount_usd) - LAG(S"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "datadog_reconcile_trends",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1108,
+      "output_tokens": 703,
+      "cached_tokens": 0,
+      "latency_ms": 12803,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "datadog_usage_sql::truncated_query_result",
+            "mongo_value": null,
+            "sql_value": {
+              "publisher": null,
+              "product": null,
+              "fiscal_year": null,
+              "fiscal_quarter": null,
+              "usage_month": null,
+              "event_type": null,
+              "license_count": 0,
+              "distinct_users": 0,
+              "total_amount_usd": 0,
+              "avg_amount_usd": 0,
+              "total_active_seats": 0,
+              "avg_daily_active_seats": 0,
+              "peak_daily_active_seats": 0,
+              "min_daily_active_seats": 0,
+              "mom_amount_change": null,
+              "mom_amount_pct_change": null,
+              "mom_seats_change": null,
+              "mom_seats_pct_change": null,
+              "yoy_amount_change": null,
+              "query_status": "truncated",
+              "query_completeness": "partial",
+              "notes": "SQL query output was truncated before returning result rows; only the query definition was captured, no data rows available for reconciliation"
+            },
+            "classification": "no_recent_activity",
+            "variance_analysis": {
+              "allocated_licenses": null,
+              "consumed_licenses": null,
+              "utilization_rate_pct": null,
+              "variance_units": null,
+              "variance_pct": null,
+              "provisioning_status": "unknown"
+            },
+            "growth_trend": {
+              "mom_seats_pct_change": null,
+              "mom_amount_pct_change": null,
+              "yoy_amount_pct_change": null,
+              "trend_direction": "indeterminate",
+              "trend_confidence": "none"
+            },
+            "recommendations": [
+              {
+                "priority": "high",
+                "action": "re_execute_sql_query",
+                "rationale": "SQL output was truncated during transmission and contains only the query definition, not result rows. Re-execute to obtain actual license allocation and usage metrics."
+              },
+              {
+                "priority": "high",
+                "action": "provide_mongodb_operational_state",
+                "rationale": "No MongoDB source data was provided in this reconciliation task. MongoDB is the primary source under LEFT JOIN semantics; without it, no authoritative entity list can be established."
+              },
+              {
+                "priority": "medium",
+                "action": "validate_data_pipeline",
+                "rationale": "Truncation of SQL output suggests a possible buffer overflow, timeout, or serialization issue in the upstream datadog_usage_sql node. Inspect pipeline configuration and output size limits."
+              },
+              {
+                "priority": "medium",
+                "action": "define_utilization_thresholds",
+                "rationale": "Once data is available, apply the following classification thresholds: over-provisioned if utilization < 60%, optimally-used if 60-85%, under-provisioned if > 85% of allocated seats are consumed on peak days."
+              },
+              {
+                "priority": "low",
+                "action": "schedule_recurring_reconciliation",
+                "rationale": "Establish a monthly reconciliation cadence comparing MongoDB license allocation snapshots against SQL usage aggregates to detect drift and optimize license spend proactively."
+              }
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.027333000000000003,
+  "total_latency_ms": 21429,
+  "cumulative_spend_usd": 0.22608000000000003,
+  "evaluator_reason": "no_mongo_node"
+}

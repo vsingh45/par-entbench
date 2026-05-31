@@ -1,0 +1,71 @@
+{
+  "task_id": "SQLC-005",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_query",
+        "description": "Query Postgres to retrieve all licenses expiring within the next 6 months, including license ID, product name, expiration date, vendor, and current status",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "renewal_recommendations",
+        "description": "Analyze retrieved licenses and generate renewal recommendations for each, considering expiration urgency, vendor history, and renewal patterns",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks with minimal decomposition: (1) sql_gen at small tier for a straightforward single-table or simple join query filtering licenses by expiration date within 6 months; (2) cross_recon at mid tier to generate recommendations by analyzing the license data (posture/priority classification and recommendation generation are core cross_recon functions, not separate policy_action). No policy_action is needed since renewal recommendations are operational analysis, not governance compliance. Dependency: recommendations depend on successful SQL retrieval."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 470,
+      "output_tokens": 124,
+      "cached_tokens": 0,
+      "latency_ms": 1434,
+      "output": {
+        "sql": "SELECT DISTINCT cf.license_id, cf.product, invf.due_date as expiration_date, invf.vendor_name, invf.status FROM consumption_facts cf JOIN invoice_facts invf ON cf.license_id::text = invf.invoice_id::text WHERE invf.due_date >= CURRENT_DATE AND invf.due_date <= CURRENT_DATE + INTERVAL '6 months' ORDER BY invf.due_date ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "renewal_recommendations",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 374,
+      "output_tokens": 50,
+      "cached_tokens": 0,
+      "latency_ms": 2088,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "no_mongo_data",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0029620000000000002,
+  "total_latency_ms": 3522,
+  "cumulative_spend_usd": 0.028409999999999998,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

@@ -1,0 +1,111 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sam_contract_fetch",
+        "description": "Query SAM system for active contracts with renewal dates, contract IDs, vendor names, and renewal thresholds (typically contracts within 90-120 days of renewal date)",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "consumption_trends",
+        "description": "Retrieve usage/consumption trends from billing or consumption warehouse for matched contract IDs, including historical monthly/quarterly burn rate and forecast to renewal date",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "risk_assessment",
+        "description": "Cross-reconcile contract renewal dates with consumption trends, assess renewal risk (high/medium/low) based on spend trajectory, renewal proximity, and vendor lock-in factors. Classify each contract and generate renewal recommendations with priority and rationale for procurement action.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sam_contract_fetch",
+          "consumption_trends"
+        ]
+      },
+      {
+        "id": "notify_procurement",
+        "description": "Generate and send alert notification to procurement team with prioritized list of renewals requiring action, including contract summary, risk level, and recommended actions",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "risk_assessment"
+        ]
+      }
+    ],
+    "cost_rationale": "Four subtasks, minimum necessary: (1) SAM contract query is a straightforward SQL fetch (small). (2) Consumption trends requires multi-table joins across billing/usage history (mid). (3) Risk assessment combines both data sources for reconciliation, classification, and recommendation generation\u2014this is cross_recon's scope, not separate policy evaluation (mid, since it reconciles two moderate-complexity sources). (4) Notification dispatch requires tool invocation from the registry (multitool_plan, small since the action itself is straightforward once risk data is prepared). No separate policy_action needed\u2014risk classification and prioritization are part of cross_recon output. No unnecessary splits: both SQL queries can run in parallel; cross_recon depends on both; notification depends on cross_recon result."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sam_contract_fetch",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 477,
+      "output_tokens": 199,
+      "cached_tokens": 0,
+      "latency_ms": 1810,
+      "output": {
+        "sql": "SELECT invoice_id AS contract_id, vendor_name, due_date AS renewal_date, amount_usd AS renewal_threshold, EXTRACT(DAY FROM due_date - CURRENT_DATE) AS days_to_renewal, CASE WHEN EXTRACT(DAY FROM due_date - CURRENT_DATE) BETWEEN 90 AND 120 THEN 'ALERT' WHEN EXTRACT(DAY FROM due_date - CURRENT_DATE) < 90 THEN 'URGENT' ELSE 'MONITOR' END AS renewal_status FROM invoice_facts WHERE status IN ('ACTIVE', 'PENDING') AND due_date >= CURRENT_DATE AND EXTRACT(DAY FROM due_date - CURRENT_DATE) <= 120 ORDER BY days_to_renewal ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "consumption_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 470,
+      "output_tokens": 207,
+      "cached_tokens": 0,
+      "latency_ms": 1934,
+      "output": {
+        "sql": "SELECT cf.license_id, cf.publisher, cf.product, DATE_TRUNC('month', cf.event_date)::DATE AS month, cf.fiscal_year, cf.fiscal_quarter, SUM(cf.amount_usd) AS monthly_spend_usd, AVG(cf.daily_active_seats) AS avg_daily_seats, COUNT(DISTINCT cf.user_id) AS unique_users, COUNT(*) AS event_count FROM consumption_facts cf WHERE cf.event_date >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '24 months')::DATE GROUP BY cf.license_id, cf.publisher, cf.product, DATE_TRUNC('month', cf.event_date), cf.fiscal_year, cf.fiscal_quarter ORDER BY cf.license_id, month DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "risk_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 683,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9635,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"contract_reconciliation_framework\",\n      \"mongo_value\": null,\n      \"sql_value\": null,\n      \"classification\": \"requires_data_integration\",\n      \"note\": \"No MongoDB output provided - using SQL results as primary source\"\n    }\n  ],\n  \"reconciliation_status\": \"incomplete_upstream_data\",\n  \"available_data_sources\": {\n    \"sql_contracts\": \"sam_contract_fetch query ready\",\n    \"sql_consumption\": \"consumption_trends query ready\",\n    \"mongodb_state\": \"not_provided\"\n  },\n  \"workflow_generation\": {\n    \"step_1_contract_fetch\": {\n      \"query\": \"SELECT invoice_id AS contract_id, vendor_name, due_date AS renewal_date, amount_usd AS renewal_threshold, EXTRACT(DAY FROM due_date - CURRENT_DATE) AS days_to_renewal, CASE WHEN EXTRACT(DAY FROM due_date - CURRENT_DATE) BETWEEN 90 AND 120 THEN 'ALERT' WHEN EXTRACT(DAY FROM due_date - CURRENT_DATE) < 90 THEN 'URGENT' ELSE 'MONITOR' END AS renewal_status FROM invoice_facts WHERE status IN ('ACTIVE', 'PENDING') AND due_date >= CURRENT_DATE AND EXTRACT(DAY FROM due_date - CURRENT_DATE) <= 120 ORDER BY days_to_renewal ASC\",\n      \"classification\": \"executable\"\n    },\n    \"step_2_consumption_analysis\": {\n      \"query\": \"SELECT cf.license_id, cf.publisher, cf.product, DATE_TRUNC('month', cf.event_date)::DATE AS month, SUM(cf.amount_usd) AS monthly_spend_usd, AVG(cf.daily_active_seats) AS avg_daily_seats, COUNT(DISTINCT cf.user_id) AS unique_users FROM consumption_facts cf WHERE cf.event_date >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '24 months')::DATE GROUP BY cf.license_id, cf.publisher, cf.product, DATE_TRUNC('month', cf.event_date) ORDER BY cf.license_id, month DESC\",\n      \"classification\": \"executable\"\n    },\n    \"step_3_risk_assessment_logic\": {\n      \"renewal_risk_matrix\": {\n        \"high_risk\": {\n          \"conditions\": [\n            \"days_to_renewal < 30\",\n            \"spend_trajectory positive AND days_to_renewal BETWEEN 30 AND 60\",\n            \"unique_users > avg_daily_seats * 0.8 (high utilization)\",\n            \"monthly_spend_usd > renewal_threshold * 0.15 (approaching threshold)\"\n          ],\n          \"action\": \"immediate_procurement_review\"\n        },\n        \"medium_risk\": {\n          \"conditions\": [\n            \"days_to_renewal BETWEEN 30 AND 90\",\n            \"spend_trajectory stable with 80%+ seat utilization\",\n            \"vendor_lock_in_factors present (proprietary integrations)\"\n          ],\n          \"action\": \"schedule_renewal_meeting\"\n        },\n        \"low_risk\": {\n          \"conditions\": [\n            \"days_to_renewal"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "notify_procurement",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1961,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8082,
+      "output": {
+        "raw_output": "{\"plan\":[{\"tool\":\"iam.check_permission\",\"arguments\":{\"resource\":\"procurement.alerts\",\"action\":\"send\"},\"depends_on\":[]},{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT invoice_id AS contract_id, vendor_name, due_date AS renewal_date, amount_usd AS renewal_threshold, EXTRACT(DAY FROM due_date - CURRENT_DATE) AS days_to_renewal, CASE WHEN EXTRACT(DAY FROM due_date - CURRENT_DATE) BETWEEN 90 AND 120 THEN 'ALERT' WHEN EXTRACT(DAY FROM due_date - CURRENT_DATE) < 90 THEN 'URGENT' ELSE 'MONITOR' END AS renewal_status FROM invoice_facts WHERE status IN ('ACTIVE','PENDING') AND due_date >= CURRENT_DATE AND EXTRACT(DAY FROM due_date - CURRENT_DATE) <= 120 ORDER BY days_to_renewal ASC\"},\"depends_on\":[1]},{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT cf.license_id, cf.publisher, cf.product, DATE_TRUNC('month', cf.event_date)::DATE AS month, SUM(cf.amount_usd) AS monthly_spend_usd, AVG(cf.daily_active_seats) AS avg_daily_seats, COUNT(DISTINCT cf.user_id) AS unique_users FROM consumption_facts cf WHERE cf.event_date >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '24 months')::DATE GROUP BY cf.license_id, cf.publisher, cf.product, DATE_TRUNC('month', cf.event_date) ORDER BY cf.license_id, month DESC\"},\"depends_on\":[1]},{\"tool\":\"mongo.find\",\"arguments\":{\"collection\":\"contract_state\",\"filter\":{\"status\":{\"$in\":[\"ACTIVE\",\"PENDING_RENEWAL\"]}}},\"depends_on\":[1]},{\"tool\":\"mongo.aggregate\",\"arguments\":{\"collection\":\"contract_renewals\",\"pipeline\":[{\"$match\":{\"renewal_date"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.037465,
+  "total_latency_ms": 21461,
+  "cumulative_spend_usd": 7.268435000000006,
+  "evaluator_reason": "no_plan_in_output"
+}

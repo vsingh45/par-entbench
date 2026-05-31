@@ -1,0 +1,63 @@
+{
+  "task_id": "SQLC-007",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "step_1_spending_mix",
+        "description": "Query SQL warehouse to identify top spending publishers by spend amount and calculate their product mix (percentage of spend by product category). Include total spend and spend distribution across product lines.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "step_2_leverage_assessment",
+        "description": "Assess negotiation leverage for each top publisher by analyzing spend concentration, contract terms, historical pricing trends, and competitive alternatives. Classify leverage level (high/medium/low) with rationale for each publisher.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen at mid tier for multi-table spend aggregation with product-level breakdown and window functions to rank publishers; (2) cross_recon at frontier tier to reconcile spend data with contract/pricing intelligence and apply multi-signal leverage classification logic (concentration, alternatives, term flexibility, pricing elasticity). The leverage assessment requires inference and comparative analysis across multiple factors\u2014hence frontier. Kept to 2 subtasks minimum: the spend query and leverage assessment are distinct operations that don't justify further decomposition."
+  },
+  "node_results": [
+    {
+      "subtask_id": "step_1_spending_mix",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 465,
+      "output_tokens": 204,
+      "cached_tokens": 0,
+      "latency_ms": 4075,
+      "output": {
+        "sql": "SELECT publisher, product, SUM(amount_usd) AS product_spend, SUM(SUM(amount_usd)) OVER (PARTITION BY publisher) AS total_publisher_spend, ROUND(100.0 * SUM(amount_usd) / SUM(SUM(amount_usd)) OVER (PARTITION BY publisher), 2) AS product_pct_of_publisher, RANK() OVER (ORDER BY SUM(SUM(amount_usd)) OVER (PARTITION BY publisher) DESC) AS publisher_spend_rank, COUNT(DISTINCT license_id) AS license_count, COUNT(DISTINCT user_id) AS unique_users, AVG(daily_active_seats) AS avg_daily_active_seats FROM consumption_facts GROUP BY publisher, product ORDER BY total_publisher_spend DESC, publisher, product_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "step_2_leverage_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 434,
+      "output_tokens": 43,
+      "cached_tokens": 0,
+      "latency_ms": 1156,
+      "output": {
+        "reconciled": [],
+        "_note": "No upstream MongoDB or SQL outputs provided to reconcile."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0077,
+  "total_latency_ms": 5231,
+  "cumulative_spend_usd": 1.2129840000000003,
+  "evaluator_reason": "step1_sql_fail: generated_sql_execution_error"
+}

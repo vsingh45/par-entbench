@@ -1,0 +1,162 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_elevated_roles",
+        "description": "Query IAM database to retrieve all roles with elevated permissions (e.g., admin, write, delete capabilities). Include role name, assigned permissions, and privilege level.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_exercised_perms",
+        "description": "Query access/audit logs for the last 180 days to identify which permissions were actually exercised (invoked/used) per IAM role. Return role name, exercised permissions, and execution counts.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_unused_perms",
+        "description": "Reconcile granted vs. exercised permissions: for each elevated role, identify granted permissions that have zero usage in the 180-day window. Classify each unused permission by risk (criticality, frequency of similar permissions being used). Generate revocation candidates ranked by safe-to-revoke confidence.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_elevated_roles",
+          "sql_exercised_perms"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: two independent SQL queries (elevated roles + audit logs over 180 days), then cross_recon to reconcile the two sources and classify unused permissions for revocation candidacy. Both SQL queries are mid-tier due to complexity (multi-table joins, aggregation over audit logs, privilege-level filtering). Cross_recon is frontier because it requires signal reconciliation across two datasets, risk classification of permissions, and generation of confidence-scored recommendations\u2014beyond simple matching. The plan avoids unnecessary subtasks: role enumeration and log querying happen in parallel (no deps), and downstream revocation recommendations are produced directly by cross_recon (not a separate policy_action, since the query asks for flagging candidates, not formal approval)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_elevated_roles",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 488,
+      "output_tokens": 134,
+      "cached_tokens": 0,
+      "latency_ms": 1427,
+      "output": {
+        "sql": "SELECT DISTINCT al.permission, COUNT(DISTINCT al.user_id) as user_count, COUNT(DISTINCT al.log_id) as action_count, MAX(al.access_time) as last_used FROM access_log_facts al WHERE al.permission IN ('admin', 'write', 'delete') AND al.access_time >= CURRENT_DATE - INTERVAL '180 days' AND al.result = 'success' GROUP BY al.permission ORDER BY user_count DESC, action_count DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_exercised_perms",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 497,
+      "output_tokens": 106,
+      "cached_tokens": 0,
+      "latency_ms": 1429,
+      "output": {
+        "sql": "SELECT permission, action, COUNT(*) as execution_count, COUNT(DISTINCT user_id) as unique_users, MIN(access_time) as first_used, MAX(access_time) as last_used FROM access_log_facts WHERE access_time >= CURRENT_DATE - INTERVAL '180 days' AND result = 'success' GROUP BY permission, action ORDER BY execution_count DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_unused_perms",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 847,
+      "output_tokens": 395,
+      "cached_tokens": 0,
+      "latency_ms": 5128,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "admin",
+            "mongo_value": {
+              "granted": [
+                "admin",
+                "write",
+                "delete",
+                "read",
+                "audit",
+                "configure"
+              ]
+            },
+            "sql_value": {
+              "user_count": 12,
+              "action_count": 340,
+              "last_used": "2024-05-20"
+            },
+            "classification": "reduce"
+          },
+          {
+            "entity_key": "admin:configure",
+            "mongo_value": {
+              "granted": true
+            },
+            "sql_value": null,
+            "classification": "at_risk"
+          },
+          {
+            "entity_key": "admin:audit",
+            "mongo_value": {
+              "granted": true
+            },
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "write",
+            "mongo_value": {
+              "granted": [
+                "write",
+                "read",
+                "update"
+              ]
+            },
+            "sql_value": {
+              "user_count": 45,
+              "action_count": 2100,
+              "last_used": "2024-05-22"
+            },
+            "classification": "hold"
+          },
+          {
+            "entity_key": "delete",
+            "mongo_value": {
+              "granted": [
+                "delete",
+                "read"
+              ]
+            },
+            "sql_value": {
+              "user_count": 3,
+              "action_count": 12,
+              "last_used": "2024-03-15"
+            },
+            "classification": "reduce"
+          },
+          {
+            "entity_key": "delete:bulk_delete",
+            "mongo_value": {
+              "granted": true
+            },
+            "sql_value": null,
+            "classification": "at_risk"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.016295,
+  "total_latency_ms": 7984,
+  "cumulative_spend_usd": 3.0625990000000023,
+  "evaluator_reason": "no_mongo_node"
+}

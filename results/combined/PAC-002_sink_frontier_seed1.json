@@ -1,0 +1,51 @@
+{
+  "task_id": "PAC-002",
+  "task_class": "policy_action",
+  "router": "sink_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "Engineer 'u_7732' attempts to deploy a hotfix to production environment 'prod-us-east-1' outside of the approved maintenance window (current time: 2:15 AM UTC Tuesday).",
+        "specialist": "policy_action",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 796,
+      "output_tokens": 231,
+      "cached_tokens": 0,
+      "latency_ms": 3607,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-401": "pending_review",
+          "POL-402": "fail",
+          "POL-403": "fail"
+        },
+        "reason": "Deployment attempted at Tuesday 02:15 UTC is outside the approved Saturday 22:00 \u2013 Sunday 06:00 UTC maintenance window and lacks CAB approval. Engineer seniority level also cannot be confirmed as >= senior-engineer.",
+        "applied_constraints": [
+          "Obtain CAB approval for out-of-window production deployment",
+          "Verify user u_7732 holds senior-engineer or higher role",
+          "Reschedule to approved maintenance window if no emergency justification"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009755,
+  "total_latency_ms": 3607,
+  "cumulative_spend_usd": 4.897505000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

@@ -1,0 +1,49 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "frugal_cascade",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_contractor_access",
+        "description": "Evaluate contractor's download request against access control policies: verify temporary access scope, data classification restrictions, and backup export permissions. Determine if request violates role-based access control (RBAC) or data governance policies.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask (mid-tier) is sufficient. This is explicitly a governance/access control evaluation\u2014the contractor is requesting a download that may violate policy. Mid-tier reasoning is needed to reconcile temporary access scope against data classification policies and role-based restrictions. The request is clear enough that no prior data retrieval is needed; the policy engine can evaluate the action directly against the access control registry.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_contractor_access",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 516,
+      "output_tokens": 262,
+      "cached_tokens": 0,
+      "latency_ms": 2785,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "Contractor 'contractor-dave' attempting to download production database backup violates multiple access control policies: (1) POL-701 restricts backups to full-time DBA employees only; contractor role is not eligible; (2) POL-702 explicitly limits contractors to de-identified query results and prohibits raw data exports; full backup is raw production data; (3) POL-703 requires explicit project manager approval and 7-day advance notice; no evidence of approval or notice provided.",
+        "applied_constraints": [],
+        "recommended_action": "escalate_for_approval",
+        "escalation_rationale": "If legitimate business need exists, redirect contractor through formal approval workflow: obtain written project manager approval, provide 7-day notice, and consider alternative: provide de-identified data subset via secure query interface instead of full backup export."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0018260000000000001,
+  "total_latency_ms": 2785,
+  "cumulative_spend_usd": 8.797067000000006,
+  "evaluator_reason": "selected_action_mismatch"
+}

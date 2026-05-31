@@ -1,0 +1,106 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_sam_contracts",
+        "description": "Query SAM system for active contracts with renewal dates, vendor names, and contract terms. Focus on contracts approaching renewal window (e.g., within 90 days).",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_consumption_trends",
+        "description": "Query license consumption database to retrieve usage trends (last 12 months of monthly/quarterly consumption) for each vendor/contract. Calculate growth rate and current utilization.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_assess_risk",
+        "description": "Reconcile SAM contract renewal dates with consumption trends. Classify risk level (low/medium/high/critical) based on renewal proximity, consumption growth, budget impact, and contract terms. Generate renewal recommendations and prioritize by risk.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "notify_procurement",
+        "description": "Format alert payload with contract details, risk assessment, and recommendations. Prepare notification message for procurement team including renewal urgency, consumption forecast, and recommended actions.",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Four subtasks required: (1) SAM contract fetch is a simple single-table query (small tier). (2) Consumption trends require multi-period aggregation and growth calculations across a single consumption warehouse (mid tier). (3) Reconciliation of two sources (SAM contracts + consumption trends) with risk classification and recommendations is a cross_recon responsibility (mid tier). (4) Notification distribution to procurement requires tool registry invocation for alert/messaging systems (multitool_plan, small tier since it's straightforward payload formatting and routing). The workflow is end-to-end: fetch \u2192 query \u2192 assess \u2192 notify, with dependencies flowing left to right."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_sam_contracts",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 729,
+      "output_tokens": 124,
+      "cached_tokens": 0,
+      "latency_ms": 2175,
+      "output": {
+        "sql": "SELECT contract_id, vendor_name, invoice_id, invoice_date, due_date, amount_usd, status FROM invoice_facts WHERE status = 'active' AND due_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days' ORDER BY due_date ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_consumption_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 733,
+      "output_tokens": 779,
+      "cached_tokens": 0,
+      "latency_ms": 8280,
+      "output": {
+        "sql": "WITH monthly AS (SELECT publisher AS vendor, license_id AS contract, DATE_TRUNC('month', event_date) AS month_start, SUM(amount_usd) AS monthly_consumption, AVG(daily_active_seats) AS avg_daily_seats FROM consumption_facts WHERE event_date >= (CURRENT_DATE - INTERVAL '12 months') GROUP BY publisher, license_id, DATE_TRUNC('month', event_date)), quarterly AS (SELECT publisher AS vendor, license_id AS contract, fiscal_year, fiscal_quarter, SUM(amount_usd) AS quarterly_consumption, AVG(daily_active_seats) AS avg_seats FROM consumption_facts WHERE event_date >= (CURRENT_DATE - INTERVAL '12 months') GROUP BY publisher, license_id, fiscal_year, fiscal_quarter), agg AS (SELECT vendor, contract, SUM(monthly_consumption) AS total_12mo_consumption, AVG(monthly_consumption) AS avg_monthly_consumption, MAX(CASE WHEN month_start = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') THEN monthly_consumption END) AS current_month_consumption, MAX(CASE WHEN month_start = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '12 months') THEN monthly_consumption END) AS baseline_month_consumption, AVG(avg_daily_seats) AS avg_utilization_seats FROM monthly GROUP BY vendor, contract) SELECT a.vendor, a.contract, a.total_12mo_consumption, a.avg_monthly_consumption, a.current_month_consumption, a.baseline_month_consumption, CASE WHEN a.baseline_month_consumption > 0 THEN ROUND(((a.current_month_consumption - a.baseline_month_consumption) / a.baseline_month_consumption) * 100, 2) ELSE NULL END AS growth_rate_pct, a.avg_utilization_seats AS current_utilization FROM agg a ORDER BY a.total_12mo_consumption DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_assess_risk",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 463,
+      "output_tokens": 13,
+      "cached_tokens": 0,
+      "latency_ms": 969,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "notify_procurement",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 648,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9797,
+      "output": {
+        "raw_output": "{\"plan\":[{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT contract_id, vendor_name, product_name, renewal_date, contract_value, license_count, owner_email FROM sam.contracts WHERE renewal_date <= DATEADD(day, 90, CURRENT_DATE()) AND status = 'ACTIVE' ORDER BY renewal_date ASC\"},\"depends_on\":[]},{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT contract_id, product_name, AVG(daily_active_users) AS avg_dau, MAX(peak_users) AS peak_users, SUM(license_consumed) AS total_consumed, (SUM(license_consumed)*1.0/MAX(license_count)) AS utilization_ratio FROM sam.consumption_metrics WHERE event_date >= DATEADD(day, -90, CURRENT_DATE()) GROUP BY contract_id, product_name\",\"contracts\":\"$1.results\"},\"depends_on\":[1]},{\"tool\":\"mongo.aggregate\",\"arguments\":{\"collection\":\"sam_risk_assessments\",\"pipeline\":[{\"$match\":{\"contract_id\":{\"$in\":\"$1.results.contract_id\"}}},{\"$project\":{\"contract_id\":1,\"risk_score\":1,\"risk_factors\":1,\"recommended_action\":1,\"forecast_30d\":1,\"forecast_60d\":1,\"forecast_90d\":1}}]},\"depends_on\":[1,2]},{\"tool\":\"mongo.find\",\"arguments\":{\"collection\":\"procurement_team\",\"filter\":{\"role\":{\"$in\":[\"procurement_lead\",\"contract_manager\"]},\"active\":true}},\"depends_on\":[]},{\"tool\":\"jira.create_ticket\",\"arguments\":{\"project\":\"PROC\",\"issue_type\":\"Task\",\"summary\":\"License Renewal Alert: Contracts requiring action within 90 days\",\"description\":\"Contracts: $1.results\\nConsumption: $2.results\\nRisk Assessment: $3.results\\nRecommended Actions per contract included.\",\"priority\":\"High\",\"labels\":[\"license-renewal\",\"sam-alert\"]},\"depends_on\":[1,2,3]},{\"tool\":\"slack.post_message\",\"arguments\":{\"channel\":\"#procurement-alerts\",\"message\":\":rotating_light: *License Renewal Alert*\\n\\nContracts approaching renewal"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.05576500000000001,
+  "total_latency_ms": 21221,
+  "cumulative_spend_usd": 7.338250000000006,
+  "evaluator_reason": "no_plan_in_output"
+}

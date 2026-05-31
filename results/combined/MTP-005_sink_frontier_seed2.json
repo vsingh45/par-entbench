@@ -1,0 +1,209 @@
+{
+  "task_id": "MTP-005",
+  "task_class": "multitool_plan",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "check_iam_role",
+        "description": "Retrieve user's current IAM role and permissions from identity system",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_manager_approval",
+        "description": "Retrieve manager approval status and decision from workflow management system",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "check_iam_role"
+        ]
+      },
+      {
+        "id": "update_iam_permissions",
+        "description": "Update user IAM permissions and roles based on approval decision, then execute provisioning changes",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "fetch_manager_approval"
+        ]
+      },
+      {
+        "id": "confirm_email",
+        "description": "Send confirmation email to user and manager documenting the IAM permission changes and effective date",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "update_iam_permissions"
+        ]
+      }
+    ],
+    "cost_rationale": "Four subtasks required because this is a multi-step operational workflow with explicit sequential dependencies and tool orchestration at each stage. Each step involves different system interactions: (1) IAM role lookup (small: single-table query of user attributes), (2) workflow system query for manager approval (mid: cross-system lookup with conditional logic), (3) IAM permission update (mid: complex provisioning orchestration requiring condition evaluation and multiple tool calls), (4) email confirmation (small: simple notification call). All are inherently sequential and cannot be combined. Each multitool_plan step uses the 25-tool registry to invoke the appropriate provisioning/workflow/email tools at that stage."
+  },
+  "node_results": [
+    {
+      "subtask_id": "check_iam_role",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 458,
+      "output_tokens": 48,
+      "cached_tokens": 0,
+      "latency_ms": 1053,
+      "output": {
+        "sql": "SELECT user_id, permission, resource, action, result FROM access_log_facts WHERE user_id IS NOT NULL ORDER BY access_time DESC LIMIT 100"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_manager_approval",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 482,
+      "output_tokens": 393,
+      "cached_tokens": 0,
+      "latency_ms": 2745,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "resource": "workflow_management_system",
+              "action": "read_approvals"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "sql.postgres.query",
+            "arguments": {
+              "query": "SELECT user_id, permission, resource, action, result FROM access_log_facts WHERE user_id IS NOT NULL ORDER BY access_time DESC LIMIT 100"
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "workflow_approvals",
+              "filter": {
+                "user_id": "$2.results[0].user_id",
+                "status": {
+                  "$in": [
+                    "pending",
+                    "approved",
+                    "rejected"
+                  ]
+                }
+              }
+            },
+            "depends_on": [
+              2
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "retrieve_manager_approval",
+              "resource": "workflow_approvals",
+              "details": {
+                "approval_records": "$3.results"
+              }
+            },
+            "depends_on": [
+              3
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#workflow-approvals",
+              "message": "Manager approval status retrieved - Approval Decision: $3.results"
+            },
+            "depends_on": [
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "update_iam_permissions",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 726,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 4441,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"resource\": \"iam_management\",\n        \"action\": \"modify_roles\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"workflow_approvals\",\n        \"filter\": {\n          \"status\": \"approved\"\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"sql.postgres.query\",\n      \"arguments\": {\n        \"query\": \"SELECT user_id, requested_role, requested_permissions FROM access_requests WHERE approval_id IN (SELECT _id FROM workflow_approvals WHERE status = 'approved') LIMIT 100\"\n      },\n      \"depends_on\": [2]\n    },\n    {\n      \"tool\": \"iam.grant_role\",\n      \"arguments\": {\n        \"user_id\": \"$3.results[0].user_id\",\n        \"role\": \"$3.results[0].requested_role\"\n      },\n      \"depends_on\": [3]\n    },\n    {\n      \"tool\": \"audit.log_action\",\n      \"arguments\": {\n        \"action\": \"grant_iam_role\",\n        \"resource\": \"iam_roles\",\n        \"details\": {\n          \"user_id\": \"$3.results[0].user_id\",\n          \"role_granted\": \"$3.results[0].requested_role\",\n          \"approval_id\": \"$2.results[0]._id\"\n        }\n      },\n      \"depends_on\": [4]\n    },\n    {\n      \"tool\": \"mongo.update\",\n      \"arguments\": {\n        \"collection\": \"access_requests\",\n        \"filter\": {\n          \"user_id\": \"$3.results[0].user_id\"\n        },\n        \"update\": {\n          \"$set\": {\n            \"status\": \"provisioned\",\n            \"provisioned_at\": \"NOW()\",\n            \"provisioned_role\": \"$3.results[0].requested_role\"\n          }\n        }\n      },\n      \"depends_on\": [5]\n    },\n    {\n      \"tool\": \"audit.log_action\",\n      \"arguments\": {\n        \"action\": \"update_access_request_status\",\n        \"resource\": \"access_requests\",\n        \"details\": {\n          \"user_id\": \"$3.results[0].user_id\",\n          \"new_status\": \"provisioned\"\n        }\n      },\n      \"depends_on\": [6]\n    },\n    {\n      \"tool\": \"email.send\",\n      \"arguments\": {\n        \"to\": \"$3.results[0].user_id\",\n        \"subject\": \"IAM Access Provisioning Confirmation\",\n        \"body\": \"Your access request has been approved and provisioned. Role: $3.results[0].requested_role\"\n      },\n      \"depends_on\": [7]\n    },\n    {\n      \"tool\": \"slack.post_message\",\n      \"arguments\": {\n        \"channel\": \"#access-provisioning\",\n        \"message\": \"IAM provisioning completed for user $3.results[0].user_id with role $3.results[0].requested_"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "confirm_email",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1858,
+      "output_tokens": 504,
+      "cached_tokens": 0,
+      "latency_ms": 6296,
+      "output": {
+        "plan": [
+          {
+            "tool": "sql.postgres.query",
+            "arguments": {
+              "query": "SELECT ar.user_id, ar.requested_role, ar.manager_email, u.email AS user_email, ar.effective_date FROM access_requests ar JOIN users u ON u.id = ar.user_id WHERE ar.status = 'provisioned' ORDER BY ar.provisioned_at DESC LIMIT 1"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "email.send",
+            "arguments": {
+              "to": "$1.results[0].user_email",
+              "cc": "$1.results[0].manager_email",
+              "subject": "IAM Permission Change Confirmation",
+              "body": "Hello,\n\nThis email confirms that IAM permission changes have been applied for user $1.results[0].user_id.\n\nRole granted: $1.results[0].requested_role\nEffective date: $1.results[0].effective_date\n\nIf you did not expect this change, please contact the security team immediately.\n\nThanks,\nAccess Provisioning"
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "send_iam_change_confirmation_email",
+              "resource": "email_notifications",
+              "details": {
+                "user_id": "$1.results[0].user_id",
+                "user_email": "$1.results[0].user_email",
+                "manager_email": "$1.results[0].manager_email",
+                "role_granted": "$1.results[0].requested_role",
+                "effective_date": "$1.results[0].effective_date"
+              }
+            },
+            "depends_on": [
+              2
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.029761,
+  "total_latency_ms": 14535,
+  "cumulative_spend_usd": 6.605138000000006,
+  "evaluator_reason": "missing_tools: {'iam.roles.attach', 'workflow.approvals.check', 'email.send', 'iam.user.get'}"
+}

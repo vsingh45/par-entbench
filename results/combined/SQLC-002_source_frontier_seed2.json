@@ -1,0 +1,130 @@
+{
+  "task_id": "SQLC-002",
+  "task_class": "sql_compose",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_gen_1",
+        "description": "Generate SQL query to identify top 10 TPC-H customers by lifetime value in BUILDING market segment, including their order count, total spend, average order value, and order date range for narrative context",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_1",
+        "description": "Reconcile customer lifetime value rankings with order pattern analysis and generate personalized retention narratives for each of the 10 customers, referencing their order frequency, spend trends, and engagement timeline",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_gen_1"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid tier) to query the TPC-H customer fact table filtered by BUILDING segment, ranking by lifetime value with supporting order metrics\u2014moderate complexity due to multi-metric aggregation and ranking. (2) cross_recon (frontier tier) to synthesize the SQL results into personalized narratives\u2014requires reasoning across order patterns, temporal trends, and customer context to generate coherent, individualized retention messaging for 10 customers. The frontier tier is necessary for high-quality narrative generation that infers engagement signals and crafts tailored messaging. Using cross_recon rather than a separate downstream step avoids unnecessary task multiplication and keeps narrative generation logic unified with customer context analysis."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_gen_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 745,
+      "output_tokens": 242,
+      "cached_tokens": 0,
+      "latency_ms": 2941,
+      "output": {
+        "sql": "SELECT c.c_custkey, c.c_name, c.c_acctbal, COUNT(o.o_orderkey) AS order_count, SUM(o.o_totalprice) AS total_spend, AVG(o.o_totalprice) AS avg_order_value, MIN(o.o_orderdate) AS first_order_date, MAX(o.o_orderdate) AS last_order_date FROM customer c JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name, c.c_acctbal ORDER BY total_spend DESC LIMIT 10"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_1",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 468,
+      "output_tokens": 644,
+      "cached_tokens": 0,
+      "latency_ms": 5463,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "customer_ltv_ranking",
+            "mongo_value": null,
+            "sql_value": {
+              "query_type": "customer_lifetime_value",
+              "segment": "BUILDING",
+              "limit": 10,
+              "metrics": [
+                "c_custkey",
+                "c_name",
+                "c_acctbal",
+                "order_count",
+                "total_spend",
+                "avg_order_value",
+                "first_order_date",
+                "last_order_date"
+              ]
+            },
+            "classification": "data_source_primary",
+            "note": "SQL is primary source for this reconciliation task"
+          },
+          {
+            "entity_key": "order_pattern_analysis",
+            "mongo_value": null,
+            "sql_value": {
+              "pattern_types": [
+                "order_frequency",
+                "spend_trends",
+                "engagement_timeline"
+              ],
+              "derivable_from": [
+                "order_count",
+                "total_spend",
+                "avg_order_value",
+                "first_order_date",
+                "last_order_date"
+              ]
+            },
+            "classification": "analytical_layer",
+            "note": "Patterns computed from SQL metrics"
+          },
+          {
+            "entity_key": "retention_narrative_generation",
+            "mongo_value": null,
+            "sql_value": {
+              "narrative_inputs": {
+                "order_frequency": "COUNT(o.o_orderkey)",
+                "spend_trends": "SUM(o.o_totalprice) + AVG(o.o_totalprice)",
+                "engagement_timeline": "MIN(o.o_orderdate) to MAX(o.o_orderdate)",
+                "customer_value": "c_acctbal + total_spend"
+              },
+              "status": "ready_for_personalization"
+            },
+            "classification": "data_enrichment_ready",
+            "note": "All required fields present for narrative generation"
+          }
+        ],
+        "reconciliation_summary": {
+          "source_alignment": "complete",
+          "sql_coverage": "10_customers_with_full_metrics",
+          "mongo_coverage": "no_operational_state_provided",
+          "join_type": "sql_primary_left_join",
+          "missing_entities": 0,
+          "confidence": "high",
+          "next_step": "Generate personalized retention narratives using SQL result set as foundation, with variables: customer_name, order_count, total_spend, avg_order_value, tenure_days (last_order_date - first_order_date), recency_indicator (days since last_order_date)"
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.013463000000000001,
+  "total_latency_ms": 8404,
+  "cumulative_spend_usd": 0.8911309999999998,
+  "evaluator_reason": "step2_consumer_narrative_check_failed"
+}

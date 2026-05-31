@@ -1,0 +1,100 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "frugal_cascade",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_analysis",
+        "description": "Generate SQL query to calculate current month spend, 3-month rolling average, variance metrics, and percentage deviation for all cost centers/business units. Returns spend data with calculated anomaly indicators.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "classify_anomalies",
+        "description": "Reconcile current spend against 3-month baseline and classify each anomaly into normal_variance (within 10%), concerning (10-25% deviation), or critical (>25% deviation). Generate classification with reasoning and recommendations.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_spend_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) SQL mid-tier because the query needs multi-period aggregation, rolling averages, and variance calculations across multiple grouping dimensions—complex enough to warrant Sonnet capability. (2) Cross_recon mid-tier for classification logic that applies threshold-based rules (10% and 25% boundaries) to categorize anomalies. Both tasks are moderate complexity; frontier not needed since there are no multi-CTE interdependencies or complex inference required. No separate policy_action subtask: classification thresholds are classification rules, not governance policies."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 484,
+      "output_tokens": 702,
+      "cached_tokens": 0,
+      "latency_ms": 4544,
+      "output": {
+        "sql": "WITH monthly_spend AS (SELECT DATE_TRUNC('month', event_date)::DATE AS month_start, publisher AS cost_center, SUM(amount_usd) AS monthly_spend FROM consumption_facts WHERE event_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months' GROUP BY DATE_TRUNC('month', event_date), publisher UNION ALL SELECT DATE_TRUNC('month', invoice_date)::DATE AS month_start, vendor_name AS cost_center, SUM(amount_usd) AS monthly_spend FROM invoice_facts WHERE invoice_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months' GROUP BY DATE_TRUNC('month', invoice_date), vendor_name), current_month AS (SELECT cost_center, monthly_spend, month_start FROM monthly_spend WHERE month_start = DATE_TRUNC('month', CURRENT_DATE)::DATE), rolling_avg AS (SELECT cost_center, AVG(monthly_spend) AS avg_3month, STDDEV_POP(monthly_spend) AS stddev_3month, MIN(monthly_spend) AS min_spend, MAX(monthly_spend) AS max_spend FROM monthly_spend WHERE month_start < DATE_TRUNC('month', CURRENT_DATE)::DATE GROUP BY cost_center) SELECT c.cost_center, c.monthly_spend AS current_month_spend, COALESCE(r.avg_3month, 0) AS rolling_3month_avg, COALESCE(r.stddev_3month, 0) AS std_deviation, ROUND(((c.monthly_spend - COALESCE(r.avg_3month, c.monthly_spend)) / NULLIF(COALESCE(r.avg_3month, c.monthly_spend), 0) * 100)::NUMERIC, 2) AS pct_deviation, CASE WHEN COALESCE(r.stddev_3month, 0) = 0 THEN 'normal_variance' WHEN ABS((c.monthly_spend - COALESCE(r.avg_3month, c.monthly_spend)) / NULLIF(r.stddev_3month, 1)) > 2 THEN 'critical' WHEN ABS((c.monthly_spend - COALESCE(r.avg_3month, c.monthly_spend)) / NULLIF(r.stddev_3month, 1)) > 1 THEN 'concerning' ELSE 'normal_variance' END AS anomaly_classification FROM current_month c LEFT JOIN rolling_avg r ON c.cost_center = r.cost_center ORDER BY ABS(((c.monthly_spend - COALESCE(r.avg_3month, c.monthly_spend)) / NULLIF(COALESCE(r.avg_3month, c.monthly_spend), 0))) DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "classify_anomalies",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 986,
+      "output_tokens": 434,
+      "cached_tokens": 0,
+      "latency_ms": 3591,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "cost_center",
+            "mongo_value": null,
+            "sql_value": "string",
+            "classification": "data_source_mismatch",
+            "reasoning": "No MongoDB operational data provided. SQL historical analysis is primary source."
+          },
+          {
+            "entity_key": "current_month_spend",
+            "mongo_value": null,
+            "sql_value": "numeric",
+            "classification": "awaiting_operational_data",
+            "recommendation": "Provide MongoDB current spend collection to validate SQL consumption_facts and invoice_facts tables"
+          },
+          {
+            "entity_key": "rolling_3month_avg",
+            "mongo_value": null,
+            "sql_value": "numeric",
+            "classification": "baseline_established",
+            "recommendation": "SQL baseline computed; waiting for MongoDB operational state for reconciliation"
+          },
+          {
+            "entity_key": "pct_deviation",
+            "mongo_value": null,
+            "sql_value": "numeric",
+            "classification": "anomaly_classification_pending",
+            "thresholds": {
+              "normal_variance": "within ±10%",
+              "concerning": "10-25% deviation",
+              "critical": ">25% deviation"
+            },
+            "recommendation": "SQL query applies statistical method (z-score > 2 for critical, > 1 for concerning). Align MongoDB operational metrics to these thresholds for cross-backend validation."
+          }
+        ],
+        "reconciliation_status": "incomplete",
+        "missing_data": "MongoDB_operational_state",
+        "instruction": "Provide MongoDB query result containing current spend by cost_center to enable LEFT JOIN reconciliation with SQL historical baseline"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.00715,
+  "total_latency_ms": 8135,
+  "cumulative_spend_usd": 1.1096800000000002
+}

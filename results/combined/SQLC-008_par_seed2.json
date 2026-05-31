@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_budget_analysis",
+        "description": "Query budget allocation by product category and cost trends over time (e.g., YTD/quarterly breakdown). Return total spend, variance, and trend metrics per category.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reallocation_strategy",
+        "description": "Analyze budget query results to identify underutilized and high-ROI categories, calculate reallocation recommendations (e.g., % shift by category), and generate prioritized strategy with justification.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_budget_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen to extract budget and cost trend data from structured warehouse\u2014mid tier because multi-table joins and aggregation by category with time-series trends are involved; (2) cross_recon to analyze the results and produce reallocation recommendations with classification and prioritization\u2014mid tier because it performs single-source analysis with multiple signals (spend efficiency, trends, category performance) but no cross-source reconciliation. Both tiers are mid because the work is moderately complex but does not require frontier-level capability (e.g., no multi-CTE windowing or cross-collection logic)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_budget_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 467,
+      "output_tokens": 395,
+      "cached_tokens": 0,
+      "latency_ms": 5946,
+      "output": {
+        "sql": "SELECT product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS total_spend, COUNT(DISTINCT event_id) AS event_count, COUNT(DISTINCT user_id) AS unique_users, AVG(amount_usd) AS avg_spend_per_event, SUM(SUM(amount_usd)) OVER (PARTITION BY product, fiscal_year ORDER BY fiscal_quarter ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS ytd_spend, SUM(amount_usd) - LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter) AS qoq_variance, ROUND(100.0 * (SUM(amount_usd) - LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter)) / NULLIF(LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter), 0), 2) AS qoq_variance_pct, SUM(amount_usd) / NULLIF(SUM(SUM(amount_usd)) OVER (PARTITION BY fiscal_year, fiscal_quarter), 0) * 100 AS pct_of_total_spend, AVG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter ROWS BETWEEN 3 PRECEDING AND CURRENT ROW) AS rolling_4q_avg FROM consumption_facts GROUP BY product, fiscal_year, fiscal_quarter ORDER BY fiscal_year, fiscal_quarter, total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reallocation_strategy",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 670,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 13213,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"sql_budget_analysis\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"query_intent\": \"Budget allocation analysis by product, fiscal year, fiscal quarter with QoQ variance, YTD spend, rolling 4Q average, and % of total spend\",\n        \"metrics_available\": [\n          \"total_spend\",\n          \"event_count\",\n          \"unique_users\",\n          \"avg_spend_per_event\",\n          \"ytd_spend\",\n          \"qoq_variance\",\n          \"qoq_variance_pct\",\n          \"pct_of_total_spend\",\n          \"rolling_4q_avg\"\n        ],\n        \"grouping_dimensions\": [\"product\", \"fiscal_year\", \"fiscal_quarter\"],\n        \"analysis_output\": {\n          \"underutilized_categories\": {\n            \"criteria\": \"Low pct_of_total_spend (<5%), low event_count, negative or flat qoq_variance_pct, rolling_4q_avg declining\",\n            \"signals\": [\n              \"pct_of_total_spend significantly below peer products in same fiscal_quarter\",\n              \"qoq_variance_pct <= 0 for 2+ consecutive quarters\",\n              \"avg_spend_per_event high relative to unique_users (inefficient reach)\",\n              \"rolling_4q_avg trending downward\"\n            ],\n            \"classification\": \"reduce\",\n            \"reallocation_recommendation_pct\": -15,\n            \"justification\": \"Products with declining QoQ spend, low share of total budget, and shrinking user base signal poor ROI. Budget freed here should be redeployed to high-performing categories.\"\n          },\n          \"high_roi_categories\": {\n            \"criteria\": \"High pct_of_total_spend with accelerating qoq_variance_pct, high unique_users, low avg_spend_per_event (efficient reach), rolling_4q_avg rising\",\n            \"signals\": [\n              \"qoq_variance_pct >= +10% for 2+ consecutive quarters\",\n              \"pct_of_total_spend growing quarter-over-quarter\",\n              \"avg_spend_per_event low relative to unique_users (broad, efficient reach)\",\n              \"rolling_4q_avg consistently above current quarter mean across products\"\n            ],\n            \"classification\": \"expand\",\n            \"reallocation_recommendation_pct\": +20,\n            \"justification\": \"Products demonstrating consistent spend efficiency, growing user engagement, and positive QoQ momentum warrant increased budget allocation to capitalize on compounding returns.\"\n          },\n          \"stable_categories\": {\n            \"criteria\": \"Flat qoq_variance_pct (-5% to +5%), steady pct_of_total_spend, consistent rolling_4q_avg\",\n            \"signals\": [\n              \"qoq_variance_pct within \u00b15% band\",\n              \"pct_of_total_spend stable across quarters\",\n              \"event_count and unique_users showing no significant drift\"\n            ],\n            \"classification\": \"hold\",\n            \"reallocation_recommendation_pct\": 0,\n            \"justification\": \"Stable categories maintain baseline performance. No reallocation needed unless high-ROI categories require additional funding beyond the reduce-category surplus.\"\n          },"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.021336,
+  "total_latency_ms": 19159,
+  "cumulative_spend_usd": 1.4697930000000008,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

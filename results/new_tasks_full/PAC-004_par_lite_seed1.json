@@ -1,0 +1,51 @@
+{
+  "task_id": "PAC-004",
+  "task_class": "policy_action",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_prod_access",
+        "description": "Evaluate whether the developer's production database access request complies with organizational security and access control policies. Check for: authorization level, debugging permissions, audit requirements, and exception handling procedures.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This is a governance and compliance evaluation, not a data query. The policy_action specialist is the correct choice. Assigned 'mid' tier because policy evaluation of database access typically involves multiple applicable rules (access control policies, security policies, audit/logging requirements, exception procedures) that need to be weighed together, rather than a single simple binary check. Single 'small' tier would be insufficient for the nuanced reasoning needed to handle authorization levels, conditional permissions, and exception workflows."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_prod_access",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 469,
+      "output_tokens": 268,
+      "cached_tokens": 0,
+      "latency_ms": 5567,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-401": "fail",
+          "POL-402": "fail"
+        },
+        "reason": "dev-alice (role: developer) is not authorized to execute queries on prod-mysql-primary. POL-401 requires both Manager approval AND on-call role, neither of which is present for this request. POL-402 explicitly restricts debug access to the designated staging environment, prohibiting live production debugging. Both applicable policies are violated.",
+        "applied_constraints": [
+          "Access denied: Manager approval not obtained (POL-401)",
+          "Access denied: User does not hold on-call role (POL-401)",
+          "Access denied: Debugging must be performed in staging environment only (POL-402)",
+          "Recommended remediation: Redirect debugging activity to staging environment; if production access is genuinely required, obtain Manager approval and coordinate with on-call personnel before re-submitting request",
+          "Audit log: Unauthorized production database access attempt by dev-alice recorded for security review"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.005427,
+  "total_latency_ms": 5567,
+  "cumulative_spend_usd": 8.356969000000001
+}

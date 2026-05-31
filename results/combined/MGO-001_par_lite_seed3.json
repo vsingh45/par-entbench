@@ -1,0 +1,51 @@
+{
+  "task_id": "MGO-001",
+  "task_class": "mongo_gen",
+  "router": "par_lite",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "Find all active Adobe licenses with contract value over $50,000.",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1202,
+      "output_tokens": 86,
+      "cached_tokens": 0,
+      "latency_ms": 1013,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Adobe",
+              "status": "active",
+              "contract_value_usd": {
+                "$gt": 50000
+              }
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.001632,
+  "total_latency_ms": 1013,
+  "cumulative_spend_usd": 1.4779160000000013,
+  "evaluator_reason": "ok"
+}

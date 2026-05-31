@@ -1,0 +1,93 @@
+{
+  "task_id": "MTP-008",
+  "task_class": "multitool_plan",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "multi_tool_orchestration",
+        "description": "Orchestrate multi-tool workflow: retrieve project requirements from Jira, check team availability via calendar API, schedule standup meeting, and share agenda via Slack. Generate a step-by-step tool invocation plan from the enterprise tool registry.",
+        "specialist": "multitool_plan",
+        "tier": "frontier",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This query explicitly requests orchestration of four distinct external tools (Jira, calendar API, meeting scheduler, Slack) in a coordinated workflow. This is a classic multitool_plan scenario requiring a single frontier-tier agent to generate the tool-call sequence from the enterprise registry. No decomposition into separate subtasks is needed—multitool_plan handles the entire orchestration logic, sequencing, and dependency management in one call. Frontier tier is assigned because the plan must coordinate timing (availability check → scheduling → notification), handle conditional logic (availability constraints), and manage state across multiple tool invocations."
+  },
+  "node_results": [
+    {
+      "subtask_id": "multi_tool_orchestration",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 686,
+      "output_tokens": 344,
+      "cached_tokens": 0,
+      "latency_ms": 4406,
+      "output": {
+        "plan": [
+          {
+            "tool": "jira.list_tickets",
+            "arguments": {
+              "project": "CROSS_TEAM",
+              "filter": {
+                "type": "requirement",
+                "status": "open"
+              }
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "team": "cross-team",
+              "time_range": "next_24h"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.create_event",
+            "arguments": {
+              "title": "Cross-Team Standup",
+              "attendees": "$2.attendees",
+              "agenda": "$1.results",
+              "duration_minutes": 30
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "calendar.create_event",
+              "resource": "$3.event_id",
+              "details": "Scheduled standup from Jira requirements"
+            },
+            "depends_on": [
+              3
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#cross-team",
+              "message": "Standup scheduled: $3.event_id. Agenda based on Jira requirements: $1.results"
+            },
+            "depends_on": [
+              3
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01203,
+  "total_latency_ms": 4406,
+  "cumulative_spend_usd": 8.027912000000004
+}

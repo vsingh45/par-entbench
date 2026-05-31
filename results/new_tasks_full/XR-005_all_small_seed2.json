@@ -1,0 +1,95 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "query_salesforce_seats",
+        "description": "Query Salesforce data warehouse to retrieve licensed seat counts by user type/edition, and actual seat assignments by user type with assignment status. Include metrics like seats purchased, seats assigned, seats active, and per-user assignment dates.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_utilization",
+        "description": "Cross-reconcile licensed seats vs actual assignments to identify unutilized licenses. Classify licenses as: fully utilized, underutilized (assigned but inactive), and unassigned. Calculate utilization rates and generate ranked list of underutilized license pools with recommendations for reallocation or deprovisioning.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Two subtasks address this query: (1) sql_gen (mid-tier) retrieves licensed seat inventory and actual assignments from the Salesforce data warehouse—requires multi-table joins across license and user tables with aggregation by user type. (2) cross_recon (mid-tier) reconciles the two datasets to identify gaps, classify utilization states, and generate actionable recommendations. Both are mid-tier because the Salesforce schema likely requires multi-table joins and the reconciliation involves multi-signal classification logic. No separate cross_recon policy_action is needed because compliance/governance recommendations flow from the reconciliation itself. This is the minimum decomposition: a single SQL query captures all seat data, and a single reconciliation pass identifies underutilization and produces recommendations."
+  },
+  "node_results": [
+    {
+      "subtask_id": "query_salesforce_seats",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 483,
+      "output_tokens": 218,
+      "cached_tokens": 0,
+      "latency_ms": 1598,
+      "output": {
+        "sql": "SELECT cf.license_id, cf.publisher, cf.product, cf.event_type, COUNT(DISTINCT cf.user_id) as seats_assigned, SUM(cf.daily_active_seats) as seats_active, MAX(cf.event_date) as last_assignment_date, MIN(cf.event_date) as first_assignment_date, COUNT(DISTINCT CASE WHEN cf.daily_active_seats > 0 THEN cf.user_id END) as active_users, COUNT(DISTINCT CASE WHEN cf.daily_active_seats = 0 THEN cf.user_id END) as inactive_users FROM consumption_facts cf WHERE cf.event_date >= '2024-01-01' GROUP BY cf.license_id, cf.publisher, cf.product, cf.event_type ORDER BY cf.license_id, seats_assigned DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_utilization",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 299,
+      "output_tokens": 444,
+      "cached_tokens": 0,
+      "latency_ms": 3742,
+      "output": {
+        "reconciled": [],
+        "status": "no_data_provided",
+        "error": "upstream_outputs is empty",
+        "message": "Cannot perform cross-backend reconciliation without MongoDB query results and SQL query results",
+        "expected_input_format": {
+          "mongodb_results": [
+            {
+              "license_pool_id": "string",
+              "license_type": "string",
+              "total_licensed_seats": "number",
+              "seat_assignments": "number",
+              "last_activity_date": "string"
+            }
+          ],
+          "sql_results": [
+            {
+              "license_pool_id": "string",
+              "assigned_users": "number",
+              "active_users_30d": "number",
+              "last_login": "string",
+              "total_usage_hours": "number"
+            }
+          ]
+        },
+        "reconciliation_logic": {
+          "utilization_rate": "(active_users_30d / total_licensed_seats) * 100",
+          "assignment_rate": "(seat_assignments / total_licensed_seats) * 100",
+          "classifications": {
+            "fully_utilized": "utilization_rate >= 80 AND assignment_rate >= 90",
+            "underutilized_active": "assignment_rate >= 50 AND utilization_rate < 80 AND active_users_30d > 0",
+            "underutilized_inactive": "assignment_rate > 0 AND utilization_rate = 0 AND no_activity_days > 90",
+            "unassigned": "seat_assignments = 0 OR assignment_rate = 0"
+          }
+        },
+        "recommendations": "Provide actual MongoDB and SQL query results to generate ranked list with reallocation/deprovisioning recommendations"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.004092,
+  "total_latency_ms": 5340,
+  "cumulative_spend_usd": 3.1343170000000016
+}

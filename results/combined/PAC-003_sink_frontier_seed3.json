@@ -1,0 +1,53 @@
+{
+  "task_id": "PAC-003",
+  "task_class": "policy_action",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_emergency_access",
+        "description": "Evaluate emergency access request from u_9981 (senior-engineer role) to production database db-payments-primary against access control and incident response policies. Determine authorization based on role, incident severity (P1), on-call status, and applicable governance rules.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single subtask required: this is explicitly a policy evaluation query requiring governance decision against access control rules. The policy_action specialist evaluates the requestor's role (senior-engineer), incident context (P1, on-call), and production database sensitivity against the policy registry to authorize or deny emergency access. Mid tier assigned because emergency access decisions typically involve multiple policy signals (role-based access, incident severity thresholds, on-call verification, audit logging requirements), not a simple single-rule check."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_emergency_access",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 803,
+      "output_tokens": 257,
+      "cached_tokens": 0,
+      "latency_ms": 3954,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-501": "pass",
+          "POL-502": "pass_conditional",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "Senior-engineer u_9981 has active P1 incident ticket INC-20241215-0042 satisfying POL-501. POL-502 dual approval waived due to declared P1 incident. POL-503 requires logging and 24-hour post-incident review.",
+        "applied_constraints": [
+          "Access scoped to incident INC-20241215-0042",
+          "All queries and writes must be audit-logged",
+          "Access auto-expires at incident resolution or 4 hours, whichever first",
+          "Mandatory post-access review within 24 hours",
+          "Read_write actions limited to investigation/remediation scope"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.010440000000000001,
+  "total_latency_ms": 3954,
+  "cumulative_spend_usd": 5.045762000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

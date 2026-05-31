@@ -1,0 +1,94 @@
+{
+  "task_id": "SQLC-007",
+  "task_class": "sql_compose",
+  "router": "frugal_cascade",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "spend_by_publisher",
+        "description": "Query SQL to get top spending publishers with total spend and product category breakdown (count and % of invoices by product type)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "assess_leverage",
+        "description": "Analyze top publishers' product mix, spend concentration, and contract terms (from MongoDB) to assess negotiation leverage factors: concentration risk, switching costs, performance dependency, and market alternatives",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "spend_by_publisher"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid-tier) to aggregate spending data and product mix across multiple dimensions\u2014requires joins between publishers, invoices, and products; (2) cross_recon (mid-tier) to reconcile SQL spend data with MongoDB contract/term details and synthesize leverage assessment (supplier concentration, switching cost, dependency signals). Not frontier-level because the SQL is multi-table aggregation (not complex window functions), and the leverage assessment follows a standard framework. Single cross_recon handles all downstream classification/recommendation\u2014no separate policy_action needed. This is the minimal plan: one SQL call for metrics, one reconciliation call for assessment."
+  },
+  "node_results": [
+    {
+      "subtask_id": "spend_by_publisher",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 455,
+      "output_tokens": 127,
+      "cached_tokens": 0,
+      "latency_ms": 1596,
+      "output": {
+        "sql": "SELECT publisher, SUM(cf.amount_usd) AS total_spend, COUNT(DISTINCT cf.product) AS product_count, cf.product, COUNT(*) AS invoice_count, ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (PARTITION BY publisher), 2) AS pct_of_invoices FROM consumption_facts cf GROUP BY publisher, cf.product ORDER BY total_spend DESC, publisher, pct_of_invoices DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "assess_leverage",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 386,
+      "output_tokens": 450,
+      "cached_tokens": 0,
+      "latency_ms": 4099,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "publisher_product_mix",
+            "mongo_value": "operational product catalog and current consumption patterns",
+            "sql_value": "historical spend aggregation with product concentration metrics",
+            "classification": "requires_data_execution"
+          }
+        ],
+        "error": "Cannot reconcile without actual MongoDB and SQL query results. Please provide:",
+        "requirements": {
+          "mongodb_query_needed": "db.consumption.aggregate([{$group: {_id: '$publisher', total_spend: {$sum: '$amount_usd'}, products: {$push: '$product'}, product_count: {$addToSet: '$product'}, recent_invoices: {$push: '$$ROOT'}}}}, {$sort: {total_spend: -1}}, {$limit: 10}])",
+          "sql_results_format": "publisher, total_spend, product_count, product, invoice_count, pct_of_invoices",
+          "leverage_factors_to_assess": [
+            "concentration_risk: percentage spend on top N products",
+            "switching_costs: product diversity and contract lock-in signals",
+            "performance_dependency: invoice frequency and consistency by product",
+            "market_alternatives: product count as proxy for competitive landscape"
+          ]
+        },
+        "expected_output_schema": {
+          "reconciled": [
+            {
+              "entity_key": "string (publisher name)",
+              "mongo_value": "number (current operational spend snapshot)",
+              "sql_value": "number (historical cumulative spend)",
+              "product_count": "number",
+              "concentration_ratio": "number (top 3 products / total spend %)",
+              "classification": "string (expand|hold|reduce|at_risk|stable|growing)"
+            }
+          ]
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.003726,
+  "total_latency_ms": 5695,
+  "cumulative_spend_usd": 1.3793370000000007,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

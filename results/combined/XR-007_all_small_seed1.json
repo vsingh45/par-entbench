@@ -1,0 +1,111 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "router": "all_small",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "aws_commitment_query",
+        "description": "Query AWS commitment contract data (committed spend levels by service/region) from the cloud contracts database",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "aws_spend_query",
+        "description": "Query actual AWS spend data (monthly/period spend by service/region) from the cost management warehouse",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_analyze",
+        "description": "Reconcile committed vs actual spend, calculate utilization ratios, identify overcommitment (actual spend < committed) and underutilization (committed capacity not fully used), classify commitment health per service/region",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "aws_commitment_query",
+          "aws_spend_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks are required: (1) fetch committed levels and (2) fetch actual spend from separate data sources (SQL queries), then (3) reconcile and analyze the two datasets to identify patterns and classify health. Both SQL queries are simple single-table or straightforward joins (small tier). The reconciliation requires cross-source comparison, variance analysis, and classification logic (mid tier). This avoids unnecessary fragmentation\u2014both queries run in parallel and feed a single analysis step."
+  },
+  "node_results": [
+    {
+      "subtask_id": "aws_commitment_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 453,
+      "output_tokens": 256,
+      "cached_tokens": 0,
+      "latency_ms": 2763,
+      "output": {
+        "sql": "SELECT vendor_name, contract_id, SUM(CASE WHEN status = 'active' THEN amount_usd ELSE 0 END) as committed_spend, SUM(CASE WHEN paid_date IS NOT NULL THEN amount_usd ELSE 0 END) as actual_spend, SUM(CASE WHEN status = 'active' THEN amount_usd ELSE 0 END) - SUM(CASE WHEN paid_date IS NOT NULL THEN amount_usd ELSE 0 END) as variance_usd, ROUND(100.0 * (SUM(CASE WHEN paid_date IS NOT NULL THEN amount_usd ELSE 0 END) / NULLIF(SUM(CASE WHEN status = 'active' THEN amount_usd ELSE 0 END), 0)), 2) as utilization_percent FROM invoice_facts WHERE vendor_name ILIKE '%aws%' GROUP BY vendor_name, contract_id ORDER BY variance_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "aws_spend_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 454,
+      "output_tokens": 194,
+      "cached_tokens": 0,
+      "latency_ms": 3652,
+      "output": {
+        "raw_output": "{\"sql\": \"SELECT 'No AWS cost management data available in EntBench schema' AS result\"}\n```\n\nThe EntBench Postgres warehouse schema provided does not contain AWS spend data, cost management tables, or service/region cost breakdowns. The available tables focus on:\n- Software consumption (consumption_facts)\n- Invoice/contract management (invoice_facts)\n- Access logs (access_log_facts)\n- Standard TPC-H retail data (customer, orders, lineitem)\n\nTo query AWS spend data with commitment level comparisons, you would need access to an AWS Cost Management warehouse with tables such as:\n- `aws_cost_by_service`\n- `aws_commitment_reserves`\n- `aws_monthly_spend`\n- `aws_savings_plans`\n\nPlease verify the correct warehouse connection or provide the actual AWS cost management schema."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_analyze",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 742,
+      "output_tokens": 271,
+      "cached_tokens": 0,
+      "latency_ms": 2509,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "aws_commitment_health_summary",
+            "mongo_value": null,
+            "sql_value": {
+              "status": "data_unavailable",
+              "committed_spend": 0,
+              "actual_spend": 0,
+              "variance_usd": 0,
+              "utilization_percent": 0
+            },
+            "classification": "no_recent_activity"
+          }
+        ],
+        "reconciliation_notes": {
+          "data_gap": "MongoDB operational state not provided; SQL query executed against EntBench schema which lacks AWS cost management tables",
+          "missing_tables": [
+            "aws_cost_by_service",
+            "aws_commitment_reserves",
+            "aws_monthly_spend",
+            "aws_savings_plans"
+          ],
+          "available_source": "invoice_facts table contains vendor data but lacks service/region cost breakdown and commitment reserve details",
+          "recommendation": "Redirect query to AWS Cost Management warehouse or configure AWS CUR (Cost and Usage Reports) integration"
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.005254,
+  "total_latency_ms": 8924,
+  "cumulative_spend_usd": 4.271020000000002,
+  "evaluator_reason": "no_mongo_node"
+}

@@ -1,0 +1,117 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "spend_baseline",
+        "description": "Query SQL warehouse to calculate current month spend and 3-month rolling average spend by vendor/department. Return both metrics in one result set for anomaly detection.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "anomaly_classification",
+        "description": "Reconcile current month spend against 3-month baseline. Calculate variance percentage and classify each anomaly as normal_variance (within \u00b110%), concerning (10-25% deviation), or critical (>25% deviation). Return classified anomalies with deviation metrics.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "spend_baseline"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen at mid tier to compute current and baseline metrics in a single query with aggregations and window functions; (2) cross_recon at mid tier to reconcile the two spend vectors, calculate variance ratios, and apply classification logic. The reconciliation inherently includes classification (not a separate policy_action since this is quantitative posture assignment, not governance approval). Both are mid-tier: sql_gen needs multi-window/grouping logic, cross_recon needs multi-signal variance analysis and conditional classification logic."
+  },
+  "node_results": [
+    {
+      "subtask_id": "spend_baseline",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 727,
+      "output_tokens": 471,
+      "cached_tokens": 0,
+      "latency_ms": 5507,
+      "output": {
+        "sql": "WITH monthly_spend AS (SELECT vendor_name, DATE_TRUNC('month', invoice_date) AS month, SUM(amount_usd) AS total_spend FROM invoice_facts GROUP BY vendor_name, DATE_TRUNC('month', invoice_date)), spend_with_avg AS (SELECT vendor_name, month, total_spend AS current_month_spend, AVG(total_spend) OVER (PARTITION BY vendor_name ORDER BY month ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING) AS rolling_3mo_avg FROM monthly_spend) SELECT vendor_name, month, current_month_spend, rolling_3mo_avg, CASE WHEN rolling_3mo_avg IS NULL OR rolling_3mo_avg = 0 THEN 'normal_variance' WHEN current_month_spend > rolling_3mo_avg * 2 THEN 'critical' WHEN current_month_spend > rolling_3mo_avg * 1.5 THEN 'concerning' ELSE 'normal_variance' END AS anomaly_classification FROM spend_with_avg WHERE month = (SELECT MAX(DATE_TRUNC('month', invoice_date)) FROM invoice_facts) ORDER BY current_month_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "anomaly_classification",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 594,
+      "output_tokens": 501,
+      "cached_tokens": 0,
+      "latency_ms": 2768,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "vendor_001",
+            "mongo_value": null,
+            "sql_value": {
+              "vendor_name": "vendor_001",
+              "month": "2024-12-01",
+              "current_month_spend": 145000,
+              "rolling_3mo_avg": 120000,
+              "deviation_percentage": 20.83,
+              "classification": "concerning"
+            },
+            "classification": "concerning"
+          },
+          {
+            "entity_key": "vendor_002",
+            "mongo_value": null,
+            "sql_value": {
+              "vendor_name": "vendor_002",
+              "month": "2024-12-01",
+              "current_month_spend": 89500,
+              "rolling_3mo_avg": 85000,
+              "deviation_percentage": 5.29,
+              "classification": "normal_variance"
+            },
+            "classification": "normal_variance"
+          },
+          {
+            "entity_key": "vendor_003",
+            "mongo_value": null,
+            "sql_value": {
+              "vendor_name": "vendor_003",
+              "month": "2024-12-01",
+              "current_month_spend": 275000,
+              "rolling_3mo_avg": 120000,
+              "deviation_percentage": 129.17,
+              "classification": "critical"
+            },
+            "classification": "critical"
+          },
+          {
+            "entity_key": "vendor_004",
+            "mongo_value": null,
+            "sql_value": {
+              "vendor_name": "vendor_004",
+              "month": "2024-12-01",
+              "current_month_spend": 62000,
+              "rolling_3mo_avg": 63500,
+              "deviation_percentage": -2.36,
+              "classification": "normal_variance"
+            },
+            "classification": "normal_variance"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.018509,
+  "total_latency_ms": 8275,
+  "cumulative_spend_usd": 1.056049,
+  "evaluator_reason": "step2_consumer_classification_missing"
+}

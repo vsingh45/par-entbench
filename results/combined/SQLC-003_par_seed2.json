@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_declining_trends",
+        "description": "Query 2024 quarterly revenue/spend by publisher, calculate quarter-over-quarter trends, and identify publishers with declining QoQ metrics across Q1-Q4 2024",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal",
+        "description": "Reconcile declining publisher trends with current contract state (MongoDB) and historical performance metrics (SQL), classify renewal posture (hold/expand/reduce) based on trend severity and contract value, generate renewal recommendations",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_declining_trends"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid-tier) to fetch 2024 quarterly trends across all publishers with QoQ decline calculations\u2014multi-table join with aggregate windowing to compare quarters. (2) cross_recon (mid-tier) to reconcile SQL trend output with MongoDB contract state and generate renewal recommendations (hold/expand/reduce) based on trend severity and value. Classification and recommendation generation are native to cross_recon, not separate policy_action. Both tasks are mid-complexity: the SQL needs aggregation + trend logic; cross_recon needs multi-source reconciliation but not frontier-level inference. Avoided unnecessary task proliferation: recommendation generation is part of reconciliation, not a separate subtask."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_declining_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 479,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9852,
+      "output": {
+        "raw_output": "{\"sql\": \"WITH quarterly_revenue AS (\\n  SELECT\\n    publisher,\\n    fiscal_quarter,\\n    SUM(amount_usd) AS total_revenue\\n  FROM consumption_facts\\n  WHERE event_date >= '2024-01-01'\\n    AND event_date < '2025-01-01'\\n  GROUP BY publisher, fiscal_quarter\\n),\\npivoted AS (\\n  SELECT\\n    publisher,\\n    MAX(CASE WHEN fiscal_quarter = 1 THEN total_revenue ELSE 0 END) AS q1,\\n    MAX(CASE WHEN fiscal_quarter = 2 THEN total_revenue ELSE 0 END) AS q2,\\n    MAX(CASE WHEN fiscal_quarter = 3 THEN total_revenue ELSE 0 END) AS q3,\\n    MAX(CASE WHEN fiscal_quarter = 4 THEN total_revenue ELSE 0 END) AS q4\\n  FROM quarterly_revenue\\n  GROUP BY publisher\\n),\\ntrends AS (\\n  SELECT\\n    publisher,\\n    q1,\\n    q2,\\n    q3,\\n    q4,\\n    ROUND(CASE WHEN q1 > 0 THEN ((q2 - q1) / q1) * 100 ELSE NULL END, 2) AS q1_to_q2_pct,\\n    ROUND(CASE WHEN q2 > 0 THEN ((q3 - q2) / q2) * 100 ELSE NULL END, 2) AS q2_to_q3_pct,\\n    ROUND(CASE WHEN q3 > 0 THEN ((q4 - q3) / q3) * 100 ELSE NULL END, 2) AS q3_to_q4_pct,\\n    (CASE WHEN q2 < q1 THEN 1 ELSE 0 END +\\n     CASE WHEN q3 < q2 THEN 1 ELSE 0 END +\\n     CASE WHEN q4 < q3 THEN 1 ELSE 0 END) AS declining_quarters_count\\n  FROM pivoted\\n),\\ndeclining_publishers AS (\\n  SELECT *\\n  FROM trends\\n  WHERE declining_quarters_count >= 2\\n)\\nSELECT\\n  publisher,\\n  q1,\\n  q2,\\n  q3,\\n  q4,\\n  q1_to_q2_pct,\\n  q2_to_q3_pct,\\n  q3_to_q4_pct,\\n  declining_quarters_count,\\n  CASE\\n    WHEN declining_quarters_count = 3\\n      AND q3_to_q4_pct < -20 THEN 'reduce'\\n    WHEN declining_quarters_count = 3\\n      AND (q3_to_q4_pct >= -20 OR q3_to_q4_pct IS NULL) THEN 'hold'\\n    WHEN declining_quarters_count = 2\\n      AND q4 > q1 THEN 'hold'\\n    WHEN declining_quarters_count ="
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1100,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 16590,
+      "output": {
+        "raw_output": "I notice the SQL output is truncated. I'll work with the partial SQL data available and apply reconciliation rules, using null/0 for missing MongoDB contract state data since no MongoDB output was provided. I'll reconstruct what's available and apply LEFT JOIN semantics with MongoDB as primary \u2014 but since MongoDB output is absent, I'll invert and use SQL as the available source, filling MongoDB fields as null per the task's reconciliation intent.\n\n```json\n{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"sql_declining_trends\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"query_status\": \"truncated\",\n        \"raw_sql_present\": true,\n        \"parsed_publishers\": [],\n        \"note\": \"SQL output was truncated before result rows were emitted; no publisher-level revenue or trend rows could be extracted\",\n        \"sql_logic_reconstructed\": {\n          \"approach\": \"quarterly_revenue -> pivoted -> trends -> declining_publishers (declining_quarters_count >= 2)\",\n          \"classification_logic\": {\n            \"reduce\": \"declining_quarters_count = 3 AND q3_to_q4_pct < -20\",\n            \"hold_severe\": \"declining_quarters_count = 3 AND (q3_to_q4_pct >= -20 OR q3_to_q4_pct IS NULL)\",\n            \"hold_recovering\": \"declining_quarters_count = 2 AND q4 > q1\",\n            \"expand\": \"not yet emitted \u2014 SQL was cut before remaining CASE branches\"\n          }\n        }\n      },\n      \"classification\": \"no_recent_activity\",\n      \"renewal_recommendation\": null,\n      \"reconciliation_errors\": [\n        {\n          \"code\": \"SQL_OUTPUT_TRUNCATED\",\n          \"severity\": \"critical\",\n          \"detail\": \"The sql_declining_trends raw_output was cut mid-CASE-expression; no publisher rows, revenue figures, or trend percentages are available for reconciliation.\",\n          \"impact\": \"Zero publisher entities can be reconciled \u2014 no LEFT JOIN keys exist from either source.\"\n        },\n        {\n          \"code\": \"MONGO_OUTPUT_ABSENT\",\n          \"severity\": \"critical\",\n          \"detail\": \"No MongoDB contract-state output was supplied in upstream_outputs. Contract value, renewal dates, and current contract status are all null.\",\n          \"impact\": \"Cannot apply contract-value weighting to renewal posture classification.\"\n        }\n      ],\n      \"recommended_actions\": [\n        {\n          \"priority\": 1,\n          \"action\": \"Resubmit the SQL query against consumption_facts and return the full result set (all publisher rows with q1\u2013q4, pct changes, declining_quarters_count, and the recommendation label).\"\n        },\n        {\n          \"priority\": 2,\n          \"action\": \"Supply the MongoDB query output containing current contract documents: fields expected are publisher_id, contract_value_usd, contract_status, renewal_date, and any active_flags.\"\n        },\n        {\n          \"priority\": 3,\n          \"action\": \"Once both sources are present, re-run reconciliation: each publisher from MongoDB will be LEFT JOINed to SQL trend rows on publisher key; missing SQL rows will produce null trend metrics with classification defaulting to 'no_recent_activity'; present SQL rows will override classification using the reduce/hold/expand ladder weighted by contract_value"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.028737000000000002,
+  "total_latency_ms": 26442,
+  "cumulative_spend_usd": 1.0530599999999999,
+  "evaluator_reason": "step1_sql_fail: no_sql_in_output"
+}

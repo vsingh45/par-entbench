@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-007",
+  "task_class": "sql_compose",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "spending_mix_query",
+        "description": "Query spend data and product mix for top publishers. Generate SQL to retrieve: publisher name, total spend (YTD or recent period), spend by product category/line, product count, and category distribution percentages. Order by total spend descending.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "leverage_assessment",
+        "description": "Analyze top publishers' spending and product mix to assess negotiation leverage for each. Evaluate: concentration risk (how much vendor depends on this account), customer portability (alternative products available), contract flexibility, and competitive alternatives in each product category. Classify leverage position (high/medium/low) and provide negotiation recommendations.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "spending_mix_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Minimal decomposition: (1) A single mid-tier SQL query retrieves all spending and product mix metrics in one call\u2014no need to split into separate spend and product queries. (2) A frontier-tier cross_recon then analyzes that output to assess leverage across multiple signals (concentration, portability, alternatives, contract terms), classify leverage buckets, and generate prioritized negotiation recommendations. This single downstream pass avoids unnecessary intermediate steps and leverages frontier capability for nuanced competitive and structural analysis. Cost justified: frontier tier is necessary for multi-signal leverage modeling; mid tier for SQL is sufficient for structured aggregation without cross-source reconciliation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "spending_mix_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 729,
+      "output_tokens": 337,
+      "cached_tokens": 0,
+      "latency_ms": 3918,
+      "output": {
+        "sql": "WITH publisher_totals AS (SELECT publisher, SUM(amount_usd) AS total_spend FROM consumption_facts WHERE event_date >= '2024-01-01' GROUP BY publisher), publisher_product AS (SELECT publisher, product, SUM(amount_usd) AS product_spend, COUNT(DISTINCT product) OVER (PARTITION BY publisher) AS product_count FROM consumption_facts WHERE event_date >= '2024-01-01' GROUP BY publisher, product) SELECT pp.publisher, pt.total_spend, pp.product, pp.product_spend, pp.product_count, ROUND((pp.product_spend / NULLIF(pt.total_spend, 0)) * 100, 2) AS category_pct FROM publisher_product pp JOIN publisher_totals pt ON pp.publisher = pt.publisher ORDER BY pt.total_spend DESC, pp.product_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "leverage_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 508,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 4891,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"publisher_leverage_assessment\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"analysis_type\": \"top_publishers_spending_product_mix\",\n        \"query_status\": \"requires_execution\",\n        \"expected_output_structure\": {\n          \"publisher\": \"string\",\n          \"total_spend\": \"numeric\",\n          \"product\": \"string\",\n          \"product_spend\": \"numeric\",\n          \"product_count\": \"integer\",\n          \"category_pct\": \"numeric\"\n        }\n      },\n      \"classification\": \"no_recent_activity\",\n      \"note\": \"SQL query defined but not executed; awaiting data execution\"\n    },\n    {\n      \"entity_key\": \"concentration_risk_metric\",\n      \"mongo_value\": null,\n      \"sql_value\": null,\n      \"classification\": \"data_required\",\n      \"dependencies\": [\n        \"publisher_total_spend\",\n        \"vendor_total_revenue\",\n        \"concentration_ratio\"\n      ]\n    },\n    {\n      \"entity_key\": \"customer_portability_assessment\",\n      \"mongo_value\": null,\n      \"sql_value\": null,\n      \"classification\": \"data_required\",\n      \"evaluation_criteria\": [\n        \"alternative_products_available\",\n        \"switching_cost\",\n        \"product_differentiation\",\n        \"customer_lock_in_level\"\n      ]\n    },\n    {\n      \"entity_key\": \"contract_flexibility_analysis\",\n      \"mongo_value\": null,\n      \"sql_value\": null,\n      \"classification\": \"data_required\",\n      \"required_data_points\": [\n        \"contract_terms\",\n        \"commitment_duration\",\n        \"renewal_flexibility\",\n        \"volume_discount_tiers\"\n      ]\n    },\n    {\n      \"entity_key\": \"competitive_alternatives_mapping\",\n      \"mongo_value\": null,\n      \"sql_value\": null,\n      \"classification\": \"data_required\",\n      \"evaluation_by\": \"product_category\"\n    },\n    {\n      \"entity_key\": \"leverage_classification_framework\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"high_leverage\": {\n          \"conditions\": [\n            \"vendor_concentration_ratio > 0.40\",\n            \"product_count <= 2\",\n            \"limited_competitive_alternatives\",\n            \"high_switching_costs\"\n          ],\n          \"recommendation\": \"aggressive_negotiation_possible\"\n        },\n        \"medium_leverage\": {\n          \"conditions\": [\n            \"vendor_concentration_ratio 0.20-0.40\",\n            \"product_count 3-5\",\n            \"moderate_competitive_alternatives\",\n            \"medium_switching_costs\"\n          ],\n          \"recommendation\": \"balanced_negotiation_approach\"\n        },\n        \"low_leverage\": {\n          \"conditions\": [\n            \"vendor_concentration_ratio < 0.20\",\n            \"product_count > 5\",\n            \"abundant_competitive_alternatives\",\n            \"low_switching_costs\"\n          ],\n          \"recommendation\": \"vendor_focused_retention\"\n        }\n      },\n      \"classification\": \"hold\"\n    }\n  ],\n  \"execution_status\": \"awaiting_"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.016578000000000002,
+  "total_latency_ms": 8809,
+  "cumulative_spend_usd": 1.3379420000000006,
+  "evaluator_reason": "step1_sql_fail: generated_sql_execution_error"
+}

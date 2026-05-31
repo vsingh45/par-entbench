@@ -1,0 +1,56 @@
+{
+  "task_id": "EXT-004",
+  "task_class": "extract",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_parties",
+        "description": "Extract all party names, their roles, and contact addresses from the multi-party contract",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single extract subtask assigned to mid tier because multi-party contract extraction requires handling multiple entity instances (party name, role, address triplets) with potential schema variation across parties and may need inference to correctly associate addresses with roles across a complex document structure. Small tier is insufficient for multi-instance structured field extraction from legal documents; frontier is unnecessary as no cross-document inference or upstream uncertainty compensation is needed.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_parties",
+      "specialist": "extract",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 570,
+      "output_tokens": 170,
+      "cached_tokens": 0,
+      "latency_ms": 2102,
+      "output": {
+        "parties": [
+          {
+            "name": "Acme Corporation",
+            "role": "Service Provider",
+            "address": "123 Business Ave, San Francisco, CA 94105"
+          },
+          {
+            "name": "TechCorp Inc.",
+            "role": "Primary Client",
+            "address": "456 Innovation Drive, San Jose, CA 95110"
+          },
+          {
+            "name": "Global Partners LLC",
+            "role": "Secondary Partner",
+            "address": "789 Enterprise Boulevard, Las Vegas, NV 89101"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.0071,
+  "total_latency_ms": 2102,
+  "cumulative_spend_usd": 5.385984000000004,
+  "evaluator_reason": "f1=1.000"
+}

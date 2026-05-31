@@ -1,0 +1,63 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "spend_query",
+        "description": "Query SQL warehouse to retrieve current month spend and 3-month average spend by department/category. Include current month total, 3-month average, and variance metrics (absolute and percentage).",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "anomaly_classification",
+        "description": "Classify spend anomalies from spend_query results into three categories: normal_variance (within expected range), concerning (moderate deviation), or critical (severe deviation). Apply statistical thresholds and generate anomaly summary with classifications.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "spend_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen at mid tier because the task requires a multi-table or temporal join to calculate current month spend alongside 3-month rolling averages with variance calculations—straightforward but non-trivial aggregation. (2) cross_recon at mid tier to apply classification logic and threshold-based decision rules to the spend data; this is a single-source reconciliation (SQL result) with added classification logic, which fits cross_recon's scope. Both tiers are mid because they involve moderate complexity aggregation and multi-signal logic but not high-complexity window functions or cross-source fusion. The plan avoids unnecessary subtasks: classification is embedded in cross_recon, not a separate policy_action, because the task is prioritization/categorization, not governance approval."
+  },
+  "node_results": [
+    {
+      "subtask_id": "spend_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 486,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9689,
+      "output": {
+        "raw_output": "{\"sql\": \"SELECT\\n  publisher AS department,\\n  product AS category,\\n  \\n  -- Current month spend\\n  SUM(CASE\\n    WHEN event_date >= DATE_TRUNC('month', CURRENT_DATE)\\n     AND event_date <  DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'\\n    THEN amount_usd ELSE 0\\n  END) AS current_month_spend,\\n  \\n  -- 3-month average (excluding current month)\\n  ROUND(\\n    SUM(CASE\\n      WHEN event_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months'\\n       AND event_date <  DATE_TRUNC('month', CURRENT_DATE)\\n      THEN amount_usd ELSE 0\\n    END) / 3.0\\n  , 2) AS three_month_avg_spend,\\n  \\n  -- Absolute variance\\n  ROUND(\\n    SUM(CASE\\n      WHEN event_date >= DATE_TRUNC('month', CURRENT_DATE)\\n       AND event_date <  DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'\\n      THEN amount_usd ELSE 0\\n    END)\\n    -\\n    SUM(CASE\\n      WHEN event_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months'\\n       AND event_date <  DATE_TRUNC('month', CURRENT_DATE)\\n      THEN amount_usd ELSE 0\\n    END) / 3.0\\n  , 2) AS absolute_variance,\\n  \\n  -- Percentage variance\\n  ROUND(\\n    CASE\\n      WHEN SUM(CASE\\n             WHEN event_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months'\\n              AND event_date <  DATE_TRUNC('month', CURRENT_DATE)\\n             THEN amount_usd ELSE 0\\n           END) = 0 THEN NULL\\n      ELSE (\\n        SUM(CASE\\n          WHEN event_date >= DATE_TRUNC('month', CURRENT_DATE)\\n           AND event_date <  DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'\\n          THEN amount_usd ELSE 0\\n        END)\\n        -\\n        SUM(CASE\\n          WHEN event_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months'\\n           AND event_date <  DATE_TRUNC('month', CURRENT_DATE)\\n          THEN amount_usd ELSE 0\\n        END) / 3.0\\n      )\\n      /\\n      NULLIF(\\n        SUM(CASE\\n          WHEN event_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months'\\n           AND event_date <  DATE_TRUNC('month', CURRENT_DATE)\\n          THEN amount_usd ELSE 0\\n        END) / 3.0\\n      , 0) * 100\\n    END\\n"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "anomaly_classification",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1129,
+      "output_tokens": 169,
+      "cached_tokens": 0,
+      "latency_ms": 3816,
+      "output": {
+        "raw_output": "{\"reconciled\": [{\"entity_key\": \"no_sql_results_returned\", \"mongo_value\": null, \"sql_value\": null, \"classification\": \"no_recent_activity\"}]}\n```\n\nWait, let me re-read the input. The `spend_query` raw_output only contains the SQL text, not actual result rows. I'll reconcile based on what's available.\n\n```json\n{\"reconciled\": [{\"entity_key\": \"spend_query_result\", \"mongo_value\": null, \"sql_value\": {\"status\": \"query_only\", \"rows\": [], \"note\": \"No result rows returned; only SQL definition present in upstream output\"}, \"classification\": \"no_recent_activity\"}]}"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01938,
+  "total_latency_ms": 13505,
+  "cumulative_spend_usd": 1.133958
+}

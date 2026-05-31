@@ -1,0 +1,54 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "access_eval",
+        "description": "Evaluate contractor's temporary access credentials and the requested resource (full customer database backup) against access control policies to determine if the request violates governance rules or exceeds authorization scope.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask at mid tier because this requires reasoning over multiple policy signals: (1) contractor status vs. full-database access scope, (2) temporary access duration vs. backup persistence, (3) local analysis use case vs. data residency/export controls. Mid tier handles multi-clause policy reasoning. No cross_recon needed\u2014we are not reconciling state from two sources; we are evaluating one access request against policy rules. No additional subtasks needed because the policy evaluation directly answers whether this request should be approved or denied.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "access_eval",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 507,
+      "output_tokens": 388,
+      "cached_tokens": 0,
+      "latency_ms": 8112,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "All three applicable policies are violated. POL-701 restricts database backup access exclusively to full-time employees with DBA role \u2014 contractor-dave holds neither qualification. POL-702 explicitly prohibits contractors from accessing raw data exports, limiting them to de-identified query results only; downloading a full production backup (production_backup.tar.gz) is a direct violation. POL-703 requires explicit project manager approval and a 7-day advance notice period for any contractor data access \u2014 no such approval or notice is recorded in the upstream outputs. The requested action exceeds the contractor's authorization scope on every applicable governance dimension.",
+        "applied_constraints": [
+          "Access denied: contractor-dave is not a full-time employee and does not hold the DBA role (POL-701)",
+          "Access denied: raw data exports and database backups are prohibited for contractors; only de-identified query results are permitted (POL-702)",
+          "Access denied: no project manager approval on record and 7-day notice requirement not satisfied (POL-703)",
+          "Incident should be logged for security review due to attempted access to production_backup.tar.gz by a contractor",
+          "Contractor may be redirected to submit a formal access request via project manager with 7-day lead time if business need exists",
+          "If analysis can proceed with de-identified data, contractor should be redirected to approved query interface instead"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007341,
+  "total_latency_ms": 8112,
+  "cumulative_spend_usd": 8.806368000000006,
+  "evaluator_reason": "selected_action_mismatch"
+}

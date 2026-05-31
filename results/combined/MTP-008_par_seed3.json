@@ -1,0 +1,40 @@
+{
+  "task_id": "MTP-008",
+  "task_class": "multitool_plan",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "tool_orchestration",
+        "description": "Generate a multi-tool orchestration plan to: (1) retrieve project requirements from Jira API, (2) check team availability from calendar API, (3) schedule standup meeting via calendar, and (4) share agenda via Slack API. Include tool sequencing, payload construction, and error handling for cross-team collaboration.",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This query explicitly requests orchestration across FOUR distinct external tools (Jira, Calendar API, Calendar scheduling, Slack) with sequential dependencies: requirements must be retrieved before agenda can be drafted, availability must be checked before scheduling, and agenda must be finalized before Slack notification. This is exactly the use case for multitool_plan. A single mid-tier call can generate the complete tool invocation sequence, payload templates, and dependency graph. No separate subtasks needed\u2014multitool_plan produces a comprehensive orchestration workflow covering all four tool interactions in one output."
+  },
+  "node_results": [
+    {
+      "subtask_id": "tool_orchestration",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 498,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 13007,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"step\": 1,\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"user\": \"current_user\",\n        \"resource\": \"jira.tickets\",\n        \"action\": \"read\"\n      },\n      \"depends_on\": [],\n      \"error_handling\": {\n        \"on_failure\": \"abort\",\n        \"message\": \"Insufficient permissions to read Jira tickets. Contact your IAM administrator.\"\n      }\n    },\n    {\n      \"step\": 2,\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"user\": \"current_user\",\n        \"resource\": \"calendar.events\",\n        \"action\": \"read_write\"\n      },\n      \"depends_on\": [],\n      \"error_handling\": {\n        \"on_failure\": \"abort\",\n        \"message\": \"Insufficient permissions to access calendar. Contact your IAM administrator.\"\n      }\n    },\n    {\n      \"step\": 3,\n      \"tool\": \"jira.list_tickets\",\n      \"arguments\": {\n        \"project\": \"CROSSTEAM\",\n        \"filters\": {\n          \"status\": [\"Open\", \"In Progress\"],\n          \"issue_types\": [\"Story\", \"Epic\", \"Task\"],\n          \"labels\": [\"standup\", \"requirements\", \"cross-team\"]\n        },\n        \"fields\": [\"summary\", \"description\", \"assignee\", \"priority\", \"status\", \"labels\", \"acceptance_criteria\"],\n        \"max_results\": 50\n      },\n      \"depends_on\": [1],\n      \"error_handling\": {\n        \"on_failure\": \"retry\",\n        \"retry_count\": 3,\n        \"retry_delay_seconds\": 5,\n        \"fallback\": \"continue_with_empty_tickets\",\n        \"message\": \"Jira API unavailable. Proceeding with empty ticket list \u2014 agenda will note data retrieval failure.\"\n      }\n    },\n    {\n      \"step\": 4,\n      \"tool\": \"calendar.list_events\",\n      \"arguments\": {\n        \"participants\": [\n          \"team-backend@company.com\",\n          \"team-frontend@company.com\",\n          \"team-product@company.com\",\n          \"team-qa@company.com\"\n        ],\n        \"time_range\": {\n          \"start\": \"2025-01-20T08:00:00Z\",\n          \"end\": \"2025-01-24T18:00:00Z\"\n        },\n        \"event_types\": [\"busy\", \"focus_time\", \"out_of_office\"],\n        \"timezone\": \"America/New_York\",\n        \"resolve_conflicts\": true\n      },\n      \"depends_on\": [2],\n      \"error_handling\": {\n        \"on_failure\": \"retry\",\n        \"retry_count\": 2,\n        \"retry_delay_seconds\": 3,\n        \"fallback\": \"use_default_slot\",\n        \"default_slot\": \"2025-01-21T10:00:00-05:00\",\n        \"message\": \"Calendar API unavailable. Defaulting to standard standup slot: Tuesday 10:00 AM ET.\"\n      }\n    },\n    {\n      \"step\": 5,\n      \"tool\": \"calendar.create_event\","
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.013494,
+  "total_latency_ms": 13007,
+  "cumulative_spend_usd": 8.003417000000004,
+  "evaluator_reason": "no_plan_in_output"
+}

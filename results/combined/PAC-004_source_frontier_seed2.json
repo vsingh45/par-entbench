@@ -1,0 +1,50 @@
+{
+  "task_id": "PAC-004",
+  "task_class": "policy_action",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_eval_prod_db_access",
+        "description": "Evaluate the developer's production database access request against security and governance policies. Assess whether live debugging access to production is permitted, required approvals, required controls (read-only, time limits, audit logging), and applicable compliance constraints.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask at mid tier: The query explicitly asks for evaluation of an access control decision (developer accessing production database) against organizational policies. This requires multi-signal reasoning: assessing the request against security policies, approval workflows, environment-specific rules (production vs. dev), role-based access control, and potential compliance constraints. Mid tier handles multi-clause policy reasoning with exceptions and control conditions (e.g., read-only mode, audit requirements). No data retrieval from SQL/Mongo is needed\u2014this is purely governance evaluation. One subtask because policy evaluation is atomic; no preliminary data gathering needed before the decision.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_eval_prod_db_access",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 709,
+      "output_tokens": 170,
+      "cached_tokens": 0,
+      "latency_ms": 5125,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-401": "fail",
+          "POL-402": "fail"
+        },
+        "reason": "Developer dev-alice lacks Manager approval and on-call role required for production DB access (POL-401), and debug activities must be performed in the designated staging environment per POL-402.",
+        "applied_constraints": [
+          "Redirect debugging activity to staging environment",
+          "Require Manager approval and on-call role assignment before any future production access",
+          "Log denied access attempt to audit trail"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.007795000000000001,
+  "total_latency_ms": 5125,
+  "cumulative_spend_usd": 8.33812,
+  "evaluator_reason": "ok"
+}

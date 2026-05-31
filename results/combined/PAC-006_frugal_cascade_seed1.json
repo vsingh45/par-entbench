@@ -1,0 +1,47 @@
+{
+  "task_id": "PAC-006",
+  "task_class": "policy_action",
+  "router": "frugal_cascade",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "An infrastructure engineer proposes rolling out Docker image changes to all microservices in production without prior staging validation.",
+        "specialist": "policy_action",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 501,
+      "output_tokens": 159,
+      "cached_tokens": 0,
+      "latency_ms": 1442,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-601": "fail",
+          "POL-602": "fail",
+          "POL-603": "fail"
+        },
+        "reason": "Proposed action violates three critical policies: (1) skips mandatory 48-hour staging validation required by POL-601, (2) lacks change board approval and monitoring setup required by POL-602, (3) does not confirm rollback capability and traffic monitoring implementation required by POL-603. Production deployment cannot proceed without satisfying all three requirements.",
+        "applied_constraints": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0012959999999999998,
+  "total_latency_ms": 1442,
+  "cumulative_spend_usd": 8.620188000000006,
+  "evaluator_reason": "selected_action_mismatch"
+}

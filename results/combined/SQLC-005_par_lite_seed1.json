@@ -1,0 +1,121 @@
+{
+  "task_id": "SQLC-005",
+  "task_class": "sql_compose",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_retrieve_expiring",
+        "description": "Query Postgres to retrieve all licenses with expiration dates within the next 6 months, including license ID, name, vendor, expiration date, and current status.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal_recommendations",
+        "description": "Analyze retrieved licenses and generate renewal recommendations for each, considering expiration proximity, usage patterns, cost impact, and renewal options. Produce structured recommendations with priority and action suggestions.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_retrieve_expiring"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen for Postgres query is small tier\u2014straightforward date-range filter on a single table. (2) cross_recon at mid tier for generating renewal recommendations based on the SQL output; this involves analyzing multiple dimensions (expiration timeline, cost, renewal options) to produce actionable recommendations. The recommendation generation is part of the reconciliation step, not a separate policy_action, as it involves decision-making rather than compliance evaluation. We avoid unnecessary intermediate steps by combining the analysis in a single cross_recon call that directly consumes the SQL result."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_retrieve_expiring",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 471,
+      "output_tokens": 79,
+      "cached_tokens": 0,
+      "latency_ms": 1171,
+      "output": {
+        "sql": "SELECT invoice_id AS license_id, vendor_name AS name, vendor_name, due_date AS expiration_date, status FROM invoice_facts WHERE due_date >= CURRENT_DATE AND due_date <= CURRENT_DATE + INTERVAL '6 months' ORDER BY due_date ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal_recommendations",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 349,
+      "output_tokens": 652,
+      "cached_tokens": 0,
+      "latency_ms": 12307,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "NO_MONGO_SOURCE_PROVIDED",
+            "mongo_value": null,
+            "sql_value": {
+              "note": "SQL query was provided as a schema/template only \u2014 no result rows were returned in upstream_outputs",
+              "sql_used": "SELECT invoice_id AS license_id, vendor_name AS name, vendor_name, due_date AS expiration_date, status FROM invoice_facts WHERE due_date >= CURRENT_DATE AND due_date <= CURRENT_DATE + INTERVAL '6 months' ORDER BY due_date ASC",
+              "rows_received": 0
+            },
+            "classification": "no_recent_activity",
+            "renewal_recommendation": {
+              "priority": "unknown",
+              "action": "Cannot generate renewal recommendations \u2014 no license records were returned from the SQL query and no MongoDB operational data was supplied. Please re-run with actual query result sets attached to upstream_outputs.",
+              "suggested_next_steps": [
+                "Execute the SQL query against the live Postgres instance and attach the result rows to upstream_outputs.sql_retrieve_expiring.results",
+                "Provide MongoDB operational snapshot (active sessions, usage counters, seat utilization) as a second upstream source",
+                "Re-submit to this reconciliation pipeline for full LEFT JOIN processing and classification"
+              ]
+            }
+          }
+        ],
+        "pipeline_status": "incomplete",
+        "warnings": [
+          "MongoDB source was not provided in upstream_outputs \u2014 LEFT JOIN primary source is missing",
+          "SQL upstream_outputs.sql_retrieve_expiring contains only the query string, not a result payload",
+          "Zero entities could be reconciled; output contains a single diagnostic placeholder record",
+          "All renewal recommendations (priority scoring, cost impact, expiration proximity bucketing) require live row data to execute"
+        ],
+        "reconciliation_meta": {
+          "join_semantics": "LEFT JOIN \u2014 MongoDB as primary source",
+          "mongo_records_received": 0,
+          "sql_records_received": 0,
+          "records_reconciled": 0,
+          "records_mongo_only": 0,
+          "records_matched": 0,
+          "classification_schema": [
+            "expand",
+            "hold",
+            "reduce",
+            "no_recent_activity",
+            "at_risk",
+            "stable",
+            "growing"
+          ],
+          "renewal_priority_schema": [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "monitor"
+          ],
+          "expiration_buckets": {
+            "critical": "0\u201330 days",
+            "high": "31\u201360 days",
+            "medium": "61\u201390 days",
+            "low": "91\u2013180 days"
+          }
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.011693,
+  "total_latency_ms": 13478,
+  "cumulative_spend_usd": 0.806398,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

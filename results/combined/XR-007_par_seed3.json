@@ -1,0 +1,64 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "aws_spend_query",
+        "description": "Query AWS spend database to retrieve current contracted commitment levels, monthly spend actuals, and utilization metrics across all AWS accounts and service categories",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_commitment_analysis",
+        "description": "Reconcile contracted commitments against actual spend data, calculate variance metrics (overcommitment %, underutilization %), and identify patterns by service type and time period to classify commitment posture",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "aws_spend_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid-tier) to extract commitment and spend data from the warehouse with joins across commitment contracts and actual spend tables\u2014this is moderate complexity requiring multi-table aggregation. (2) cross_recon (mid-tier) to reconcile the two datasets and produce variance analysis and classification of over/undercommitment by segment\u2014the reconciliation logic itself is moderate complexity, well-suited to mid-tier without requiring frontier-level inference. No policy_action needed (this is analysis, not governance approval). No multitool_plan needed (this is a self-contained SQL + reconciliation flow, not multi-tool registry invocation)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "aws_spend_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 462,
+      "output_tokens": 379,
+      "cached_tokens": 0,
+      "latency_ms": 5935,
+      "output": {
+        "sql": "SELECT cf.publisher, cf.product, cf.fiscal_year, cf.fiscal_quarter, SUM(cf.amount_usd) AS actual_spend_usd, AVG(cf.daily_active_seats) AS avg_daily_active_seats, COUNT(DISTINCT cf.license_id) AS license_count, SUM(inf.amount_usd) AS contracted_commit_usd, SUM(cf.amount_usd) - SUM(inf.amount_usd) AS spend_vs_commit_variance, CASE WHEN SUM(inf.amount_usd) > 0 THEN ROUND((SUM(cf.amount_usd) / SUM(inf.amount_usd)) * 100, 2) ELSE NULL END AS utilization_pct, CASE WHEN SUM(cf.amount_usd) > SUM(inf.amount_usd) THEN 'OVERCOMMITMENT' WHEN SUM(cf.amount_usd) < SUM(inf.amount_usd) * 0.80 THEN 'UNDERUTILIZATION' ELSE 'ON_TRACK' END AS commitment_status FROM consumption_facts cf LEFT JOIN invoice_facts inf ON cf.license_id = inf.contract_id AND cf.publisher = inf.vendor_name WHERE cf.publisher ILIKE '%AWS%' OR cf.publisher ILIKE '%Amazon%' GROUP BY cf.publisher, cf.product, cf.fiscal_year, cf.fiscal_quarter ORDER BY cf.fiscal_year DESC, cf.fiscal_quarter DESC, actual_spend_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_commitment_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 655,
+      "output_tokens": 554,
+      "cached_tokens": 0,
+      "latency_ms": 10027,
+      "output": {
+        "raw_output": "I need to reconcile this, but I only have the SQL query definition \u2014 no actual MongoDB operational state data or SQL result rows were provided. I'll apply LEFT JOIN semantics with MongoDB as primary, but since no MongoDB documents or SQL result rows were supplied, I'll return a valid reconciled structure reflecting the empty/null state with a diagnostic entity.\n\n```json\n{\"reconciled\": [{\"entity_key\": \"NO_MONGO_SOURCE_PROVIDED\", \"mongo_value\": null, \"sql_value\": null, \"classification\": \"no_recent_activity\", \"notes\": {\"error\": \"No MongoDB operational state documents were provided as upstream output. Cannot perform LEFT JOIN reconciliation without a primary source.\", \"sql_query_received\": true, \"sql_results_received\": false, \"mongo_documents_received\": false, \"required_mongo_fields\": [\"publisher\", \"product\", \"fiscal_year\", \"fiscal_quarter\", \"contracted_commit_usd\", \"commitment_status\", \"license_id\"], \"required_sql_fields\": [\"actual_spend_usd\", \"avg_daily_active_seats\", \"license_count\", \"contracted_commit_usd\", \"spend_vs_commit_variance\", \"utilization_pct\", \"commitment_status\"], \"reconciliation_logic_ready\": {\"join_key\": [\"publisher\", \"product\", \"fiscal_year\", \"fiscal_quarter\"], \"variance_metrics\": {\"overcommitment_pct\": \"WHEN actual_spend_usd > contracted_commit_usd THEN ROUND(((actual_spend_usd - contracted_commit_usd) / contracted_commit_usd) * 100, 2)\", \"underutilization_pct\": \"WHEN actual_spend_usd < contracted_commit_usd * 0.80 THEN ROUND(((contracted_commit_usd - actual_spend_usd) / contracted_commit_usd) * 100, 2)\"}, \"classification_rules\": {\"overcommitment\": \"utilization_pct > 100\", \"at_risk\": \"utilization_pct BETWEEN 95 AND 100\", \"stable\": \"utilization_pct BETWEEN 80 AND 95\", \"underutilization\": \"utilization_pct < 80\", \"no_recent_activity\": \"sql_value IS NULL AND mongo_value IS NULL\", \"hold\": \"mongo_value exists BUT sql_value IS NULL\"}}}}]}"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.017346,
+  "total_latency_ms": 15962,
+  "cumulative_spend_usd": 4.195481000000002,
+  "evaluator_reason": "no_mongo_node"
+}

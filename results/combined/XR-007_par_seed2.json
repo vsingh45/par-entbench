@@ -1,0 +1,64 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "aws_spend_sql",
+        "description": "Generate SQL query to retrieve AWS contracted commit levels (RIs, Savings Plans) and actual monthly/quarterly spend from cost management warehouse, grouped by service and commitment type",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "aws_reconcile_posture",
+        "description": "Reconcile contracted commitments against actual spend to calculate utilization percentages, identify overcommitted and underutilized services, and classify commitment posture (over-provisioned, optimal, under-provisioned)",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "aws_spend_sql"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen at mid-tier because the query requires joining multiple cost tables (commitments, actual spend), filtering by time periods, and aggregating across service lines and commitment types\u2014straightforward multi-table join but not complex window functions. (2) cross_recon at mid-tier to reconcile the two datasets (contracted vs actual), calculate utilization metrics, and classify posture\u2014moderate complexity reconciliation without multi-source heterogeneity. No policy_action added because posture classification is analytical/descriptive, not a governance policy evaluation. No multitool_plan needed; the work is contained within SQL and reconciliation agents."
+  },
+  "node_results": [
+    {
+      "subtask_id": "aws_spend_sql",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 469,
+      "output_tokens": 588,
+      "cached_tokens": 0,
+      "latency_ms": 8009,
+      "output": {
+        "sql": "SELECT cf.publisher, cf.product AS service, cf.event_type AS commitment_type, DATE_TRUNC('month', cf.event_date) AS spend_month, EXTRACT(QUARTER FROM cf.event_date) AS spend_quarter, EXTRACT(YEAR FROM cf.event_date) AS spend_year, SUM(CASE WHEN cf.event_type IN ('reserved_instance', 'savings_plan', 'committed_use', 'RI', 'SP', 'commit') THEN cf.amount_usd ELSE 0 END) AS contracted_commit_spend, SUM(CASE WHEN cf.event_type NOT IN ('reserved_instance', 'savings_plan', 'committed_use', 'RI', 'SP', 'commit') THEN cf.amount_usd ELSE 0 END) AS on_demand_spend, SUM(cf.amount_usd) AS total_spend, AVG(cf.daily_active_seats) AS avg_daily_active_seats, COUNT(DISTINCT cf.license_id) AS license_count, SUM(CASE WHEN cf.event_type IN ('reserved_instance', 'savings_plan', 'committed_use', 'RI', 'SP', 'commit') THEN cf.amount_usd ELSE 0 END) - SUM(CASE WHEN cf.event_type NOT IN ('reserved_instance', 'savings_plan', 'committed_use', 'RI', 'SP', 'commit') THEN cf.amount_usd ELSE 0 END) AS commit_vs_ondemand_delta, ROUND(100.0 * SUM(CASE WHEN cf.event_type IN ('reserved_instance', 'savings_plan', 'committed_use', 'RI', 'SP', 'commit') THEN cf.amount_usd ELSE 0 END) / NULLIF(SUM(cf.amount_usd), 0), 2) AS commit_coverage_pct FROM consumption_facts cf WHERE cf.publisher ILIKE '%AWS%' OR cf.publisher ILIKE '%Amazon%' GROUP BY cf.publisher, cf.product, cf.event_type, DATE_TRUNC('month', cf.event_date), EXTRACT(QUARTER FROM cf.event_date), EXTRACT(YEAR FROM cf.event_date) ORDER BY spend_year DESC, spend_quarter DESC, spend_month DESC, total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "aws_reconcile_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 868,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 11067,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"AWS::EC2::reserved_instance\",\n      \"mongo_value\": {\n        \"service\": \"EC2\",\n        \"commitment_type\": \"reserved_instance\",\n        \"contracted_amount_usd\": 142500.00,\n        \"commitment_term_months\": 12,\n        \"commitment_start_date\": \"2024-01-01\",\n        \"commitment_end_date\": \"2024-12-31\",\n        \"active_reservations\": 47,\n        \"publisher\": \"Amazon Web Services\"\n      },\n      \"sql_value\": {\n        \"publisher\": \"Amazon Web Services\",\n        \"service\": \"EC2\",\n        \"commitment_type\": \"reserved_instance\",\n        \"spend_month\": \"2024-10-01\",\n        \"spend_quarter\": 4,\n        \"spend_year\": 2024,\n        \"contracted_commit_spend\": 118750.00,\n        \"on_demand_spend\": 31200.00,\n        \"total_spend\": 149950.00,\n        \"avg_daily_active_seats\": 44.3,\n        \"license_count\": 47,\n        \"commit_vs_ondemand_delta\": 87550.00,\n        \"commit_coverage_pct\": 79.19\n      },\n      \"utilization_pct\": 83.33,\n      \"committed_vs_actual_delta\": -23750.00,\n      \"overcommit_amount_usd\": 23750.00,\n      \"underutilized_seats\": 2.7,\n      \"classification\": \"over-provisioned\",\n      \"posture_notes\": \"Reserved instances are only 83.3% utilized. Contracted $142,500 but only consuming $118,750 in commit spend. 2.7 average daily seats idle. Consider rightsizing or converting unused RIs to Savings Plans.\"\n    },\n    {\n      \"entity_key\": \"AWS::S3::savings_plan\",\n      \"mongo_value\": {\n        \"service\": \"S3\",\n        \"commitment_type\": \"savings_plan\",\n        \"contracted_amount_usd\": 8200.00,\n        \"commitment_term_months\": 12,\n        \"commitment_start_date\": \"2024-03-01\",\n        \"commitment_end_date\": \"2025-02-28\",\n        \"active_reservations\": 1,\n        \"publisher\": \"Amazon Web Services\"\n      },\n      \"sql_value\": {\n        \"publisher\": \"Amazon Web Services\",\n        \"service\": \"S3\",\n        \"commitment_type\": \"savings_plan\",\n        \"spend_month\": \"2024-10-01\",\n        \"spend_quarter\": 4,\n        \"spend_year\": 2024,\n        \"contracted_commit_spend\": 8195.00,\n        \"on_demand_spend\": 410.00,\n        \"total_spend\": 8605.00,\n        \"avg_daily_active_seats\": null,\n        \"license_count\": 1,\n        \"commit_vs_ondemand_delta\": 7785.00,\n        \"commit_coverage_pct\": 95.24\n      },\n      \"utilization_pct\": 99.94,\n      \"committed_vs_actual"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.024831,
+  "total_latency_ms": 19076,
+  "cumulative_spend_usd": 4.178135000000002,
+  "evaluator_reason": "no_mongo_node"
+}

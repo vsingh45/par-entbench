@@ -1,0 +1,64 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "salesforce_seats_query",
+        "description": "Query Salesforce or license management system to extract licensed seat counts, actual seat assignments, and utilization status by user/license type. Generate metrics for total licensed seats, assigned seats, unassigned seats, and utilization percentage.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "unutilized_seats_analysis",
+        "description": "Reconcile licensed seats against actual seat assignments to identify and classify unutilized licenses. Determine inactive users, unassigned licenses, and underutilized accounts. Generate a prioritized list of recommendations for license optimization.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "salesforce_seats_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks are required: (1) sql_gen to query the Salesforce licensing database for licensed vs assigned seat counts across license types\u2014this is a moderate-complexity aggregation requiring joins across license and user assignment tables; (2) cross_recon to reconcile the seat inventory data with utilization patterns, classify unutilized licenses, and generate optimization recommendations. Both are mid-tier: the SQL needs multi-table joins and aggregation but no complex window functions, and the reconciliation involves straightforward comparison and classification logic without multi-source complexity that would demand frontier-tier analysis."
+  },
+  "node_results": [
+    {
+      "subtask_id": "salesforce_seats_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 485,
+      "output_tokens": 445,
+      "cached_tokens": 0,
+      "latency_ms": 5740,
+      "output": {
+        "sql": "SELECT\n    cf.product,\n    cf.publisher,\n    cf.license_id,\n    SUM(cf.daily_active_seats) AS total_licensed_seats,\n    COUNT(DISTINCT cf.user_id) AS assigned_seats,\n    SUM(cf.daily_active_seats) - COUNT(DISTINCT cf.user_id) AS unassigned_seats,\n    ROUND(\n        COUNT(DISTINCT cf.user_id)::NUMERIC / NULLIF(SUM(cf.daily_active_seats), 0) * 100, 2\n    ) AS utilization_percentage,\n    COUNT(DISTINCT CASE WHEN cf.event_type = 'active_usage' THEN cf.user_id END) AS active_users,\n    COUNT(DISTINCT cf.user_id) - COUNT(DISTINCT CASE WHEN cf.event_type = 'active_usage' THEN cf.user_id END) AS inactive_assigned_users,\n    ROUND(\n        COUNT(DISTINCT CASE WHEN cf.event_type = 'active_usage' THEN cf.user_id END)::NUMERIC\n        / NULLIF(COUNT(DISTINCT cf.user_id), 0) * 100, 2\n    ) AS active_utilization_pct,\n    MIN(cf.event_date) AS observation_start,\n    MAX(cf.event_date) AS observation_end\nFROM\n    consumption_facts cf\nWHERE\n    cf.event_date >= '2024-01-01'\nGROUP BY\n    cf.product,\n    cf.publisher,\n    cf.license_id\nORDER BY\n    utilization_percentage ASC,\n    unassigned_seats DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "unutilized_seats_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 730,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 15696,
+      "output": {
+        "raw_output": "I need to reconcile the MongoDB (operational state) and SQL (historical data) sources. However, I notice that only the SQL query/schema was provided, with no actual MongoDB result set or SQL result set \u2014 only the query definitions.\n\nI will treat the SQL query definition as the \"historical/analytical source\" and the absence of a MongoDB operational payload as the primary source returning no live documents, which means I must represent this as a structural reconciliation with null MongoDB values, classifying based solely on SQL schema signals.\n\nSince no runtime row data was returned from either source, I will produce a reconciliation manifest that reflects the schema-level entity keys defined in the SQL query, with null operational state, and classify accordingly.\n\n{\"reconciled\": [{\"entity_key\": \"license_utilization_reconciliation\", \"mongo_value\": null, \"sql_value\": {\"query_defined\": true, \"source_table\": \"consumption_facts\", \"date_filter\": \"event_date >= 2024-01-01\", \"group_by\": [\"product\", \"publisher\", \"license_id\"], \"metrics\": {\"total_licensed_seats\": \"SUM(daily_active_seats)\", \"assigned_seats\": \"COUNT(DISTINCT user_id)\", \"unassigned_seats\": \"SUM(daily_active_seats) - COUNT(DISTINCT user_id)\", \"utilization_percentage\": \"assigned_seats / total_licensed_seats * 100\", \"active_users\": \"COUNT(DISTINCT user_id WHERE event_type = active_usage)\", \"inactive_assigned_users\": \"assigned_seats - active_users\", \"active_utilization_pct\": \"active_users / assigned_seats * 100\", \"observation_start\": \"MIN(event_date)\", \"observation_end\": \"MAX(event_date)\"}, \"result_rows\": null}, \"classification\": \"no_recent_activity\", \"reconciliation_notes\": {\"status\": \"incomplete_reconciliation\", \"reason\": \"MongoDB operational source returned no documents; SQL query defined but no result rows provided\", \"mongo_source_status\": \"absent\", \"sql_source_status\": \"schema_only_no_rows\", \"join_result\": \"left_join_produced_zero_rows\", \"data_quality_flag\": \"both_sources_missing_runtime_data\"}, \"recommendations\": [{\"priority\": 1, \"action\": \"execute_mongodb_query\", \"rationale\": \"Operational seat assignment state is missing; MongoDB must be queried for current license-to-user mappings before reconciliation can proceed\"}, {\"priority\": 2, \"action\": \"execute_sql_query\", \"rationale\": \"SQL historical utilization data has not been returned; run query against consumption_facts for date range >= 2024-01-01\"}, {\"priority\": 3, \"action\": \"join_on_license_id\", \"rationale\": \"Once both sources return data, perform LEFT JOIN on license_id with MongoDB as primary; carry forward null SQL metrics for any license_id present in MongoDB but absent in SQL\"}, {\"priority\": 4, \"action\": \"classify_unassigned_licenses\", \"rationale\": \"Where unassigned_seats > 0 and utilization_percentage < 50, classify as reduce; candidate licenses for reclamation\"}, {\"priority\": 5, \"action\": \"classify_inactive_assigned_users\", \"rationale\": \"Where inactive_assigned_users > 0 and active_utilization_pct < 25, classify as at_risk; seats assigned but not actively used\"}, {\"priority\": 6, \"action\": \"classify_healthy_"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.02232,
+  "total_latency_ms": 21436,
+  "cumulative_spend_usd": 3.085236000000002,
+  "evaluator_reason": "no_mongo_node"
+}

@@ -1,0 +1,93 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_publisher_trends",
+        "description": "Query 2024 quarterly spend/performance data by publisher and identify those with declining trends (YoY or sequential quarter-over-quarter decline)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal",
+        "description": "For each declining publisher, reconcile current spend trajectory with contract terms and business impact to generate renewal recommendations (hold, expand, reduce)",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_publisher_trends"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid tier) because identifying quarterly trends requires multi-quarter aggregation with window functions to compute sequential/YoY decline metrics; (2) cross_recon (mid tier) to synthesize the SQL results with contextual contract and performance data to produce actionable renewal recommendations. The cross_recon includes the recommendation generation logic as part of its reconciliation scope\u2014no separate policy_action is needed since this is classification/prioritization, not compliance evaluation. Both mid tier because they involve moderate complexity (window functions, multi-signal reasoning) but not frontier-level sophistication."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_publisher_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 470,
+      "output_tokens": 634,
+      "cached_tokens": 0,
+      "latency_ms": 4528,
+      "output": {
+        "sql": "WITH quarterly_2024 AS (SELECT publisher, fiscal_quarter, SUM(amount_usd) as quarterly_spend, SUM(daily_active_seats) as total_seats FROM consumption_facts WHERE fiscal_year = 2024 GROUP BY publisher, fiscal_quarter), quarterly_2023 AS (SELECT publisher, fiscal_quarter, SUM(amount_usd) as quarterly_spend_2023 FROM consumption_facts WHERE fiscal_year = 2023 GROUP BY publisher, fiscal_quarter), yoy_comparison AS (SELECT c24.publisher, c24.fiscal_quarter, c24.quarterly_spend, c24.total_seats, c23.quarterly_spend_2023, CASE WHEN c23.quarterly_spend_2023 IS NULL THEN NULL ELSE ROUND(((c24.quarterly_spend - c23.quarterly_spend_2023) / c23.quarterly_spend_2023 * 100)::numeric, 2) END as yoy_change_pct FROM quarterly_2024 c24 LEFT JOIN quarterly_2023 c23 ON c24.publisher = c23.publisher AND c24.fiscal_quarter = c23.fiscal_quarter), sequential_decline AS (SELECT publisher, fiscal_quarter, quarterly_spend, total_seats, yoy_change_pct, LAG(quarterly_spend) OVER (PARTITION BY publisher ORDER BY fiscal_quarter) as prev_quarter_spend, CASE WHEN LAG(quarterly_spend) OVER (PARTITION BY publisher ORDER BY fiscal_quarter) IS NOT NULL AND quarterly_spend < LAG(quarterly_spend) OVER (PARTITION BY publisher ORDER BY fiscal_quarter) THEN 1 ELSE 0 END as has_qoq_decline FROM yoy_comparison), declining_publishers AS (SELECT DISTINCT publisher FROM sequential_decline WHERE has_qoq_decline = 1 OR (yoy_change_pct IS NOT NULL AND yoy_change_pct < -5)) SELECT sd.publisher, sd.fiscal_quarter, sd.quarterly_spend, sd.total_seats, sd.yoy_change_pct, sd.has_qoq_decline, CASE WHEN sd.yoy_change_pct < -20 OR (sd.has_qoq_decline = 1 AND sd.quarterly_spend < 10000) THEN 'REDUCE' WHEN sd.yoy_change_pct BETWEEN -20 AND -5 THEN 'HOLD' ELSE 'EXPAND' END as renewal_recommendation FROM sequential_decline sd INNER JOIN declining_publishers dp ON sd.publisher = dp.publisher ORDER BY sd.publisher, sd.fiscal_quarter"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 891,
+      "output_tokens": 472,
+      "cached_tokens": 0,
+      "latency_ms": 4887,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "publisher_declining_spend",
+            "mongo_value": null,
+            "sql_value": {
+              "source": "sql_publisher_trends",
+              "query_logic": "CTE-based declining publisher detection with YoY and QoQ analysis",
+              "filters_applied": [
+                "fiscal_year = 2024",
+                "has_qoq_decline = 1 OR yoy_change_pct < -5%",
+                "yoy_change_pct < -20% OR (qoq_decline AND quarterly_spend < $10k)"
+              ]
+            },
+            "classification": "query_execution_ready",
+            "note": "No MongoDB operational state provided. SQL query is self-contained and ready to execute. Will produce declining publishers with renewal recommendations based on spend trajectory and contract impact thresholds."
+          },
+          {
+            "entity_key": "recommendation_logic",
+            "mongo_value": null,
+            "sql_value": {
+              "REDUCE": "yoy_change_pct < -20% OR (qoq_decline = 1 AND quarterly_spend < $10,000)",
+              "HOLD": "yoy_change_pct BETWEEN -20% AND -5%",
+              "EXPAND": "yoy_change_pct >= -5% OR no_decline_signal"
+            },
+            "classification": "decision_framework_complete",
+            "note": "Renewal recommendation engine is mathematically defined in SQL CASE statement with clear business thresholds for spend velocity and contract risk assessment."
+          }
+        ],
+        "execution_status": "AWAITING_MONGODB_INPUT",
+        "message": "SQL query is fully constructed for declining publisher reconciliation. Provide MongoDB operational state (current publisher engagement metrics, seat utilization, contract expiry flags) to perform LEFT JOIN reconciliation and validate SQL recommendations against real-time operational signals."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0068909999999999996,
+  "total_latency_ms": 9415,
+  "cumulative_spend_usd": 1.2885989999999996,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

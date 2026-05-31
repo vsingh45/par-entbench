@@ -1,0 +1,104 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_fetch_publishers",
+        "description": "Query SQL warehouse to identify publishers with declining quarterly trends in 2024. Calculate year-over-year or quarter-over-quarter decline metrics (e.g., spend, usage, or engagement) across Q1\u2013Q4 2024. Return publisher names, quarterly metrics, and trend direction.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal",
+        "description": "For each publisher identified with declining trend, reconcile current state (from SQL results) with business context to generate renewal recommendations (hold, expand, or reduce). Apply decision logic based on trend severity, historical performance, and contract value to classify each publisher and produce recommendation rationale.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_fetch_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "2 subtasks minimum: (1) sql_gen (mid tier) to fetch publishers with declining quarterly trends\u2014this requires multi-quarter aggregation and trend calculation, not a simple single-table lookup. (2) cross_recon (mid tier) to generate renewal recommendations for each declining publisher by reconciling the trend data with business context and applying classification logic. Cross_recon is used here because recommendation generation is a reconciliation+classification task, not a separate policy check. No policy_action subtask is needed because the query asks for business recommendations, not governance/compliance evaluation. Mid tier chosen for both because sql_gen requires aggregation across multiple quarters with trend math, and cross_recon requires multi-signal reasoning (trend severity, historical context, contract value) to produce defensible recommendations.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_fetch_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 505,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8790,
+      "output": {
+        "raw_output": "{\"sql\": \"WITH quarterly_spend AS (\\n  SELECT\\n    publisher,\\n    fiscal_quarter,\\n    SUM(amount_usd) AS total_spend,\\n    SUM(daily_active_seats) AS total_seats,\\n    COUNT(DISTINCT user_id) AS active_users\\n  FROM consumption_facts\\n  WHERE event_date >= '2024-01-01'\\n    AND event_date < '2025-01-01'\\n  GROUP BY publisher, fiscal_quarter\\n),\\npivoted AS (\\n  SELECT\\n    publisher,\\n    MAX(CASE WHEN fiscal_quarter = 1 THEN total_spend ELSE 0 END) AS q1_spend,\\n    MAX(CASE WHEN fiscal_quarter = 2 THEN total_spend ELSE 0 END) AS q2_spend,\\n    MAX(CASE WHEN fiscal_quarter = 3 THEN total_spend ELSE 0 END) AS q3_spend,\\n    MAX(CASE WHEN fiscal_quarter = 4 THEN total_spend ELSE 0 END) AS q4_spend,\\n    MAX(CASE WHEN fiscal_quarter = 1 THEN total_seats ELSE 0 END) AS q1_seats,\\n    MAX(CASE WHEN fiscal_quarter = 2 THEN total_seats ELSE 0 END) AS q2_seats,\\n    MAX(CASE WHEN fiscal_quarter = 3 THEN total_seats ELSE 0 END) AS q3_seats,\\n    MAX(CASE WHEN fiscal_quarter = 4 THEN total_seats ELSE 0 END) AS q4_seats,\\n    MAX(CASE WHEN fiscal_quarter = 1 THEN active_users ELSE 0 END) AS q1_users,\\n    MAX(CASE WHEN fiscal_quarter = 2 THEN active_users ELSE 0 END) AS q2_users,\\n    MAX(CASE WHEN fiscal_quarter = 3 THEN active_users ELSE 0 END) AS q3_users,\\n    MAX(CASE WHEN fiscal_quarter = 4 THEN active_users ELSE 0 END) AS q4_users\\n  FROM quarterly_spend\\n  GROUP BY publisher\\n),\\ntrend_analysis AS (\\n  SELECT\\n    publisher,\\n    q1_spend, q2_spend, q3_spend, q4_spend,\\n    q1_seats, q2_seats, q3_seats, q4_seats,\\n    q1_users, q2_users, q3_users, q4_users,\\n    -- Quarter-over-quarter spend changes\\n    ROUND((q2_spend - q1_spend) / NULLIF(q1_spend, 0) * 100, 2) AS q1_q2_spend_chg_pct,\\n    ROUND((q3_spend - q2_spend) / NULLIF(q2_spend, 0) * 100, 2) AS q2_q3_spend_chg_pct,\\n    ROUND((q4_spend - q3_spend) / NULLIF(q3_spend, 0) * 100, 2)"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1107,
+      "output_tokens": 508,
+      "cached_tokens": 0,
+      "latency_ms": 10440,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sql_fetch_publishers",
+            "mongo_value": null,
+            "sql_value": {
+              "query_status": "partial",
+              "sql_truncated": true,
+              "note": "SQL output was truncated before result rows were returned; trend_analysis CTE is incomplete (q3_q4_spend_chg_pct column expression cut off)",
+              "parsed_structure": {
+                "ctes": [
+                  "quarterly_spend",
+                  "pivoted",
+                  "trend_analysis"
+                ],
+                "metrics_computed": [
+                  "q1_spend",
+                  "q2_spend",
+                  "q3_spend",
+                  "q4_spend",
+                  "q1_seats",
+                  "q2_seats",
+                  "q3_seats",
+                  "q4_seats",
+                  "q1_users",
+                  "q2_users",
+                  "q3_users",
+                  "q4_users",
+                  "q1_q2_spend_chg_pct",
+                  "q2_q3_spend_chg_pct",
+                  "q3_q4_spend_chg_pct(incomplete)"
+                ],
+                "filter": "event_date >= 2024-01-01 AND event_date < 2025-01-01",
+                "grouping": "publisher, fiscal_quarter"
+              },
+              "result_rows": []
+            },
+            "classification": "no_recent_activity",
+            "recommendation": "hold",
+            "rationale": "SQL query output was truncated before any publisher result rows were emitted. The trend_analysis CTE is structurally incomplete (final spend-change column expression is cut off), meaning no declining-trend publishers could be extracted from the historical data. Under LEFT JOIN semantics with MongoDB as the primary source, and given that MongoDB returned no operational-state records for any publisher entity, there are zero entities to reconcile. Renewal recommendation defaults to 'hold' for all implicitly referenced publishers until complete SQL results and MongoDB operational context are available. Re-run the query with the corrected CTE to obtain q3_q4_spend_chg_pct and final SELECT with WHERE clause filtering for negative QoQ trends before applying expand/hold/reduce decision logic."
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.024456,
+  "total_latency_ms": 19230,
+  "cumulative_spend_usd": 1.0243229999999999,
+  "evaluator_reason": "step1_sql_fail: no_sql_in_output"
+}

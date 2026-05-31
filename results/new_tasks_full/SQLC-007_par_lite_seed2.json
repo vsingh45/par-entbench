@@ -1,0 +1,61 @@
+{
+  "task_id": "SQLC-007",
+  "task_class": "sql_compose",
+  "router": "par_lite",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "get_publisher_spend",
+        "description": "Query SQL warehouse to get top spending publishers with their total spend and aggregate product category breakdowns (volume/value by product type)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "assess_leverage",
+        "description": "Analyze publisher spend concentration, product mix diversity, and contract terms to assess negotiation leverage (e.g., single-product dependency, spend growth, contract renewal timing, competitive alternatives). Generate leverage scores and recommendations.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid) to join publisher spend with product category data and aggregate by publisher — mid tier because this likely involves multiple tables with product taxonomy joins and aggregation. (2) cross_recon (mid) to synthesize the spend data with contract terms and market factors to assess leverage posture — mid tier for moderate complexity multi-signal reasoning. No policy_action needed because this is leverage assessment/recommendation, not governance approval. No multitool_plan needed as this is a standard BI workflow."
+  },
+  "node_results": [
+    {
+      "subtask_id": "get_publisher_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 457,
+      "output_tokens": 187,
+      "cached_tokens": 0,
+      "latency_ms": 3752,
+      "output": {
+        "sql": "SELECT publisher, product, COUNT(event_id) AS event_count, SUM(daily_active_seats) AS total_active_seats, SUM(amount_usd) AS product_spend, SUM(SUM(amount_usd)) OVER (PARTITION BY publisher) AS total_publisher_spend, ROUND(100.0 * SUM(amount_usd) / SUM(SUM(amount_usd)) OVER (PARTITION BY publisher), 2) AS pct_of_publisher_spend, COUNT(DISTINCT product) OVER (PARTITION BY publisher) AS distinct_product_count, COUNT(DISTINCT event_type) AS distinct_event_types FROM consumption_facts GROUP BY publisher, product ORDER BY total_publisher_spend DESC, publisher, product_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "assess_leverage",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 273,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 14618,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"publisher_001\",\n      \"mongo_value\": {\n        \"publisher_name\": \"TechMedia Global\",\n        \"contract_status\": \"active\",\n        \"contract_renewal_date\": \"2024-09-30\",\n        \"products_subscribed\": [\"display_ads\", \"sponsored_content\", \"data_analytics\", \"video_ads\"],\n        \"account_manager\": \"Sarah Chen\",\n        \"competitive_alternatives_noted\": [\"AdTech Pro\", \"MediaBridge\"],\n        \"contract_auto_renew\": false,\n        \"exclusivity_clause\": false,\n        \"payment_terms_days\": 30\n      },\n      \"sql_value\": {\n        \"total_spend_usd\": 4850000,\n        \"spend_growth_yoy_pct\": 22.4,\n        \"product_mix\": {\n          \"display_ads\": 1940000,\n          \"sponsored_content\": 1455000,\n          \"data_analytics\": 970000,\n          \"video_ads\": 485000\n        },\n        \"product_count\": 4,\n        \"top_product_concentration_pct\": 40.0,\n        \"months_as_customer\": 38,\n        \"avg_monthly_spend\": 403333,\n        \"late_payment_count_12mo\": 1,\n        \"churn_risk_score\": 0.18\n      },\n      \"classification\": \"expand\",\n      \"leverage_assessment\": {\n        \"leverage_score\": 72,\n        \"leverage_direction\": \"buyer_favored\",\n        \"key_signals\": [\n          \"High YoY spend growth (+22.4%) signals strong dependency\",\n          \"Multi-product adoption (4 products) increases switching costs\",\n          \"Contract renewal in <90 days creates negotiation window\",\n          \"No exclusivity clause — competitive alternatives are viable\",\n          \"No auto-renew means active negotiation is required\"\n        ],\n        \"risk_factors\": [\n          \"40% spend concentration in display_ads — moderate single-product risk\",\n          \"Identified competitive alternatives reduce publisher leverage\"\n        ],\n        \"recommendations\": [\n          \"NEGOTIATE NOW: Renewal window is imminent (Sep 2024) — initiate 60-day pre-renewal talks\",\n          \"Request 8–12% volume discount given spend growth trajectory\",\n          \"Push for multi-year lock-in (2–3 years) in exchange for budget commitment\",\n          \"Seek bundled pricing across all 4 products to reduce per-unit costs\",\n          \"Use AdTech Pro / MediaBridge as active leverage in negotiation\",\n          \"Request SLA guarantees on data_analytics product given growing share\"\n        ]\n      }\n    },\n    {\n      \"entity_key\": \"publisher_002\",\n      \"mongo_value\": {\n        \"publisher_name\": \"ContentBridge Inc.\",\n        \"contract_status\": \"active\",\n        \"contract_renewal_date\": \"2025-03-15\",\n        \"products_subscribed\": [\"sponsored_content\"],\n        \"account_manager\": \"James Park\",\n        \"competitive_alternatives_noted\": [\"ContentHub\", \"NativeReach\", \"StoryAds\"],\n        \"contract_auto_renew\": true,\n        \"exclusivity_clause\": true,\n        \"payment_terms"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.016995,
+  "total_latency_ms": 18370,
+  "cumulative_spend_usd": 1.4219430000000008
+}

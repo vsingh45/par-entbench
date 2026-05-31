@@ -1,0 +1,51 @@
+{
+  "task_id": "PAC-004",
+  "task_class": "policy_action",
+  "router": "frugal_cascade",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_eval_prod_access",
+        "description": "Evaluate the developer's production database access request against governance policies. Check compliance with access control policies, approval requirements, audit logging, and any role-based restrictions for live debugging.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single subtask: This query explicitly asks for a governance/policy evaluation decision (access control approval). A policy_action specialist is required to check the request against the policy registry. Tier assignment is 'mid' because the evaluation requires multi-signal reasoning (checking multiple policies, role-based rules, and approval chains for production access) rather than a single straightforward policy check. A small tier would be insufficient for the typical complexity of production access governance."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_eval_prod_access",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 467,
+      "output_tokens": 176,
+      "cached_tokens": 0,
+      "latency_ms": 2521,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-401": "fail",
+          "POL-402": "fail"
+        },
+        "reason": "Developer 'dev-alice' lacks required Manager approval for production database access and does not hold on-call role (POL-401). Additionally, debug access is restricted to designated staging environment only; production queries for live debugging are prohibited (POL-402).",
+        "applied_constraints": [
+          "Production database query_execute action denied",
+          "Redirect user to staging environment for debugging",
+          "Manager approval required before any production access",
+          "On-call role prerequisite not satisfied"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.001347,
+  "total_latency_ms": 2521,
+  "cumulative_spend_usd": 8.348792000000001,
+  "evaluator_reason": "ok"
+}

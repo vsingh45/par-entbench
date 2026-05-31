@@ -1,0 +1,77 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_contractor_access",
+        "description": "Evaluate the contractor's access request against data governance and access control policies. Determine if temporary contractor access is permitted for full database backups and what data classification restrictions apply.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_access_posture",
+        "description": "Reconcile the contractor's current access profile (role, tenure, clearance level) with the database backup classification (customer data sensitivity, PII scope) and the requested action (local download). Generate a risk posture assessment and recommend an approval decision (approve, deny, or conditional approval with safeguards).",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "policy_check_contractor_access"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) policy_action (mid tier) evaluates governance rules for contractor data access, temporary access constraints, and backup download permissions. (2) cross_recon (mid tier) reconciles the contractor's access profile against data sensitivity and generates a risk-based recommendation. Both mid tier because they require multi-signal reasoning (policy evaluation + access context + data classification) but no extreme complexity. We do not add a separate policy_action for the final decision because the recommendation is generated as part of cross_recon. Plan is minimal: no sql_gen, mongo_query, or extract needed—this is purely an access control and governance decision on existing data, not a data retrieval or transformation query."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_contractor_access",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 506,
+      "output_tokens": 348,
+      "cached_tokens": 0,
+      "latency_ms": 7335,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "All three applicable policies prohibit this action. POL-701 restricts database backup access exclusively to full-time employees with DBA role; contractor-dave holds neither status. POL-702 explicitly limits contractors to de-identified query results and prohibits raw data exports such as production_backup.tar.gz. POL-703 requires explicit project manager approval with 7-day advance notice for any contractor data access, which has not been established. The requested download of a full production customer database backup by a contractor represents a high-risk data governance violation across all evaluated policies.",
+        "applied_constraints": [
+          "Access to production_backup.tar.gz denied for all contractor roles per POL-701",
+          "Raw data exports prohibited for contractors; only de-identified query results permitted per POL-702",
+          "No project manager approval on record and 7-day notice requirement not satisfied per POL-703",
+          "Incident should be logged and security team notified of unauthorized access attempt",
+          "Contractor may be redirected to submit a formal data access request through approved channels with PM sponsorship",
+          "If legitimate analysis need exists, contractor must work with a DBA to receive scoped, de-identified query results only"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_access_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 740,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 14452,
+      "output": {
+        "raw_output": "{\"reconciled\": [{\"entity_key\": \"contractor-dave::production_backup.tar.gz::download\", \"mongo_value\": {\"user\": \"contractor-dave\", \"role\": \"contractor\", \"resource\": \"production_backup.tar.gz\", \"action\": \"download\", \"tenure_type\": \"temporary\", \"clearance_level\": \"contractor_standard\", \"access_profile_status\": \"active_temporary\"}, \"sql_value\": {\"backup_classification\": \"production\", \"customer_data_sensitivity\": \"high\", \"pii_scope\": \"full\", \"raw_export_type\": \"tar.gz\", \"data_governance_tier\": \"restricted\", \"authorized_roles\": [\"full_time_employee\", \"dba\"], \"contractor_permitted_formats\": [\"de-identified_query_results_only\"]}, \"policy_evaluation\": {\"POL-701\": {\"status\": \"fail\", \"reason\": \"User is a contractor, not a full-time employee with DBA role; access to database backups strictly prohibited\"}, \"POL-702\": {\"status\": \"fail\", \"reason\": \"production_backup.tar.gz is a raw data export; contractors are limited to de-identified query results only\"}, \"POL-703\": {\"status\": \"fail\", \"reason\": \"No project manager approval on record and 7-day advance notice requirement not satisfied\"}}, \"risk_posture\": {\"overall_risk_level\": \"critical\", \"risk_factors\": [{\"factor\": \"role_mismatch\", \"severity\": \"high\", \"detail\": \"Contractor role is explicitly excluded from backup access per POL-701\"}, {\"factor\": \"pii_exposure\", \"severity\": \"critical\", \"detail\": \"Full PII scope present in production backup; unauthorized local download creates uncontrolled data egress risk\"}, {\"factor\": \"raw_export_prohibited\", \"severity\": \"high\", \"detail\": \"tar.gz export format violates POL-702 contractor data format restrictions\"}, {\"factor\": \"missing_pm_approval\", \"severity\": \"high\", \"detail\": \"No sponsoring project manager approval or advance notice logged per POL-703\"}, {\"factor\": \"local_storage_risk\", \"severity\": \"critical\", \"detail\": \"Local download of full customer database backup introduces data loss, theft, and compliance breach vectors outside organizational control\"}, {\"factor\": \"no_audit_chain\", \"severity\": \"medium\", \"detail\": \"No formal data access request submitted through approved channels; no traceable authorization chain exists\"}], \"compliance_exposure\": [\"GDPR Art. 25 (Data Protection by Design)\", \"CCPA unauthorized third-party data sharing\", \"Internal data governance policy violations across POL-701, POL-702, POL-703\"], \"incident_flag\": true, \"incident_action_required\": \"Log access attempt immediately; notify security team; review contractor-dave session for additional anomalous activity\"}, \"recommendation\": {\"decision\": \"deny\", \"rationale\": \"All three applicable policies independently prohibit this action. The combination of contractor role, full-PII production backup, raw export format, absence of PM approval, and local download destination creates a critical-risk data governance violation with potential regulatory exposure. No mitigating factors present.\", \"applied_constraints\": [\"Access to production_backup.tar.gz denied for all contractor roles per POL-701\", \"Raw data exports prohibited for contractors; only de-identified query results permitted per POL-702\", \"No project manager approval on record and 7-day notice requirement not satisfied per POL-703\", \"Incident must be logged and security team"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.020958,
+  "total_latency_ms": 21787,
+  "cumulative_spend_usd": 8.672931000000007
+}

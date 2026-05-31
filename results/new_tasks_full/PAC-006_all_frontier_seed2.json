@@ -1,0 +1,50 @@
+{
+  "task_id": "PAC-006",
+  "task_class": "policy_action",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "An infrastructure engineer proposes rolling out Docker image changes to all microservices in production without prior staging validation.",
+        "specialist": "policy_action",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task — Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 753,
+      "output_tokens": 224,
+      "cached_tokens": 0,
+      "latency_ms": 4263,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-601": "fail",
+          "POL-602": "fail",
+          "POL-603": "pending_review"
+        },
+        "reason": "Proposed rollout skips mandatory 48-hour staging validation (POL-601) and lacks evidence of change board approval and monitoring setup (POL-602). Rollback and traffic monitoring strategy (POL-603) is not specified and must be reviewed.",
+        "applied_constraints": [
+          "Complete minimum 48-hour staging validation before production rollout",
+          "Obtain change board approval and configure post-deployment monitoring",
+          "Document automated rollback capability and traffic monitoring strategy"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009365,
+  "total_latency_ms": 4263,
+  "cumulative_spend_usd": 8.547859000000004
+}

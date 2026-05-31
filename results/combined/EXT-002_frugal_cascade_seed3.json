@@ -1,0 +1,62 @@
+{
+  "task_id": "EXT-002",
+  "task_class": "extract",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "Extract all line items from the invoice including SKU, description, quantity, unit price, and line total.",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 379,
+      "output_tokens": 216,
+      "cached_tokens": 0,
+      "latency_ms": 1994,
+      "output": {
+        "line_items": [
+          {
+            "sku": "CLO-PRO-001",
+            "description": "Adobe Creative Cloud Pro Annual License",
+            "quantity": 25,
+            "unit_price": 599.0,
+            "line_total": 14975.0
+          },
+          {
+            "sku": "CLO-STD-002",
+            "description": "Adobe Creative Cloud Standard",
+            "quantity": 10,
+            "unit_price": 359.0,
+            "line_total": 3590.0
+          },
+          {
+            "sku": "TRG-001",
+            "description": "Onboarding Training",
+            "quantity": 1,
+            "unit_price": 2500.0,
+            "line_total": 2500.0
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001459,
+  "total_latency_ms": 1994,
+  "cumulative_spend_usd": 3.551559000000004,
+  "evaluator_reason": "f1=0.600_below_0.85"
+}

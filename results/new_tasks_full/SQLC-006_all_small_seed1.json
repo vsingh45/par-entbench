@@ -1,0 +1,63 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "all_small",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_analysis",
+        "description": "Query SQL warehouse to retrieve current month spend and 3-month rolling average by vendor/department. Calculate variance, deviation percentage, and percent difference from baseline. Return current_spend, avg_3m_spend, variance, pct_deviation.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "classify_anomalies",
+        "description": "Reconcile spend variance results with classification thresholds to assign each anomaly to normal_variance (<15%), concerning (15-40%), or critical (>40%) based on percent deviation. Include rationale and risk signals.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_spend_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Plan uses 2 subtasks: (1) sql_gen (mid-tier) to compute current vs. 3-month average with variance metrics—requires multi-month aggregation and window functions for rolling averages, justifying mid-tier; (2) cross_recon (mid-tier) to classify anomalies against thresholds and generate posture assignments. Cross_recon handles the classification logic and reconciliation of computed metrics against governance bands (normal/concerning/critical). No policy_action needed because classification against numeric thresholds is part of cross_recon's reconciliation scope, not a distinct policy governance decision. No extra extract or mongo_query steps—all data originates from a single SQL warehouse."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 496,
+      "output_tokens": 444,
+      "cached_tokens": 0,
+      "latency_ms": 2956,
+      "output": {
+        "sql": "WITH monthly_spend AS (SELECT vendor_name, DATE_TRUNC('month', invoice_date)::DATE AS month, SUM(amount_usd) AS monthly_total FROM invoice_facts WHERE invoice_date >= CURRENT_DATE - INTERVAL '4 months' GROUP BY vendor_name, DATE_TRUNC('month', invoice_date)), current_month AS (SELECT vendor_name, monthly_total AS current_spend FROM monthly_spend WHERE month = DATE_TRUNC('month', CURRENT_DATE)::DATE), three_month_avg AS (SELECT vendor_name, AVG(monthly_total) AS avg_3m_spend FROM monthly_spend WHERE month < DATE_TRUNC('month', CURRENT_DATE)::DATE AND month >= DATE_TRUNC('month', CURRENT_DATE)::DATE - INTERVAL '3 months' GROUP BY vendor_name) SELECT cm.vendor_name, cm.current_spend, tma.avg_3m_spend, (cm.current_spend - tma.avg_3m_spend) AS variance, ROUND(((cm.current_spend - tma.avg_3m_spend) / tma.avg_3m_spend * 100)::NUMERIC, 2) AS pct_deviation, CASE WHEN ABS((cm.current_spend - tma.avg_3m_spend) / tma.avg_3m_spend) <= 0.10 THEN 'normal_variance' WHEN ABS((cm.current_spend - tma.avg_3m_spend) / tma.avg_3m_spend) <= 0.25 THEN 'concerning' ELSE 'critical' END AS anomaly_classification FROM current_month cm JOIN three_month_avg tma ON cm.vendor_name = tma.vendor_name ORDER BY pct_deviation DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "classify_anomalies",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 727,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 6002,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"spend_variance_classification_framework\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"query_type\": \"spend_variance_analysis\",\n        \"comparison_basis\": \"current_month_vs_3month_average\",\n        \"classification_thresholds\": {\n          \"normal_variance\": \"<=10% absolute deviation\",\n          \"concerning\": \"11-25% absolute deviation\",\n          \"critical\": \">25% absolute deviation\"\n        },\n        \"note\": \"SQL uses 10% and 25% thresholds; task references 15% and 40%\"\n      },\n      \"classification\": \"threshold_mismatch_detected\",\n      \"rationale\": \"Task specifies thresholds (normal <15%, concerning 15-40%, critical >40%) but SQL implements different thresholds (10%, 25%). Recommend aligning to task specification or SQL implementation.\",\n      \"risk_signals\": [\n        \"threshold_inconsistency\",\n        \"potential_misclassification_of_anomalies\",\n        \"need_for_threshold_reconciliation\"\n      ]\n    },\n    {\n      \"entity_key\": \"sql_query_validation\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"status\": \"executable\",\n        \"data_requirements\": [\n          \"invoice_facts table with vendor_name, invoice_date, amount_usd columns\",\n          \"current date context\",\n          \"4-month historical data availability\"\n        ],\n        \"output_columns\": [\n          \"vendor_name\",\n          \"current_spend\",\n          \"avg_3m_spend\",\n          \"variance\",\n          \"pct_deviation\",\n          \"anomaly_classification\"\n        ]\n      },\n      \"classification\": \"ready_for_execution\",\n      \"rationale\": \"SQL query is syntactically valid and implements CTE-based spend analysis with proper aggregation and variance calculation.\",\n      \"risk_signals\": [\n        \"requires_database_connectivity\",\n        \"depends_on_data_completeness\",\n        \"null_handling_for_missing_vendors\"\n      ]\n    },\n    {\n      \"entity_key\": \"classification_logic_recommendation\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"recommended_thresholds_per_task\": {\n          \"normal_variance\": \"pct_deviation < 15%\",\n          \"concerning\": \"15% <= pct_deviation <= 40%\",\n          \"critical\": \"pct_deviation > 40%\"\n        },\n        \"risk_assessment_factors\": [\n          \"absolute_variance_magnitude\",\n          \"percentage_deviation_from_baseline\",\n          \"vendor_criticality\",\n          \"spend_trajectory_direction\",\n          \"historical_volatility\"\n        ]\n      },\n      \"classification\": \"actionable_guidance\",\n      \"rationale\": \"Task thresholds should replace SQL thresholds. Classification should incorporate both upside (overspend) and downside (underspend) risks.\",\n      \"risk_signals\": [\n        \"positive_variance_may_indicate_scope_creep\",\n        \"negative_variance_may_indicate_service_degradation\",\n        \"vendors_with_critical_services_warrant_lower_thresholds\",\n        \"seasonal_patterns_"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007443,
+  "total_latency_ms": 8958,
+  "cumulative_spend_usd": 0.98277
+}

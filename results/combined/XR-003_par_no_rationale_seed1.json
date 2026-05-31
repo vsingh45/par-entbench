@@ -1,0 +1,210 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "par_no_rationale",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_iam_roles",
+        "description": "Extract all IAM roles with elevated permissions from the identity management system",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_granted_permissions",
+        "description": "Query IAM policy database to retrieve all granted permissions for each identified elevated-privilege role",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": [
+          "extract_iam_roles"
+        ]
+      },
+      {
+        "id": "extract_exercised_permissions",
+        "description": "Extract actual permission usage/exercise logs from CloudTrail, access logs, or audit systems for the last 180 days for each role",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": [
+          "extract_iam_roles"
+        ]
+      },
+      {
+        "id": "cross_reconcile_permissions",
+        "description": "Cross-reconcile granted permissions against exercised permissions; identify permissions that were granted but never actually used in the 180-day window",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "query_granted_permissions",
+          "extract_exercised_permissions"
+        ]
+      },
+      {
+        "id": "generate_revocation_report",
+        "description": "Generate comprehensive report flagging granted-but-never-used permissions as candidates for revocation, with risk assessment and role impact analysis",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "cross_reconcile_permissions"
+        ]
+      },
+      {
+        "id": "policy_recommendations",
+        "description": "Generate policy recommendations and create automated revocation action items for least-privilege principle compliance",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": [
+          "generate_revocation_report"
+        ]
+      }
+    ],
+    "cost_rationale": "This workflow requires systematic extraction of IAM data, reconciliation against 180-day usage logs, and policy analysis. Mid-tier models are sufficient for most analytical work given the structured nature of IAM and audit data; frontier tier not needed as no complex reasoning across unstructured sources is required."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_iam_roles",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 248,
+      "output_tokens": 115,
+      "cached_tokens": 0,
+      "latency_ms": 3790,
+      "output": {
+        "raw_output": "{\n  \"status\": \"No document provided\",\n  \"error\": \"Cannot extract IAM roles - no document or identity management system data was provided in the request\",\n  \"extracted_data\": null\n}\n```\n\nTo complete this task, please provide:\n1. A document containing IAM role definitions and permissions\n2. Activity logs showing exercised permissions over the last 180 days\n3. Identity management system export or configuration file\n\nOnce provided, I can extract and reconcile the requested data."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_granted_permissions",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 613,
+      "output_tokens": 363,
+      "cached_tokens": 0,
+      "latency_ms": 6094,
+      "output": {
+        "sql": "SELECT\n    a.permission,\n    a.user_id,\n    COUNT(*) FILTER (WHERE a.result = 'GRANTED') AS granted_count,\n    COUNT(*) FILTER (WHERE a.action IS NOT NULL\n        AND a.access_time >= NOW() - INTERVAL '180 days') AS exercised_count_last_180d,\n    MAX(a.access_time) FILTER (WHERE a.action IS NOT NULL) AS last_exercised_at,\n    CASE\n        WHEN COUNT(*) FILTER (\n            WHERE a.action IS NOT NULL\n            AND a.access_time >= NOW() - INTERVAL '180 days'\n        ) = 0\n        THEN TRUE\n        ELSE FALSE\n    END AS candidate_for_revocation\nFROM access_log_facts a\nWHERE a.result = 'GRANTED'\n  AND a.permission IN (\n      SELECT DISTINCT permission\n      FROM access_log_facts\n      WHERE result = 'GRANTED'\n        AND permission ILIKE ANY (ARRAY[\n            '%admin%', '%root%', '%superuser%', '%elevated%',\n            '%write%', '%delete%', '%manage%', '%full%'\n        ])\n  )\nGROUP BY a.permission, a.user_id\nORDER BY candidate_for_revocation DESC, a.permission, a.user_id"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "extract_exercised_permissions",
+      "specialist": "extract",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 404,
+      "output_tokens": 414,
+      "cached_tokens": 0,
+      "latency_ms": 8053,
+      "output": {
+        "status": "no_data_available",
+        "audit_period_days": 180,
+        "audit_period_start": null,
+        "audit_period_end": null,
+        "data_sources_provided": {
+          "iam_role_definitions": null,
+          "cloudtrail_logs": null,
+          "access_logs": null,
+          "audit_system_export": null
+        },
+        "upstream_dependency_status": {
+          "extract_iam_roles": "failed",
+          "extract_iam_roles_error": "No document or identity management system data was provided"
+        },
+        "roles_analyzed": null,
+        "permission_reconciliation_results": null,
+        "revocation_candidates": null,
+        "summary_metrics": {
+          "total_roles_with_elevated_permissions": null,
+          "total_permissions_granted": null,
+          "total_permissions_exercised": null,
+          "total_permissions_never_used": null,
+          "percent_permissions_unused": null
+        },
+        "error": "Cannot perform permission reconciliation \u2014 no IAM role definitions, CloudTrail logs, access logs, or audit system data were provided in the request or upstream outputs. All upstream data sources returned null.",
+        "required_inputs_to_complete_task": [
+          "IAM role definitions with associated permission policies (e.g., AWS IAM JSON policy exports)",
+          "CloudTrail event logs for the last 180 days covering all regions",
+          "Access logs or audit system exports (e.g., SIEM, AWS Access Analyzer findings)",
+          "Mapping of roles to principals (users, services, accounts) for scoped analysis"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_reconcile_permissions",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 992,
+      "output_tokens": 799,
+      "cached_tokens": 0,
+      "latency_ms": 13046,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"RECONCILIATION_STATUS\",\n      \"mongo_value\": {\n        \"source\": \"extract_exercised_permissions\",\n        \"status\": \"no_data_available\",\n        \"upstream_dependency_status\": {\n          \"extract_iam_roles\": \"failed\",\n          \"extract_iam_roles_error\": \"No document or identity management system data was provided\"\n        },\n        \"data_sources_provided\": {\n          \"iam_role_definitions\": null,\n          \"cloudtrail_logs\": null,\n          \"access_logs\": null,\n          \"audit_system_export\": null\n        },\n        \"roles_analyzed\": null,\n        \"permission_reconciliation_results\": null,\n        \"revocation_candidates\": null,\n        \"summary_metrics\": {\n          \"total_roles_with_elevated_permissions\": null,\n          \"total_permissions_granted\": null,\n          \"total_permissions_exercised\": null,\n          \"total_permissions_never_used\": null,\n          \"percent_permissions_unused\": null\n        }\n      },\n      \"sql_value\": {\n        \"source\": \"query_granted_permissions\",\n        \"status\": \"query_defined_not_executed\",\n        \"note\": \"SQL query was provided as a definition only; no result rows were returned in upstream outputs. No granted permission records, user_ids, exercised counts, or revocation candidates are available from this source either.\",\n        \"result_rows\": null\n      },\n      \"classification\": \"at_risk\",\n      \"reconciliation_outcome\": \"blocked\",\n      \"blocking_reasons\": [\n        \"MongoDB-equivalent source (extract_exercised_permissions) returned no_data_available due to all upstream dependencies failing \u2014 IAM role definitions, CloudTrail logs, access logs, and audit system exports were all null.\",\n        \"SQL source (query_granted_permissions) provided a query definition but no executed result rows, so no granted permission records, user_ids, or revocation flags could be joined.\",\n        \"LEFT JOIN semantics cannot be applied: the primary source (MongoDB/IAM extraction) has zero entities to anchor the join. There are no rows to emit.\",\n        \"Without IAM role-to-permission mappings and exercise event logs, it is impossible to determine which permissions were granted, which were used, and which are candidates for revocation.\"\n      ],\n      \"required_inputs_to_unblock\": [\n        \"IAM role definitions with associated permission policies (e.g., AWS IAM JSON policy exports) mapped to users/principals\",\n        \"CloudTrail event logs for the last 180 days covering all regions, identifying which permissions were actually invoked\",\n        \"Access logs or audit system exports (e.g., SIEM, AWS Access Analyzer findings) covering the same 180-day window\",\n        \"Mapping of roles to principals (users, services, accounts) for scoped per-role analysis\",\n        \"Execution results from the SQL query (query_granted_permissions) against a live access_log_facts table\"\n      ],\n      \"recommended_next_steps\": [\n        \"1. Provide IAM role definition exports and re-run extract_iam_roles upstream dependency.\",\n        \"2. Supply CloudTrail or equivalent access logs for the 180-day audit window.\",\n        \"3. Execute the SQL query (query_granted_permissions) against the live database and return result rows.\","
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "generate_revocation_report",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1377,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 11071,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"principal\": \"orchestrator_service\",\n        \"action\": \"iam:ReadRoles\",\n        \"resource\": \"*\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"principal\": \"orchestrator_service\",\n        \"action\": \"iam:ReadAuditLogs\",\n        \"resource\": \"*\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"iam_roles\",\n        \"filter\": {\n          \"elevated\": true,\n          \"status\": \"active\"\n        },\n        \"projection\": {\n          \"role_id\": 1,\n          \"role_name\": 1,\n          \"principal_bindings\": 1,\n          \"permissions\": 1,\n          \"granted_at\": 1,\n          \"last_reviewed\": 1\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"iam_permission_policies\",\n        \"filter\": {\n          \"policy_type\": { \"$in\": [\"elevated\", \"privileged\", \"admin\", \"write\", \"delete\"] }\n        },\n        \"projection\": {\n          \"policy_id\": 1,\n          \"policy_name\": 1,\n          \"permissions\": 1,\n          \"risk_classification\": 1,\n          \"affected_resources\": 1\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT u.user_id, u.username, u.email, u.department, u.manager_id, r.role_id, r.role_name, r.risk_level, rp.permission_name, rp.permission_action, rp.resource_scope, rp.granted_at, rp.granted_by FROM users u JOIN user_role_assignments ura ON u.user_id = ura.user_id JOIN iam_roles r ON ura.role_id = r.role_id JOIN role_permissions rp ON r.role_id = rp.role_id WHERE r.elevated = TRUE AND ura.active = TRUE AND u.active = TRUE ORDER BY r.risk_level DESC, u.user_id, rp.permission_name\"\n      },\n      \"depends_on\": [1, 2]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT principal_id, principal_type, permission_action, resource_scope, COUNT(*) AS invocation_count, MIN(event_time) AS first_used, MAX(event_time) AS last_used, COUNT(DISTINCT DATE_TRUNC('week', event_time)) AS active_weeks FROM access_log_facts WHERE event_time >= DATEADD(day, -180, CURRENT_TIMESTAMP()) AND event_status = 'SUCCESS' GROUP BY principal_id, principal_type, permission_action,"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "policy_recommendations",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1320,
+      "output_tokens": 636,
+      "cached_tokens": 0,
+      "latency_ms": 15581,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-LEAST-PRIVILEGE": "fail",
+          "POL-IAM-AUTOMATION": "fail",
+          "POL-DATA-INTEGRITY": "fail",
+          "POL-AUDIT-COMPLETENESS": "fail",
+          "POL-ORCHESTRATOR-SCOPE": "fail",
+          "POL-HUMAN-IN-THE-LOOP": "fail",
+          "POL-INPUT-VALIDATION": "fail"
+        },
+        "reason": "Action denied for multiple critical reasons: (1) The upstream output contains a TRUNCATED SQL query (ends mid-string at 'resource_scope,') \u2014 evaluating or acting on incomplete audit data violates data-integrity and audit-completeness policies. Any revocation recommendations derived from a partial 180-day usage scan would be factually unreliable and could cause false-positive revocations of legitimately-used permissions. (2) Automated generation of revocation action items for IAM roles constitutes a destructive/privileged IAM mutation pathway; least-privilege automation policies require human approval gates before any revocation actions are created or queued, not just before execution. (3) The orchestrator_service permission scope (iam:ReadRoles, iam:ReadAuditLogs) covers read operations only \u2014 generating actionable revocation items exceeds the read-only authorization boundary. (4) Policy recommendations that feed automated pipelines must be produced from complete, validated datasets; acting on a corrupt upstream output violates input-validation policy.",
+        "applied_constraints": [
+          "BLOCK: Do not generate revocation action items until the truncated SQL query (access_log_facts aggregation) is completed and re-executed successfully.",
+          "BLOCK: Do not derive permission-usage conclusions from a partial 180-day scan \u2014 all rows must be present before flagging any permission as 'never used'.",
+          "REQUIRE: A human IAM administrator must review and explicitly approve any auto-generated revocation list before it enters any action queue or ticketing system.",
+          "REQUIRE: Re-run the full upstream pipeline with a validated, complete query and confirm row counts match expected audit log volume before re-submitting.",
+          "REQUIRE: Orchestrator_service must request elevated write/mutation permissions via a separate, time-bound, approved privilege escalation request if it needs to create action items \u2014 current role does not authorize this.",
+          "REQUIRE: Any final revocation recommendations must include a confidence score, last-verified timestamp, and manager acknowledgment field before being surfaced as action items.",
+          "LOG: This evaluation attempt and the detected truncated upstream output must be recorded in the audit log for later review."
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.060121,
+  "total_latency_ms": 57635,
+  "cumulative_spend_usd": 3.3096110000000025,
+  "evaluator_reason": "no_mongo_node"
+}

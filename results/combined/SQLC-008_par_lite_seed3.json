@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "par_lite",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "budget_analysis_sql",
+        "description": "Query budget allocation by product category with cost trends (absolute spend, period-over-period change, and percentage of total budget). Include time-series aggregation to show trends.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reallocation_recommendation",
+        "description": "Analyze budget allocation patterns and cost trends from SQL results to identify underutilized categories, cost anomalies, and growth opportunities. Generate reallocation recommendations with rationale (e.g., shift budget from declining categories to high-ROI categories, optimize over-allocated categories).",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "budget_analysis_sql"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks are the minimum needed: (1) SQL query to aggregate budget and cost data by category with trend metrics\u2014this requires mid-tier capability for multi-table joins, window functions (LAG, YoY calculations), and multiple aggregate columns across time periods; (2) Reallocation analysis using cross_recon (frontier tier) because it involves interpretation of financial patterns, anomaly detection, and generation of strategic recommendations based on the trend data\u2014this requires higher-order reasoning to synthesize actionable insights. We do not add a policy_action subtask because reallocation strategy is a business recommendation, not a policy/compliance decision. We do not split the SQL into multiple queries since all trend metrics can be generated in a single complex query with CTEs."
+  },
+  "node_results": [
+    {
+      "subtask_id": "budget_analysis_sql",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 468,
+      "output_tokens": 252,
+      "cached_tokens": 0,
+      "latency_ms": 3992,
+      "output": {
+        "sql": "SELECT product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS total_spend, SUM(amount_usd) - LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter) AS period_over_period_change, ROUND(100.0 * SUM(amount_usd) / SUM(SUM(amount_usd)) OVER (PARTITION BY fiscal_year, fiscal_quarter), 2) AS pct_of_total_budget, ROUND(100.0 * (SUM(amount_usd) - LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter)) / NULLIF(LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter), 0), 2) AS pct_change FROM consumption_facts GROUP BY product, fiscal_year, fiscal_quarter ORDER BY fiscal_year, fiscal_quarter, total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reallocation_recommendation",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 866,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 1108,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009864000000000001,
+  "total_latency_ms": 5100,
+  "cumulative_spend_usd": 1.774798000000001,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

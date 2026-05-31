@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-003",
+  "task_class": "sql_gen",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_1",
+        "description": "Retrieve quarterly spend data for Adobe and Microsoft products in 2024. Calculate QoQ spend change for each product and rank products within each publisher by Q4 2024 spend.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single sql_gen subtask (mid tier) because this query requires: (1) multi-table joins across product and spend dimensions, (2) quarterly aggregation with LAG for QoQ comparison, (3) window function RANK() scoped to publisher for ranking. This is moderate complexity\u2014multiple joins and window functions, but no cross-source reconciliation needed. Mid tier is appropriate since the query logic is complex but straightforward SQL without inference or multi-source reasoning."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 488,
+      "output_tokens": 515,
+      "cached_tokens": 0,
+      "latency_ms": 6489,
+      "output": {
+        "sql": "WITH quarterly_spend AS (\n  SELECT\n    publisher,\n    product,\n    fiscal_quarter,\n    SUM(amount_usd) AS total_spend\n  FROM consumption_facts\n  WHERE publisher IN ('Adobe', 'Microsoft')\n    AND event_date >= '2024-01-01'\n    AND event_date < '2025-01-01'\n  GROUP BY publisher, product, fiscal_quarter\n),\nlagged_spend AS (\n  SELECT\n    publisher,\n    product,\n    fiscal_quarter,\n    total_spend,\n    LAG(total_spend) OVER (PARTITION BY publisher, product ORDER BY fiscal_quarter) AS prev_quarter_spend\n  FROM quarterly_spend\n),\nq4_rank AS (\n  SELECT\n    publisher,\n    product,\n    total_spend AS q4_spend,\n    RANK() OVER (PARTITION BY publisher ORDER BY total_spend DESC) AS rank_within_publisher\n  FROM quarterly_spend\n  WHERE fiscal_quarter = 4\n)\nSELECT\n  ls.publisher,\n  ls.product,\n  ls.fiscal_quarter,\n  ls.total_spend,\n  ls.prev_quarter_spend,\n  ROUND(\n    CASE\n      WHEN ls.prev_quarter_spend IS NULL OR ls.prev_quarter_spend = 0 THEN NULL\n      ELSE (ls.total_spend - ls.prev_quarter_spend) / ls.prev_quarter_spend * 100\n    END, 2\n  ) AS qoq_pct_change,\n  qr.q4_spend,\n  qr.rank_within_publisher AS q4_rank_within_publisher\nFROM lagged_spend ls\nLEFT JOIN q4_rank qr\n  ON ls.publisher = qr.publisher\n  AND ls.product = qr.product\nORDER BY ls.publisher, ls.product, ls.fiscal_quarter"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009189,
+  "total_latency_ms": 6489,
+  "cumulative_spend_usd": 0.15775199999999998,
+  "evaluator_reason": "result_bag_mismatch"
+}

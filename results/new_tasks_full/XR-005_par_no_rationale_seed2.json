@@ -1,0 +1,231 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "router": "par_no_rationale",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "1_extract_sf_licenses",
+        "description": "Extract Salesforce licensed seat count and seat type information from Salesforce org configuration",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "2_extract_sf_assignments",
+        "description": "Extract actual user seat assignments and active user data from Salesforce",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "3_query_assignment_details",
+        "description": "Query database for detailed seat assignment records including user status, license type, and last login information",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": [
+          "2_extract_sf_assignments"
+        ]
+      },
+      {
+        "id": "4_calculate_utilization_metrics",
+        "description": "Analyze and calculate seat utilization rates, identify gaps between licensed vs assigned seats, and flag unutilized licenses",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "1_extract_sf_licenses",
+          "3_query_assignment_details"
+        ]
+      },
+      {
+        "id": "5_reconcile_seat_data",
+        "description": "Cross-reconcile licensed seats with actual assignments to identify discrepancies, orphaned licenses, and inactive user accounts",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "1_extract_sf_licenses",
+          "3_query_assignment_details"
+        ]
+      },
+      {
+        "id": "6_generate_action_plan",
+        "description": "Generate recommendations and action plan for reclaiming unutilized licenses and optimizing seat allocation",
+        "specialist": "policy_action",
+        "tier": "frontier",
+        "depends_on": [
+          "4_calculate_utilization_metrics",
+          "5_reconcile_seat_data"
+        ]
+      }
+    ],
+    "cost_rationale": "Multi-stage analysis of Salesforce licensing data: initial extraction (small tier), database queries for detailed assignments (small tier), utilization calculations (mid tier for analytical complexity), cross-reconciliation for discrepancy detection (mid tier), and frontier-tier policy recommendations requiring synthesis of multiple data sources and business logic"
+  },
+  "node_results": [
+    {
+      "subtask_id": "1_extract_sf_licenses",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 234,
+      "output_tokens": 102,
+      "cached_tokens": 0,
+      "latency_ms": 1301,
+      "output": {
+        "licensed_seat_count": null,
+        "seat_type": null,
+        "actual_seat_assignments": null,
+        "unutilized_licenses": null,
+        "analysis_note": "No Salesforce org configuration document provided in task. Unable to extract seat count and utilization data without access to the actual Salesforce org configuration details, license allocation report, or user assignment records."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "2_extract_sf_assignments",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 230,
+      "output_tokens": 168,
+      "cached_tokens": 0,
+      "latency_ms": 1744,
+      "output": {
+        "error": "No document provided",
+        "message": "Cannot extract Salesforce seat assignment data without a document to analyze",
+        "required_document_types": [
+          "Salesforce user license report",
+          "Salesforce seat utilization report",
+          "Salesforce active users export",
+          "Salesforce license management report"
+        ],
+        "expected_fields": {
+          "total_licensed_seats": null,
+          "actual_assigned_seats": null,
+          "active_users": null,
+          "unutilized_licenses": null,
+          "license_utilization_percentage": null,
+          "report_date": null
+        }
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "3_query_assignment_details",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 585,
+      "output_tokens": 188,
+      "cached_tokens": 0,
+      "latency_ms": 1434,
+      "output": {
+        "sql": "SELECT cf.license_id, cf.user_id, cf.publisher, cf.product, cf.event_type, cf.daily_active_seats, cf.event_date, cf.fiscal_year, cf.fiscal_quarter, COUNT(DISTINCT alf.access_time) as login_count, MAX(alf.access_time) as last_login FROM consumption_facts cf LEFT JOIN access_log_facts alf ON cf.user_id = alf.user_id GROUP BY cf.license_id, cf.user_id, cf.publisher, cf.product, cf.event_type, cf.daily_active_seats, cf.event_date, cf.fiscal_year, cf.fiscal_quarter ORDER BY cf.license_id, cf.user_id"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "4_calculate_utilization_metrics",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 719,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9951,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"action\": \"read\",\n        \"resource\": \"license_utilization_data\",\n        \"context\": \"Salesforce seat utilization analysis including licensed seats, assignments, and access logs\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT license_id, publisher, product, event_type, fiscal_year, fiscal_quarter, SUM(daily_active_seats) AS total_active_seat_days, COUNT(DISTINCT user_id) AS distinct_assigned_users, MAX(event_date) AS latest_activity_date FROM consumption_facts WHERE LOWER(publisher) ILIKE '%salesforce%' GROUP BY license_id, publisher, product, event_type, fiscal_year, fiscal_quarter ORDER BY fiscal_year DESC, fiscal_quarter DESC, license_id\"\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT cf.license_id, cf.user_id, cf.publisher, cf.product, cf.event_type, cf.daily_active_seats, cf.event_date, cf.fiscal_year, cf.fiscal_quarter, COUNT(DISTINCT alf.access_time) AS login_count, MAX(alf.access_time) AS last_login FROM consumption_facts cf LEFT JOIN access_log_facts alf ON cf.user_id = alf.user_id WHERE LOWER(cf.publisher) ILIKE '%salesforce%' GROUP BY cf.license_id, cf.user_id, cf.publisher, cf.product, cf.event_type, cf.daily_active_seats, cf.event_date, cf.fiscal_year, cf.fiscal_quarter ORDER BY cf.license_id, cf.user_id\"\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT license_id, publisher, product, MAX(licensed_seat_count) AS total_licensed_seats FROM license_entitlements WHERE LOWER(publisher) ILIKE '%salesforce%' GROUP BY license_id, publisher, product ORDER BY license_id\"\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"license_contracts\",\n        \"filter\": {\n          \"publisher\": { \"$regex\": \"salesforce\", \"$options\": \"i\" }\n        },\n        \"projection\": {\n          \"license_id\": 1,\n          \"product\": 1,\n          \"seat_type\": 1,\n          \"contracted_seats\": 1,\n          \"contract_start_date\": 1,\n          \"contract_end_date\": 1,\n          \"cost_per_seat\": 1\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"WITH utilization AS ( SELECT cf.license_id, cf.publisher, cf.product"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "5_reconcile_seat_data",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 538,
+      "output_tokens": 359,
+      "cached_tokens": 0,
+      "latency_ms": 5450,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "salesforce_seat_utilization",
+            "mongo_value": {
+              "licensed_seat_count": null,
+              "seat_type": null,
+              "actual_seat_assignments": null,
+              "unutilized_licenses": null,
+              "analysis_note": "No Salesforce org configuration document provided in task. Unable to extract seat count and utilization data without access to the actual Salesforce org configuration details, license allocation report, or user assignment records."
+            },
+            "sql_value": {
+              "sql_available": false,
+              "sql_query_defined": true,
+              "sql_result": null,
+              "sql_note": "SQL query was constructed but no result set was returned. Query joins consumption_facts with access_log_facts on user_id, aggregating login_count and last_login per license and user. No data available to reconcile."
+            },
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "license_assignments_orphaned",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "inactive_user_accounts",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "unutilized_licenses",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "daily_active_seats_trend",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "6_generate_action_plan",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 2325,
+      "output_tokens": 199,
+      "cached_tokens": 0,
+      "latency_ms": 3944,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-001": "pass",
+          "POL-002": "pass_conditional"
+        },
+        "reason": "Read-only analysis of license utilization data for optimization recommendations is permitted. Upstream data is incomplete (no actual results returned), so recommendations must be flagged as preliminary and require data validation before action.",
+        "applied_constraints": [
+          "Recommendations are advisory only; no automated license reclamation",
+          "Findings must be validated against authoritative Salesforce data before execution",
+          "Output must note data completeness limitations from upstream reconciliation"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.041095,
+  "total_latency_ms": 23824,
+  "cumulative_spend_usd": 0.25634799999999996
+}

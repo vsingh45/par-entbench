@@ -1,0 +1,39 @@
+{
+  "task_id": "SQL-004",
+  "task_class": "sql_gen",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_gen_top_publishers",
+        "description": "Generate SQL query to identify the top 3 publishers by total spend in fiscal year 2024. Query should aggregate spend by publisher, filter for FY2024, order by total spend descending, and limit to top 3.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This is a straightforward single-table aggregation query: GROUP BY publisher, SUM(spend), filter by fiscal year 2024, ORDER BY descending, LIMIT 3. No complex joins, CTEs, or window functions required. Small tier is sufficient for this simple metric query."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_gen_top_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 724,
+      "output_tokens": 105,
+      "cached_tokens": 0,
+      "latency_ms": 1664,
+      "output": {
+        "sql": "SELECT publisher, SUM(amount_usd) AS total_spend FROM consumption_facts WHERE event_date >= '2024-01-01' AND event_date < '2025-01-01' GROUP BY publisher ORDER BY total_spend DESC LIMIT 3"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.0062450000000000006,
+  "total_latency_ms": 1664,
+  "cumulative_spend_usd": 0.03505
+}

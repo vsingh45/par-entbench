@@ -1,0 +1,72 @@
+{
+  "task_id": "SQLC-001",
+  "task_class": "sql_compose",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top5_publishers",
+        "description": "Generate SQL query to fetch top 5 publishers by spend in Q4 2024 (Oct-Dec), with total spend, transaction count, and spend trend indicators",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_risk_analysis",
+        "description": "Reconcile Q4 spend data with historical publisher performance patterns to classify at-risk status (e.g., declining spend, payment delays, contract expiry risk) and generate SAM team summary with specific risk flags and remediation recommendations",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_top5_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen at mid-tier for the Q4 spend query requiring multi-table joins and window functions to rank publishers and compute trends; (2) cross_recon at mid-tier to reconcile the SQL results with historical state/patterns to identify at-risk signals and deliver the SAM summary. Kept to minimum: the risk classification and recommendation generation are part of cross_recon's reconciliation output, not separate policy_action. Mid-tier for both because sql_gen needs trend calculation and cross_recon needs multi-signal reasoning (spend patterns, contracts, payment health)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top5_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 489,
+      "output_tokens": 345,
+      "cached_tokens": 0,
+      "latency_ms": 2254,
+      "output": {
+        "sql": "SELECT publisher, SUM(amount_usd) AS total_spend, COUNT(*) AS transaction_count, ROUND(SUM(amount_usd)::NUMERIC / NULLIF(COUNT(*), 0), 2) AS avg_spend_per_transaction, CASE WHEN SUM(CASE WHEN event_date >= '2024-10-01' AND event_date <= '2024-10-31' THEN amount_usd ELSE 0 END) > SUM(CASE WHEN event_date >= '2024-11-01' AND event_date <= '2024-11-30' THEN amount_usd ELSE 0 END) THEN 'declining' WHEN SUM(CASE WHEN event_date >= '2024-10-01' AND event_date <= '2024-10-31' THEN amount_usd ELSE 0 END) < SUM(CASE WHEN event_date >= '2024-11-01' AND event_date <= '2024-11-30' THEN amount_usd ELSE 0 END) THEN 'growing' ELSE 'stable' END AS spend_trend FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date <= '2024-12-31' AND fiscal_quarter = 4 AND fiscal_year = 2024 GROUP BY publisher ORDER BY total_spend DESC LIMIT 5"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_risk_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 948,
+      "output_tokens": 596,
+      "cached_tokens": 0,
+      "latency_ms": 6594,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sql_query_only",
+            "mongo_value": null,
+            "sql_value": "SELECT publisher, SUM(amount_usd) AS total_spend, COUNT(*) AS transaction_count, ROUND(SUM(amount_usd)::NUMERIC / NULLIF(COUNT(*), 0), 2) AS avg_spend_per_transaction, CASE WHEN SUM(CASE WHEN event_date >= '2024-10-01' AND event_date <= '2024-10-31' THEN amount_usd ELSE 0 END) > SUM(CASE WHEN event_date >= '2024-11-01' AND event_date <= '2024-11-30' THEN amount_usd ELSE 0 END) THEN 'declining' WHEN SUM(CASE WHEN event_date >= '2024-10-01' AND event_date <= '2024-10-31' THEN amount_usd ELSE 0 END) < SUM(CASE WHEN event_date >= '2024-11-01' AND event_date <= '2024-11-30' THEN amount_usd ELSE 0 END) THEN 'growing' ELSE 'stable' END AS spend_trend FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date <= '2024-12-31' AND fiscal_quarter = 4 AND fiscal_year = 2024 GROUP BY publisher ORDER BY total_spend DESC LIMIT 5",
+            "classification": "no_mongo_data_available"
+          }
+        ],
+        "notes": "No MongoDB operational data provided in upstream_outputs; only SQL query definition available. Reconciliation requires executed SQL result rows and MongoDB publisher state to classify at-risk status per publisher."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.021854000000000002,
+  "total_latency_ms": 8848,
+  "cumulative_spend_usd": 0.5097109999999999,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

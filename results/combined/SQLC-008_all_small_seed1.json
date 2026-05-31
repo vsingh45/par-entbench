@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "all_small",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "budget_analysis_sql",
+        "description": "Query budget allocation by product category and calculate cost trends (YoY growth, variance from budget, spend velocity). Return aggregated spend by category, trend metrics, and historical comparison.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reallocation_strategy",
+        "description": "Analyze budget allocation results and cost trends to classify categories by performance (overbudget/underbudget/optimal). Generate reallocation recommendations based on trend analysis, category priority, and cost efficiency metrics.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "budget_analysis_sql"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks minimum: (1) sql_gen (mid-tier) because the analysis requires multi-table joins across budget, spend, and category dimensions with aggregation and trend calculation (YoY growth, variance); (2) cross_recon (mid-tier) to reconcile actual spend against budget targets and classify categories for reallocation strategy\u2014this is reconciliation and recommendation generation, not a policy decision. Both tasks are mid-complexity: the SQL requires aggregation and window functions for trends but no extreme complexity; the reallocation logic involves multi-signal analysis (spend patterns, trends, category priority) but not deep policy interactions. No additional subtasks needed: extraction, policy checks, or multi-tool orchestration are not required."
+  },
+  "node_results": [
+    {
+      "subtask_id": "budget_analysis_sql",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 468,
+      "output_tokens": 173,
+      "cached_tokens": 0,
+      "latency_ms": 1667,
+      "output": {
+        "sql": "SELECT product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS total_spend, COUNT(DISTINCT event_id) AS transaction_count, AVG(amount_usd) AS avg_transaction, MAX(event_date) AS latest_date, ROUND(100.0 * SUM(amount_usd) / SUM(SUM(amount_usd)) OVER (PARTITION BY fiscal_year), 2) AS pct_of_year_spend FROM consumption_facts WHERE event_date >= '2023-01-01' GROUP BY product, fiscal_year, fiscal_quarter ORDER BY fiscal_year DESC, fiscal_quarter DESC, total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reallocation_strategy",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 437,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 6769,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"product_budget_allocation\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"query_type\": \"budget_analysis\",\n        \"grouping\": [\"product\", \"fiscal_year\", \"fiscal_quarter\"],\n        \"metrics\": [\"total_spend\", \"transaction_count\", \"avg_transaction\", \"latest_date\", \"pct_of_year_spend\"],\n        \"data_source\": \"consumption_facts\",\n        \"time_range\": \"2023-01-01_onwards\",\n        \"sort_order\": [\"fiscal_year_desc\", \"fiscal_quarter_desc\", \"total_spend_desc\"]\n      },\n      \"classification\": \"no_recent_activity\",\n      \"note\": \"MongoDB operational state not provided - SQL historical data available for reconciliation\"\n    },\n    {\n      \"entity_key\": \"spend_efficiency_metric\",\n      \"mongo_value\": null,\n      \"sql_value\": \"pct_of_year_spend_calculated_via_window_function\",\n      \"classification\": \"stable\",\n      \"analysis\": \"Year-over-year spend distribution tracked via rolling partition\"\n    },\n    {\n      \"entity_key\": \"transaction_cost_trend\",\n      \"mongo_value\": null,\n      \"sql_value\": \"avg_transaction_amount_tracked_by_quarter\",\n      \"classification\": \"hold\",\n      \"analysis\": \"Historical cost per transaction available; recommend comparing Q-over-Q deltas\"\n    },\n    {\n      \"entity_key\": \"category_recency\",\n      \"mongo_value\": null,\n      \"sql_value\": \"latest_date_per_product_captured\",\n      \"classification\": \"stable\",\n      \"analysis\": \"Max event_date provides last activity indicator per product\"\n    }\n  ],\n  \"reallocation_recommendations\": [\n    {\n      \"recommendation_id\": \"R001\",\n      \"strategy\": \"identify_overbudget_categories\",\n      \"method\": \"Compare pct_of_year_spend against budgeted allocation thresholds; flag products exceeding allocated percentage\",\n      \"priority\": \"high\"\n    },\n    {\n      \"recommendation_id\": \"R002\",\n      \"strategy\": \"cost_efficiency_analysis\",\n      \"method\": \"Rank products by avg_transaction and transaction_count; identify high-volume low-cost vs low-volume high-cost categories\",\n      \"priority\": \"high\"\n    },\n    {\n      \"recommendation_id\": \"R003\",\n      \"strategy\": \"trending_analysis\",\n      \"method\": \"Calculate Q-over-Q spend growth rates; classify as expanding (reallocate upward), declining (reduce allocation), or stable (hold)\",\n      \"priority\": \"medium\"\n    },\n    {\n      \"recommendation_id\": \"R004\",\n      \"strategy\": \"recency_based_prioritization\",\n      \"method\": \"Products with recent activity (latest_date within 30 days) warrant continued investment; inactive products (>90 days) eligible for reallocation\",\n      \"priority\": \"medium\"\n    },\n    {\n      \"recommendation_id\": \"R005\",\n      \"strategy\": \"reallocation_matrix\",\n      \"action_items\": [\n        \"EXPAND: High pct_of_year_spend + recent activity + increasing avg_transaction\",\n        \""
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.00577,
+  "total_latency_ms": 8436,
+  "cumulative_spend_usd": 1.5772560000000009,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

@@ -1,0 +1,71 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "task_1_budget_sql",
+        "description": "Query budget allocation data by product category with cost trends (current and historical periods). Return total allocated, spent, variance, and trend metrics (YoY/QoQ growth rates) for each category.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "task_2_reallocation_recon",
+        "description": "Analyze budget allocation results to identify underutilized and overallocated categories. Apply cost-efficiency metrics and trend analysis to recommend reallocation strategy, including priority ranking, move magnitude, and risk assessment for each recommended shift.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "task_1_budget_sql"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks minimum: (1) sql_gen (mid-tier) for the budget query because it requires multi-table joins across budget allocations and historical spend data with trend calculations (YoY/QoQ), warranting mid-complexity SQL; (2) cross_recon (mid-tier) to synthesize allocation metrics with trend analysis and generate classification of categories plus reallocation recommendations. The cross_recon task includes recommendation generation as part of its reconciliation scope, so no separate policy_action is needed. Using mid-tier for both because the budget analysis involves multiple dimensions and the reallocation strategy requires reasoned trade-off analysis, but neither rises to frontier complexity without multi-signal reconciliation across completely disparate systems."
+  },
+  "node_results": [
+    {
+      "subtask_id": "task_1_budget_sql",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 473,
+      "output_tokens": 767,
+      "cached_tokens": 0,
+      "latency_ms": 3921,
+      "output": {
+        "sql": "SELECT cf.product, SUM(CASE WHEN cf.event_date >= '2024-01-01' AND cf.event_date < '2025-01-01' THEN cf.amount_usd ELSE 0 END) AS current_year_spent, SUM(CASE WHEN cf.event_date >= '2023-01-01' AND cf.event_date < '2024-01-01' THEN cf.amount_usd ELSE 0 END) AS prior_year_spent, SUM(CASE WHEN cf.event_date >= '2024-01-01' AND cf.event_date < '2025-01-01' THEN cf.amount_usd ELSE 0 END) - SUM(CASE WHEN cf.event_date >= '2023-01-01' AND cf.event_date < '2024-01-01' THEN cf.amount_usd ELSE 0 END) AS yoy_variance, ROUND(((SUM(CASE WHEN cf.event_date >= '2024-01-01' AND cf.event_date < '2025-01-01' THEN cf.amount_usd ELSE 0 END) - SUM(CASE WHEN cf.event_date >= '2023-01-01' AND cf.event_date < '2024-01-01' THEN cf.amount_usd ELSE 0 END)) / NULLIF(SUM(CASE WHEN cf.event_date >= '2023-01-01' AND cf.event_date < '2024-01-01' THEN cf.amount_usd ELSE 0 END), 0) * 100)::NUMERIC, 2) AS yoy_growth_pct, SUM(CASE WHEN cf.event_date >= '2024-10-01' AND cf.event_date < '2025-01-01' THEN cf.amount_usd ELSE 0 END) AS q4_current_spent, SUM(CASE WHEN cf.event_date >= '2023-10-01' AND cf.event_date < '2024-01-01' THEN cf.amount_usd ELSE 0 END) AS q4_prior_spent, ROUND(((SUM(CASE WHEN cf.event_date >= '2024-10-01' AND cf.event_date < '2025-01-01' THEN cf.amount_usd ELSE 0 END) - SUM(CASE WHEN cf.event_date >= '2023-10-01' AND cf.event_date < '2024-01-01' THEN cf.amount_usd ELSE 0 END)) / NULLIF(SUM(CASE WHEN cf.event_date >= '2023-10-01' AND cf.event_date < '2024-01-01' THEN cf.amount_usd ELSE 0 END), 0) * 100)::NUMERIC, 2) AS qoq_growth_pct FROM consumption_facts cf WHERE cf.amount_usd > 0 GROUP BY cf.product ORDER BY current_year_spent DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_2_reallocation_recon",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1433,
+      "output_tokens": 113,
+      "cached_tokens": 0,
+      "latency_ms": 2604,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "product",
+            "mongo_value": null,
+            "sql_value": "current_year_spent, prior_year_spent, yoy_variance, yoy_growth_pct, q4_current_spent, q4_prior_spent, qoq_growth_pct",
+            "classification": "no_mongo_source_available"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.014298000000000002,
+  "total_latency_ms": 6525,
+  "cumulative_spend_usd": 1.615539000000001,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

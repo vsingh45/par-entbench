@@ -1,0 +1,87 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "par_lite",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "iam_granted_perms",
+        "description": "Query IAM repository (SQL) to fetch all roles with elevated permissions and their full permission set (granted permissions)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "iam_exercised_perms",
+        "description": "Query access/audit logs (SQL) to extract actually exercised permissions by each IAM role in the last 180 days",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_flag",
+        "description": "Reconcile granted permissions against exercised permissions; identify granted-but-never-used permissions; classify roles by revocation candidacy and generate flagged report",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "iam_granted_perms",
+          "iam_exercised_perms"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: (1) sql_gen (mid) queries the IAM repository for granted permissions\u2014multi-table join of role/policy tables with filtering for elevated permissions. (2) sql_gen (mid) queries audit logs for exercised permissions over 180 days\u2014aggregation and grouping by role/action. (3) cross_recon (frontier) reconciles two data sources (granted vs. exercised), performs set-difference logic to identify unused permissions, and classifies revocation candidates\u2014this is high-complexity reconciliation requiring signal synthesis and risk assessment, justifying frontier tier. The plan is minimal: no separate policy_action subtask is needed because the flagging is part of the reconciliation output; no multitool_plan is required as this is a bounded data query workflow."
+  },
+  "node_results": [
+    {
+      "subtask_id": "iam_granted_perms",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 478,
+      "output_tokens": 467,
+      "cached_tokens": 0,
+      "latency_ms": 7068,
+      "output": {
+        "sql": "SELECT\n    al_granted.permission AS granted_permission,\n    al_granted.user_id AS iam_role,\n    COUNT(al_granted.log_id) AS total_grants,\n    SUM(CASE WHEN al_used.log_id IS NOT NULL THEN 1 ELSE 0 END) AS times_exercised_last_180_days,\n    SUM(CASE WHEN al_used.log_id IS NULL THEN 1 ELSE 0 END) AS times_never_used,\n    CASE\n        WHEN SUM(CASE WHEN al_used.log_id IS NOT NULL THEN 1 ELSE 0 END) = 0\n        THEN 'CANDIDATE_FOR_REVOCATION'\n        ELSE 'IN_USE'\n    END AS revocation_flag,\n    MAX(al_used.access_time) AS last_used_timestamp\nFROM access_log_facts al_granted\nLEFT JOIN access_log_facts al_used\n    ON al_granted.user_id = al_used.user_id\n    AND al_granted.permission = al_used.permission\n    AND al_used.result = 'ALLOW'\n    AND al_used.access_time >= NOW() - INTERVAL '180 days'\nWHERE al_granted.permission IN (\n    'admin',\n    'write',\n    'delete',\n    'superuser',\n    'root',\n    'elevated',\n    'privileged',\n    'sudo',\n    'manage',\n    'modify'\n)\nGROUP BY\n    al_granted.user_id,\n    al_granted.permission\nORDER BY\n    revocation_flag DESC,\n    al_granted.user_id,\n    al_granted.permission"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "iam_exercised_perms",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 482,
+      "output_tokens": 473,
+      "cached_tokens": 0,
+      "latency_ms": 6881,
+      "output": {
+        "sql": "SELECT\n    a.permission AS granted_permission,\n    a.user_id AS iam_role,\n    COUNT(CASE WHEN b.result = 'ALLOW' AND b.access_time >= NOW() - INTERVAL '180 days' THEN 1 END) AS times_exercised,\n    MAX(CASE WHEN b.result = 'ALLOW' AND b.access_time >= NOW() - INTERVAL '180 days' THEN b.access_time END) AS last_used,\n    CASE\n        WHEN COUNT(CASE WHEN b.result = 'ALLOW' AND b.access_time >= NOW() - INTERVAL '180 days' THEN 1 END) = 0\n        THEN 'CANDIDATE_FOR_REVOCATION'\n        ELSE 'IN_USE'\n    END AS revocation_flag\nFROM (\n    SELECT DISTINCT user_id, permission\n    FROM access_log_facts\n    WHERE permission IN (\n        SELECT DISTINCT permission\n        FROM access_log_facts\n        WHERE permission ILIKE '%admin%'\n           OR permission ILIKE '%write%'\n           OR permission ILIKE '%delete%'\n           OR permission ILIKE '%create%'\n           OR permission ILIKE '%modify%'\n           OR permission ILIKE '%root%'\n           OR permission ILIKE '%superuser%'\n           OR permission ILIKE '%elevated%'\n    )\n) a\nLEFT JOIN access_log_facts b\n    ON a.user_id = b.user_id\n    AND a.permission = b.permission\n    AND b.access_time >= NOW() - INTERVAL '180 days'\nGROUP BY\n    a.user_id,\n    a.permission\nORDER BY\n    revocation_flag DESC,\n    a.user_id,\n    a.permission"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_flag",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1739,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 1014,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.026025000000000003,
+  "total_latency_ms": 14963,
+  "cumulative_spend_usd": 3.2036530000000027,
+  "evaluator_reason": "no_mongo_node"
+}

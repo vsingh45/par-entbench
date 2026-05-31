@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-005",
+  "task_class": "sql_gen",
+  "router": "frugal_cascade",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_cost_per_seat",
+        "description": "Query SaaS/subscription database to calculate average cost per active seat by product for Q4 2024 (Oct-Dec 2024), sorted descending by cost per seat. Group by product and aggregate seat counts and costs.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single subtask (sql_gen, mid tier) is sufficient. This is a straightforward aggregation query requiring multi-table joins (products, seats/licenses, costs) with grouping and sorting\u2014typical mid-tier SQL complexity. No reconciliation from multiple sources is needed, and no policy evaluation is requested. The frontier tier is not needed because this does not require complex window functions or CTEs beyond basic aggregation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_cost_per_seat",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 484,
+      "output_tokens": 165,
+      "cached_tokens": 0,
+      "latency_ms": 1814,
+      "output": {
+        "sql": "SELECT cf.product, SUM(cf.amount_usd) as total_cost_usd, SUM(cf.daily_active_seats) as total_active_seats, ROUND(SUM(cf.amount_usd)::NUMERIC / NULLIF(SUM(cf.daily_active_seats), 0), 2) as avg_cost_per_seat FROM consumption_facts cf WHERE cf.event_date >= '2024-10-01' AND cf.event_date <= '2024-12-31' AND cf.fiscal_quarter = 4 GROUP BY cf.product ORDER BY avg_cost_per_seat DESC"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001309,
+  "total_latency_ms": 1814,
+  "cumulative_spend_usd": 0.141244,
+  "evaluator_reason": "result_bag_mismatch"
+}

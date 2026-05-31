@@ -1,0 +1,51 @@
+{
+  "task_id": "PAC-005",
+  "task_class": "policy_action",
+  "router": "sink_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_pii_export",
+        "description": "Evaluate bulk PII export request against data governance and privacy policies. Determine if the analyst has appropriate access control, data minimization justification, and compliance clearance for exporting customer names, emails, and phone numbers.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This request requires a policy_action subtask because the query explicitly asks for bulk PII export, which triggers mandatory governance, compliance, and access control evaluation. A single mid-tier specialist is sufficient because: (1) the policy check involves standard data protection rules (PII classification, access control, data minimization), (2) a single policy evaluation can assess the requestor's authorization and compliance standing, and (3) no database query should execute until the policy decision is rendered. Mid tier (Sonnet) is appropriate to handle multi-policy reasoning (GDPR/CCPA compliance, internal access controls, purpose limitation, data retention) and to formulate a compliance recommendation rather than a simple yes/no check."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_pii_export",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 773,
+      "output_tokens": 252,
+      "cached_tokens": 0,
+      "latency_ms": 3538,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-501": "fail",
+          "POL-502": "fail",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "Bulk PII export lacks required Legal/CISO approvals (POL-501) and violates data minimization since no business-critical justification is provided for exporting sensitive attributes (POL-502). POL-503 can be satisfied via audit logging and retention controls if export is later approved.",
+        "applied_constraints": [
+          "Obtain explicit privacy approval from Legal",
+          "Obtain CISO sign-off",
+          "Provide business-critical justification for sensitive attributes or reduce scope to non-sensitive fields",
+          "Enable audit logging and enforce 30-day retention if approved"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.010165,
+  "total_latency_ms": 3538,
+  "cumulative_spend_usd": 8.434528000000002
+}

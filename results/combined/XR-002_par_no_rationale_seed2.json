@@ -1,0 +1,226 @@
+{
+  "task_id": "XR-002",
+  "task_class": "cross_recon",
+  "router": "par_no_rationale",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "retrieve_contracts",
+        "description": "Retrieve all active billing contracts with contracted annual values",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "retrieve_invoices",
+        "description": "Retrieve all invoices issued in 2024 with amounts and associated contract IDs",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "aggregate_invoices",
+        "description": "Aggregate 2024 invoice amounts by contract to calculate total actual billed amount",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": [
+          "retrieve_invoices"
+        ]
+      },
+      {
+        "id": "variance_analysis",
+        "description": "Calculate variance between contracted annual value and actual 2024 invoiced amounts, identify contracts with >10% variance",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "retrieve_contracts",
+          "aggregate_invoices"
+        ]
+      },
+      {
+        "id": "flag_and_report",
+        "description": "Flag contracts with material variance (>10%) and prepare reconciliation report with details on discrepancies",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": [
+          "variance_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Small tier agents handle straightforward data retrieval (SQL queries for contracts and invoices). Mid tier handles variance calculation logic and cross-reconciliation, which requires moderate complexity. Policy_action tier flags discrepancies and prepares final report since it requires judgement on materiality thresholds and remediation steps."
+  },
+  "node_results": [
+    {
+      "subtask_id": "retrieve_contracts",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 457,
+      "output_tokens": 446,
+      "cached_tokens": 0,
+      "latency_ms": 3115,
+      "output": {
+        "sql": "SELECT c.contract_id, c.vendor_name, c.contracted_annual_value, COALESCE(SUM(i.amount_usd), 0) as actual_invoiced_2024, ROUND(100.0 * (COALESCE(SUM(i.amount_usd), 0) - COALESCE(c.contracted_annual_value, 0)) / NULLIF(c.contracted_annual_value, 0), 2) as variance_percent, CASE WHEN ABS(100.0 * (COALESCE(SUM(i.amount_usd), 0) - COALESCE(c.contracted_annual_value, 0)) / NULLIF(c.contracted_annual_value, 0)) > 10 THEN 'FLAGGED' ELSE 'OK' END as variance_flag FROM (SELECT invoice_id, contract_id, vendor_name, amount_usd, 0 as contracted_annual_value FROM invoice_facts WHERE status IN ('active', 'current') AND invoice_date >= '2024-01-01' AND invoice_date < '2025-01-01' UNION ALL SELECT NULL, contract_id, vendor_name, 0, amount_usd FROM (SELECT DISTINCT contract_id, vendor_name, amount_usd FROM invoice_facts WHERE status IN ('active', 'current')) t GROUP BY contract_id, vendor_name, amount_usd) c LEFT JOIN invoice_facts i ON c.contract_id = i.contract_id AND i.invoice_date >= '2024-01-01' AND i.invoice_date < '2025-01-01' AND i.status IN ('paid', 'active') GROUP BY c.contract_id, c.vendor_name, c.contracted_annual_value ORDER BY variance_percent DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "retrieve_invoices",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 465,
+      "output_tokens": 96,
+      "cached_tokens": 0,
+      "latency_ms": 1447,
+      "output": {
+        "sql": "SELECT i.invoice_id, i.contract_id, i.vendor_name, i.invoice_date, i.amount_usd, i.status FROM invoice_facts i WHERE i.invoice_date >= '2024-01-01' AND i.invoice_date < '2025-01-01' ORDER BY i.contract_id, i.invoice_date"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "aggregate_invoices",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1311,
+      "output_tokens": 444,
+      "cached_tokens": 0,
+      "latency_ms": 2564,
+      "output": {
+        "collection": "billing_contracts",
+        "pipeline": [
+          {
+            "$match": {
+              "status": "active"
+            }
+          },
+          {
+            "$lookup": {
+              "from": "sam_seat_assignments",
+              "localField": "contract_id",
+              "foreignField": "license_id",
+              "as": "invoice_records"
+            }
+          },
+          {
+            "$addFields": {
+              "contract_annual_value": "$annual_value_usd",
+              "material_variance_threshold": {
+                "$multiply": [
+                  "$annual_value_usd",
+                  0.1
+                ]
+              }
+            }
+          },
+          {
+            "$group": {
+              "_id": "$contract_id",
+              "vendor_name": {
+                "$first": "$vendor_name"
+              },
+              "contract_annual_value": {
+                "$first": "$contract_annual_value"
+              },
+              "material_variance_threshold": {
+                "$first": "$material_variance_threshold"
+              },
+              "term_months": {
+                "$first": "$term_months"
+              },
+              "payment_terms_days": {
+                "$first": "$payment_terms_days"
+              },
+              "early_payment_discount_pct": {
+                "$first": "$early_payment_discount_pct"
+              }
+            }
+          },
+          {
+            "$addFields": {
+              "variance_flag": {
+                "$cond": [
+                  {
+                    "$gt": [
+                      {
+                        "$abs": {
+                          "$subtract": [
+                            "$actual_billed_amount",
+                            "$contract_annual_value"
+                          ]
+                        }
+                      },
+                      "$material_variance_threshold"
+                    ]
+                  },
+                  "MATERIAL_VARIANCE",
+                  "OK"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "variance_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1018,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9166,
+      "output": {
+        "raw_output": "{\"reconciled\": [{\"entity_key\": \"C-1001\", \"mongo_value\": {\"vendor_name\": \"Adobe Inc.\", \"contract_annual_value\": 120000, \"material_variance_threshold\": 12000, \"term_months\": 12, \"payment_terms_days\": 30, \"early_payment_discount_pct\": 2.0, \"variance_flag\": \"OK\"}, \"sql_value\": {\"contracted_annual_value\": 120000, \"actual_invoiced_2024\": 118500, \"variance_percent\": -1.25, \"variance_flag\": \"OK\"}, \"classification\": \"stable\"}, {\"entity_key\": \"C-1002\", \"mongo_value\": {\"vendor_name\": \"Salesforce\", \"contract_annual_value\": 250000, \"material_variance_threshold\": 25000, \"term_months\": 24, \"payment_terms_days\": 45, \"early_payment_discount_pct\": 1.5, \"variance_flag\": \"MATERIAL_VARIANCE\"}, \"sql_value\": {\"contracted_annual_value\": 250000, \"actual_invoiced_2024\": 310000, \"variance_percent\": 24.0, \"variance_flag\": \"FLAGGED\"}, \"classification\": \"at_risk\"}, {\"entity_key\": \"C-1003\", \"mongo_value\": {\"vendor_name\": \"Microsoft\", \"contract_annual_value\": 500000, \"material_variance_threshold\": 50000, \"term_months\": 36, \"payment_terms_days\": 60, \"early_payment_discount_pct\": 3.0, \"variance_flag\": \"OK\"}, \"sql_value\": {\"contracted_annual_value\": 500000, \"actual_invoiced_2024\": 495000, \"variance_percent\": -1.0, \"variance_flag\": \"OK\"}, \"classification\": \"stable\"}, {\"entity_key\": \"C-1004\", \"mongo_value\": {\"vendor_name\": \"ServiceNow\", \"contract_annual_value\": 180000, \"material_variance_threshold\": 18000, \"term_months\": 12, \"payment_terms_days\": 30, \"early_payment_discount_pct\": 0.0, \"variance_flag\": \"MATERIAL_VARIANCE\"}, \"sql_value\": {\"contracted_annual_value\": 180000, \"actual_invoiced_2024\": 145000, \"variance_percent\": -19.44, \"variance_flag\": \"FLAGGED\"}, \"classification\": \"at_risk\"}, {\"entity_key\": \"C-1005\", \"mongo_value\": {\"vendor_name\": \"Workday\", \"contract_annual_value\": 320000, \"material_variance_threshold\": 32000, \"term_months\": 24, \"payment_terms_days\": 45, \"early_payment_discount_pct\": 2.5, \"variance_flag\": \"OK\"}, \"sql_value\": {\"contracted_annual_value\": 320000, \"actual_invoiced_2024\": 327500, \"variance_percent\": 2.34, \"variance_flag\": \"OK\"}, \"classification\": \"stable\"}, {\"entity_key\": \"C-1006\", \"mongo_value\": {\"vendor_name\": \"Okta\", \"contract_annual_value\": 95000, \"material_variance_threshold\": 9500, \"term_months\":"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "flag_and_report",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1291,
+      "output_tokens": 654,
+      "cached_tokens": 0,
+      "latency_ms": 13049,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-001": "pass",
+          "POL-002": "pass_conditional",
+          "POL-003": "pass",
+          "POL-004": "pass_conditional",
+          "POL-005": "not_applicable",
+          "POL-006": "pass",
+          "POL-007": "pending_review"
+        },
+        "reason": "Variance analysis and reconciliation report preparation is permitted. Two contracts (C-1002: Salesforce at +24.0%, C-1004: ServiceNow at -19.44%) exceed the 10% material variance threshold and must be flagged. The upstream data for C-1006 (Okta) appears truncated/incomplete and requires human review before inclusion in the final reconciliation report. Financial reporting constraints apply: outputs must be audit-logged, flagged contracts must be escalated to contract management, and the incomplete C-1006 record must not be reported as reconciled.",
+        "applied_constraints": [
+          "FLAGGED_CONTRACTS: C-1002 (Salesforce, +24.0% variance, $60,000 over-invoiced) and C-1004 (ServiceNow, -19.44% variance, $35,000 under-invoiced) must be formally flagged and escalated to contract management and finance stakeholders",
+          "INCOMPLETE_DATA_HOLD: C-1006 (Okta) upstream data is truncated; this record must be excluded from the reconciliation report and flagged as 'data_incomplete' pending re-query or manual review",
+          "AUDIT_LOG_REQUIRED: All reconciliation outputs and flagged variance decisions must be written to the audit log with timestamps, user identity, and data sources referenced",
+          "STABLE_CONTRACTS: C-1001 (Adobe, -1.25%), C-1003 (Microsoft, -1.0%), and C-1005 (Workday, +2.34%) are classified as stable and within acceptable variance thresholds; no escalation required",
+          "REPORT_DISTRIBUTION: Final reconciliation report containing contract financial data must be distributed only to authorized finance and procurement personnel; PII/vendor-sensitive fields must be access-controlled",
+          "VARIANCE_METHODOLOGY: Material variance threshold applied is >10% of contracted annual value, consistent with per-contract thresholds stored in source data (e.g., C-1002 threshold: $25,000; C-1004 threshold: $18,000)",
+          "HUMAN_REVIEW_TRIGGER: C-1006 record incompleteness must be reviewed by a human operator before the reconciliation report is marked complete or submitted to downstream systems"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0359,
+  "total_latency_ms": 29341,
+  "cumulative_spend_usd": 2.7444470000000014,
+  "evaluator_reason": "stage1_mongo_fail: doc_bag_mismatch"
+}

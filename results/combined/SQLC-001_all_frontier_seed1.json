@@ -1,0 +1,72 @@
+{
+  "task_id": "SQLC-001",
+  "task_class": "sql_compose",
+  "router": "all_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top_publishers",
+        "description": "Generate SQL query to fetch top 5 publishers by spend in Q4 2024 (Oct-Dec 2024), including spend amount, transaction count, and trend indicators",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_risk_assessment",
+        "description": "Analyze top 5 publishers from SQL results to classify at-risk status based on spend patterns, volatility, contract status, and renewal dates. Generate SAM team summary with risk rankings and recommendations",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_top_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Split into 2 subtasks: (1) sql_gen (mid) for a moderate-complexity aggregation query joining spend/transaction data filtered to Q4 2024 with ranking\u2014a single query handles all 5 publishers and metrics in one call. (2) cross_recon (mid) to reconcile the SQL output with risk indicators (volatility, renewal dates, contract health) and classify at-risk status; classification and SAM summary generation are part of reconciliation, not a separate policy step. Both mid-tier because the SQL involves time-windowed aggregation and the risk assessment requires multi-signal analysis, but neither needs frontier-level reasoning."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 742,
+      "output_tokens": 159,
+      "cached_tokens": 0,
+      "latency_ms": 2782,
+      "output": {
+        "sql": "SELECT publisher, SUM(amount_usd) AS total_spend, COUNT(*) AS transaction_count, SUM(daily_active_seats) AS total_seats, AVG(amount_usd) AS avg_transaction FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date <= '2024-12-31' GROUP BY publisher ORDER BY total_spend DESC LIMIT 5"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_risk_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 620,
+      "output_tokens": 268,
+      "cached_tokens": 0,
+      "latency_ms": 3620,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sql_query_generated",
+            "mongo_value": null,
+            "sql_value": "SELECT publisher, SUM(amount_usd) AS total_spend, COUNT(*) AS transaction_count, SUM(daily_active_seats) AS total_seats, AVG(amount_usd) AS avg_transaction FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date <= '2024-12-31' GROUP BY publisher ORDER BY total_spend DESC LIMIT 5",
+            "classification": "no_recent_activity"
+          }
+        ],
+        "note": "No MongoDB operational data or SQL result rows provided; only the SQL query string was supplied. Reconciliation requires actual publisher records from both sources to classify at-risk status."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.017485,
+  "total_latency_ms": 6402,
+  "cumulative_spend_usd": 0.4443459999999999,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

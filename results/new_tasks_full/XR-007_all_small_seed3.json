@@ -1,0 +1,128 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "retrieve_aws_contracts",
+        "description": "Query the contracts database to retrieve AWS commitment contract details including commitment levels, contract terms, start/end dates, and any renewal or modification terms.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "retrieve_aws_spend",
+        "description": "Query the billing/spend database to retrieve actual AWS spend data, aggregated by month or period, matched to contract terms.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_commit_vs_spend",
+        "description": "Reconcile contract commitment levels with actual spend data to calculate utilization rates, identify overcommitment (spend below commitment), underutilization (unused capacity), and generate posture classification and recommendations.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "retrieve_aws_contracts",
+          "retrieve_aws_spend"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) retrieve AWS contract commitments (sql_gen, small) - straightforward single-table query of contract terms; (2) retrieve actual spend data (sql_gen, small) - straightforward aggregation from billing table; (3) reconcile and classify (cross_recon, mid) - requires comparing two sources, calculating utilization metrics, and generating actionable posture recommendations (overcommitted vs underutilized). The cross_recon tier is mid because it involves multi-signal comparison (commitments vs actuals over time periods), variance analysis, and classification logic, but does not require complex inference or multi-collection joins. Two independent sql_gen calls run in parallel; cross_recon depends on both results."
+  },
+  "node_results": [
+    {
+      "subtask_id": "retrieve_aws_contracts",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 462,
+      "output_tokens": 70,
+      "cached_tokens": 0,
+      "latency_ms": 980,
+      "output": {
+        "sql": "SELECT invoice_id, contract_id, vendor_name, invoice_date, due_date, paid_date, amount_usd, status FROM invoice_facts WHERE vendor_name ILIKE '%AWS%' ORDER BY invoice_date DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "retrieve_aws_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 458,
+      "output_tokens": 141,
+      "cached_tokens": 0,
+      "latency_ms": 1414,
+      "output": {
+        "sql": "SELECT DATE_TRUNC('month', invoice_facts.invoice_date)::DATE AS period, vendor_name, SUM(invoice_facts.amount_usd) AS actual_spend, COUNT(DISTINCT invoice_facts.contract_id) AS contract_count FROM invoice_facts WHERE vendor_name ILIKE '%AWS%' AND invoice_facts.invoice_date >= '2024-01-01' GROUP BY DATE_TRUNC('month', invoice_facts.invoice_date)::DATE, vendor_name ORDER BY period DESC, vendor_name"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_commit_vs_spend",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 472,
+      "output_tokens": 446,
+      "cached_tokens": 0,
+      "latency_ms": 3469,
+      "output": {
+        "error": "insufficient_data",
+        "message": "Cannot reconcile without actual query results",
+        "expected_inputs": {
+          "mongodb_operational_state": "contract commitment data with commitment_level, period, contract_id fields",
+          "sql_historical_data": "actual spend data from retrieve_aws_spend and retrieve_aws_contracts queries"
+        },
+        "requirements": {
+          "mongodb_required_fields": [
+            "contract_id",
+            "vendor_name",
+            "commitment_level_usd",
+            "period",
+            "status"
+          ],
+          "sql_required_fields": [
+            "contract_id",
+            "vendor_name",
+            "actual_spend",
+            "period",
+            "invoice_count"
+          ]
+        },
+        "reconciliation_template": {
+          "reconciled": [
+            {
+              "entity_key": "contract_id|period",
+              "commitment_level": "from_mongodb",
+              "actual_spend": "from_sql",
+              "utilization_rate": "actual_spend / commitment_level * 100",
+              "variance_usd": "actual_spend - commitment_level",
+              "classification": "overcommitted|underutilized|optimal|at_risk|no_recent_activity",
+              "recommendation": "string based on classification"
+            }
+          ]
+        },
+        "classification_logic": {
+          "overcommitted": "actual_spend < commitment_level * 0.75",
+          "underutilized": "actual_spend < commitment_level * 0.85",
+          "optimal": "actual_spend between commitment_level * 0.85 and 1.0",
+          "at_risk": "actual_spend > commitment_level * 1.1",
+          "no_recent_activity": "null sql_value or zero actual_spend"
+        },
+        "status": "awaiting_source_data"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.004677000000000001,
+  "total_latency_ms": 5863,
+  "cumulative_spend_usd": 4.283374000000002
+}

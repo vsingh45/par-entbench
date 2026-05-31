@@ -1,0 +1,85 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "par_lite",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_metrics",
+        "description": "Generate SQL query to compute current month spend, 3-month average spend, variance percentage, and spend delta. Return results grouped by cost center or vendor with all metrics needed for anomaly classification.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "classify_anomalies",
+        "description": "Classify spend anomalies based on variance percentage thresholds: normal_variance (±10%), concerning (10-25%), or critical (>25%). Return classified results with rationale.",
+        "specialist": "cross_recon",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen at mid tier — requires multi-month aggregation with window functions to compute 3-month rolling average alongside current month spend, necessitating moderate SQL complexity. (2) cross_recon at small tier — classification logic is straightforward threshold-based decision-making applied to the SQL output; no actual reconciliation of multiple sources is needed, but cross_recon is the appropriate agent for post-query analysis and classification. This is the minimum decomposition: the SQL handles all data retrieval in one call, and classification is a single downstream decision step. No policy_action needed (classification is not a governance decision). No multitool_plan needed (no enterprise tools invoked)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_metrics",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 486,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9049,
+      "output": {
+        "raw_output": "{\"sql\": \"SELECT\\n  vendor_name,\\n  current_month_spend,\\n  avg_3month_spend,\\n  spend_delta,\\n  CASE\\n    WHEN avg_3month_spend = 0 THEN NULL\\n    ELSE ROUND(((current_month_spend - avg_3month_spend) / avg_3month_spend) * 100, 2)\\n  END AS variance_pct,\\n  CASE\\n    WHEN avg_3month_spend = 0 THEN 'insufficient_data'\\n    WHEN ABS((current_month_spend - avg_3month_spend) / avg_3month_spend) <= 0.10 THEN 'normal_variance'\\n    WHEN ABS((current_month_spend - avg_3month_spend) / avg_3month_spend) <= 0.25 THEN 'concerning'\\n    ELSE 'critical'\\n  END AS anomaly_classification\\nFROM (\\n  SELECT\\n    vendor_name,\\n    SUM(CASE\\n          WHEN invoice_date >= DATE_TRUNC('month', CURRENT_DATE)\\n           AND invoice_date < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'\\n          THEN amount_usd\\n          ELSE 0\\n        END) AS current_month_spend,\\n    SUM(CASE\\n          WHEN invoice_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months'\\n           AND invoice_date < DATE_TRUNC('month', CURRENT_DATE)\\n          THEN amount_usd\\n          ELSE 0\\n        END) / NULLIF(\\n          COUNT(DISTINCT CASE\\n            WHEN invoice_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months'\\n             AND invoice_date < DATE_TRUNC('month', CURRENT_DATE)\\n            THEN DATE_TRUNC('month', invoice_date)\\n          END), 0\\n        ) AS avg_3month_spend,\\n    SUM(CASE\\n          WHEN invoice_date >= DATE_TRUNC('month', CURRENT_DATE)\\n           AND invoice_date < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'\\n          THEN amount_usd\\n          ELSE 0\\n        END) -\\n    SUM(CASE\\n          WHEN invoice_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months'\\n           AND invoice_date < DATE_TRUNC('month', CURRENT_DATE)\\n          THEN amount_usd\\n          ELSE 0\\n        END) / NULLIF(\\n          COUNT(DISTINCT CASE\\n            WHEN invoice_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months'\\n             AND invoice_date < DATE_TRUNC('month', CURRENT_DATE)\\n            THEN DATE_TRUNC('month', invoice_date)\\n          END), 0\\n        ) AS spend_delta\\n  FROM invoice_facts\\n  WHERE\\n    invoice_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months'\\n"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "classify_anomalies",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 286,
+      "output_tokens": 305,
+      "cached_tokens": 0,
+      "latency_ms": 2565,
+      "output": {
+        "reconciled": [],
+        "error": "Insufficient input data",
+        "details": {
+          "missing_mongodb_data": "No operational spend data provided",
+          "missing_sql_data": "No historical 3-month average baseline provided",
+          "required_fields": [
+            "entity_key",
+            "current_month_spend",
+            "three_month_average",
+            "variance_percentage"
+          ],
+          "classification_thresholds": {
+            "normal_variance": "variance >= -10% AND variance <= +10%",
+            "concerning": "variance > 10% AND variance <= 25% OR variance < -10% AND variance >= -25%",
+            "critical": "variance > 25% OR variance < -25%"
+          },
+          "expected_output_format": {
+            "entity_key": "identifier from MongoDB",
+            "current_month_spend": "numeric value from MongoDB",
+            "three_month_average": "numeric value from SQL historical data",
+            "variance_percentage": "calculated ((current - average) / average) * 100",
+            "classification": "normal_variance | concerning | critical",
+            "rationale": "explanation of classification based on variance threshold"
+          }
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.015269000000000001,
+  "total_latency_ms": 11614,
+  "cumulative_spend_usd": 1.165472
+}

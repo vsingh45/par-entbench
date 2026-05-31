@@ -1,0 +1,68 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "budget_sql",
+        "description": "Query budget allocation by product category with cost trends (month-over-month or period-over-period). Calculate total spend per category, trends, and growth rates.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reallocation_analysis",
+        "description": "Analyze budget allocation results and generate reallocation strategy recommendations based on cost trends, efficiency metrics, and spending patterns across categories. Include prioritization and proposed budget shifts.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Two subtasks are the minimum: (1) sql_gen (mid tier) to extract budget and cost trend data from the transactional warehouse with multi-period aggregation and category grouping—moderate complexity requiring joins and window functions for trend analysis; (2) cross_recon (mid tier) to synthesize the budget data into strategic recommendations, comparing actual spend against implicit baselines, and proposing reallocation priorities. Both are mid-tier because they require moderate analytical depth but not frontier-level inference or multi-CTE complexity. No policy_action is added because the query asks for strategic recommendation, not compliance approval. No additional extract is needed because budget data comes from SQL, not unstructured documents."
+  },
+  "node_results": [
+    {
+      "subtask_id": "budget_sql",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 466,
+      "output_tokens": 404,
+      "cached_tokens": 0,
+      "latency_ms": 5721,
+      "output": {
+        "sql": "SELECT product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS total_spend, LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter) AS prev_period_spend, SUM(amount_usd) - LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter) AS period_over_period_change, CASE WHEN LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter) IS NULL OR LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter) = 0 THEN NULL ELSE ROUND(100.0 * (SUM(amount_usd) - LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter)) / LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter), 2) END AS growth_rate_pct, SUM(SUM(amount_usd)) OVER (PARTITION BY fiscal_year, fiscal_quarter) AS total_spend_all_categories, ROUND(100.0 * SUM(amount_usd) / NULLIF(SUM(SUM(amount_usd)) OVER (PARTITION BY fiscal_year, fiscal_quarter), 0), 2) AS pct_of_total_spend FROM consumption_facts WHERE amount_usd IS NOT NULL GROUP BY product, fiscal_year, fiscal_quarter ORDER BY fiscal_year, fiscal_quarter, total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reallocation_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 264,
+      "output_tokens": 50,
+      "cached_tokens": 0,
+      "latency_ms": 2491,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "no_data_available",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009000000000000001,
+  "total_latency_ms": 8212,
+  "cumulative_spend_usd": 1.4484570000000008
+}

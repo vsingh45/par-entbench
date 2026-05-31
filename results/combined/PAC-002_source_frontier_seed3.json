@@ -1,0 +1,51 @@
+{
+  "task_id": "PAC-002",
+  "task_class": "policy_action",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_hotfix",
+        "description": "Evaluate the hotfix deployment request against change management and maintenance window policies. Check if engineer u_7732 has authorization to deploy outside the approved maintenance window, and assess compliance with the change control policy for the prod-us-east-1 environment.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask at mid tier. The query explicitly requests a governance decision (policy evaluation) regarding an out-of-window production deployment. This requires checking multiple policy dimensions: (1) engineer authorization level, (2) maintenance window rules, (3) change control approval requirements, and (4) environment-specific constraints. Mid tier is appropriate for multi-clause policy reasoning. No additional subtasks needed because the query does not request data gathering from multiple distinct sources\u2014it is asking directly for a compliance evaluation against the policy registry. The policy agent will return the determination (approve/deny/escalate) with rationale."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_hotfix",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 809,
+      "output_tokens": 253,
+      "cached_tokens": 0,
+      "latency_ms": 3625,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-401": "fail",
+          "POL-402": "fail",
+          "POL-403": "fail"
+        },
+        "reason": "Engineer u_7732 holds 'engineer' role (below senior-engineer requirement per POL-401), and deployment is attempted Tuesday 02:15 UTC, outside approved maintenance window (Sat 10PM\u2013Sun 6AM UTC per POL-403) without CAB approval (POL-402).",
+        "applied_constraints": [
+          "Require role elevation to senior-engineer or higher",
+          "Obtain CAB approval for out-of-window deployment",
+          "Or defer deployment to next approved maintenance window (Sat 22:00 - Sun 06:00 UTC)"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01037,
+  "total_latency_ms": 3625,
+  "cumulative_spend_usd": 4.943245000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

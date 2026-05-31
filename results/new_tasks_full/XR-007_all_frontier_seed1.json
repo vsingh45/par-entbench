@@ -1,0 +1,71 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "router": "all_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_analysis",
+        "description": "Query AWS spend database to retrieve contracted commit levels (Reserved Instances, Savings Plans) and actual monthly spend by service/region. Calculate utilization ratios, variance from commitments, and identify periods of overcommitment or underutilization.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_commitment_posture",
+        "description": "Reconcile contracted commitments against actual spend patterns. Classify each commitment as (1) well-utilized, (2) underutilized, (3) overcommitted, or (4) approaching expiration. Generate recommendations for rebalancing, rightsizing, or renewal decisions.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_spend_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks are sufficient and necessary: (1) A single sql_gen subtask (mid tier) retrieves and aggregates both commitment levels and actual spend data from the AWS warehouse—this requires joins across commitment and spend tables with window functions to calculate utilization metrics, but does not require frontier complexity. (2) A cross_recon subtask (mid tier) takes the SQL results and performs reconciliation against the AWS commitment registry, classifying posture and generating recommendations. No multitool_plan is needed because the query does not request tool orchestration beyond data retrieval. No policy_action is needed because the user asks for identification and classification, not formal governance approval. The plan minimizes subtasks by combining all spend metrics into one sql_gen call rather than splitting by service or region."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 746,
+      "output_tokens": 608,
+      "cached_tokens": 0,
+      "latency_ms": 6939,
+      "output": {
+        "sql": "WITH aws_commits AS (SELECT contract_id, vendor_name, DATE_TRUNC('month', invoice_date) AS commit_month, SUM(amount_usd) AS committed_amount_usd FROM invoice_facts WHERE vendor_name ILIKE '%AWS%' OR vendor_name ILIKE '%Amazon Web Services%' GROUP BY contract_id, vendor_name, DATE_TRUNC('month', invoice_date)), aws_actuals AS (SELECT product AS service, DATE_TRUNC('month', event_date) AS spend_month, SUM(amount_usd) AS actual_spend_usd FROM consumption_facts WHERE publisher ILIKE '%AWS%' OR publisher ILIKE '%Amazon%' GROUP BY product, DATE_TRUNC('month', event_date)) SELECT c.vendor_name, c.commit_month, a.service, c.committed_amount_usd, a.actual_spend_usd, ROUND((a.actual_spend_usd / NULLIF(c.committed_amount_usd, 0)) * 100, 2) AS utilization_pct, (a.actual_spend_usd - c.committed_amount_usd) AS variance_usd, CASE WHEN a.actual_spend_usd > c.committed_amount_usd THEN 'OVERCOMMITMENT' WHEN a.actual_spend_usd < c.committed_amount_usd * 0.8 THEN 'UNDERUTILIZATION' ELSE 'OPTIMAL' END AS status FROM aws_commits c LEFT JOIN aws_actuals a ON c.commit_month = a.spend_month ORDER BY c.commit_month DESC, variance_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_commitment_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1074,
+      "output_tokens": 154,
+      "cached_tokens": 0,
+      "latency_ms": 3406,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sql_only_no_mongo_source",
+            "mongo_value": null,
+            "sql_value": "AWS commitment vs actuals analysis",
+            "classification": "insufficient_data_no_mongo_primary"
+          }
+        ],
+        "_note": "No MongoDB operational source was provided in upstream_outputs; only SQL spend analysis query was supplied. LEFT JOIN reconciliation with MongoDB as primary is not possible."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.02815,
+  "total_latency_ms": 10345,
+  "cumulative_spend_usd": 4.223631000000002
+}

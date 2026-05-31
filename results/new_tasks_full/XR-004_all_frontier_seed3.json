@@ -1,0 +1,108 @@
+{
+  "task_id": "XR-004",
+  "task_class": "cross_recon",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sam_licensed_users",
+        "description": "Query SAM database for Microsoft licensed users (SKU-level breakdown) including user count, license type, and acquisition date",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "consumption_active_users",
+        "description": "Query consumption facts warehouse for active Microsoft users (by product/service) including active user count, usage metrics, and consumption period",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_provision",
+        "description": "Reconcile licensed users from SAM against active users from consumption facts. Calculate variance (over/under-provisioning), group by product/license type, and classify posture (excess capacity, right-sized, under-capacity). Generate prioritized recommendations for license rebalancing",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sam_licensed_users",
+          "consumption_active_users"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: Two independent SQL queries (sam_licensed_users, consumption_active_users) are both simple, single-source extractions assigned to small tier. The third subtask (cross_recon) is assigned mid tier because it requires comparing two data sources, computing variance, grouping, classification logic (over/under-provisioning posture), and generating recommendations — all within a single reconciliation pass. This avoids unnecessary task splitting: SAM and consumption queries are separate because they hit different systems, but all downstream reconciliation (variance calc, classification, recommendations) is unified in cross_recon rather than split into multiple subtasks."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sam_licensed_users",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 721,
+      "output_tokens": 168,
+      "cached_tokens": 0,
+      "latency_ms": 2319,
+      "output": {
+        "sql": "SELECT product AS sku, COUNT(DISTINCT user_id) AS active_users, SUM(daily_active_seats) AS total_seats, SUM(amount_usd) AS total_spend, MIN(event_date) AS first_seen, MAX(event_date) AS last_seen FROM consumption_facts WHERE publisher = 'Microsoft' AND event_date >= '2024-01-01' GROUP BY product ORDER BY total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "consumption_active_users",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 722,
+      "output_tokens": 170,
+      "cached_tokens": 0,
+      "latency_ms": 2077,
+      "output": {
+        "sql": "SELECT product, COUNT(DISTINCT user_id) AS active_users, SUM(daily_active_seats) AS total_active_seats, SUM(amount_usd) AS total_spend_usd, MIN(event_date) AS period_start, MAX(event_date) AS period_end FROM consumption_facts WHERE publisher = 'Microsoft' AND event_date >= '2024-01-01' GROUP BY product ORDER BY total_spend_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_provision",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 822,
+      "output_tokens": 290,
+      "cached_tokens": 0,
+      "latency_ms": 4662,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "unknown_sku",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "insufficient_data",
+            "note": "No upstream rows provided; cannot compute variance between SAM licensed users and consumption active users."
+          }
+        ],
+        "recommendations": [
+          {
+            "priority": 1,
+            "action": "Execute provided SQL queries to materialize sam_licensed_users and consumption_active_users datasets before reconciliation."
+          },
+          {
+            "priority": 2,
+            "action": "Once data is available, join on sku/product and compute variance = licensed_users - active_users; classify >20% surplus as 'excess_capacity', within ±10% as 'right_sized', and <-10% as 'under_capacity'."
+          },
+          {
+            "priority": 3,
+            "action": "Prioritize rebalancing for SKUs with highest total_spend and largest absolute variance to maximize cost recovery."
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.027025,
+  "total_latency_ms": 9058,
+  "cumulative_spend_usd": 2.549638
+}

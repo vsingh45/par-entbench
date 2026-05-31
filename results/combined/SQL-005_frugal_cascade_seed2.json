@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-005",
+  "task_class": "sql_gen",
+  "router": "frugal_cascade",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_1",
+        "description": "Query warehouse for Q4 2024 SaaS contracts with product codes, seat counts, and costs. Calculate average cost per active seat by product, sorted descending.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single SQL query with aggregation and sorting. This is a multi-table join likely involving contracts, products, and cost/seat data with GROUP BY and ORDER BY operations. Mid-tier handles multi-table aggregation reliably. No cross-source reconciliation needed\u2014single data warehouse query. One subtask avoids unnecessary fragmentation; all metrics and sorting are computed in a single SQL call."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 471,
+      "output_tokens": 103,
+      "cached_tokens": 0,
+      "latency_ms": 4483,
+      "output": {
+        "sql": "SELECT product, ROUND(AVG(amount_usd / NULLIF(daily_active_seats, 0)), 2) AS avg_cost_per_seat, COUNT(*) AS event_count FROM consumption_facts WHERE fiscal_year = 2024 AND fiscal_quarter = 4 AND daily_active_seats > 0 GROUP BY product ORDER BY avg_cost_per_seat DESC"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.000986,
+  "total_latency_ms": 4483,
+  "cumulative_spend_usd": 0.14223,
+  "evaluator_reason": "result_bag_mismatch"
+}

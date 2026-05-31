@@ -1,0 +1,123 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "par_lite",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check",
+        "description": "Evaluate contractor's access request against data governance and least-privilege policies. Assess whether temporary access grants authority to download full database backups, verify compliance with data protection regulations (GDPR, CCPA), and determine if local analysis requirement conflicts with data residency or security policies.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "access_control",
+        "description": "Cross-reference contractor's current access scope (temporary access grants) with the requested action (full customer database download). Identify role-based access control (RBAC) violations and determine whether the request should be denied, requires approval, or needs access elevation.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "policy_check"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) policy_action to evaluate governance rules around contractor access, data protection, and export restrictions\u2014this is a governance decision requiring policy registry evaluation; (2) cross_recon to reconcile contractor's current access grants (from identity system) with the requested action and policy outcome to make a final access control determination. Both mid-tier because they require multi-policy reasoning and multi-signal assessment (roles + policies + regulations). The access control decision depends on policy evaluation, so cross_recon follows policy_action."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 530,
+      "output_tokens": 543,
+      "cached_tokens": 0,
+      "latency_ms": 11373,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "Contractor 'contractor-dave' is denied download of 'production_backup.tar.gz' on multiple grounds: (1) POL-701 restricts database backup access exclusively to full-time employees with DBA role \u2014 contractors are categorically excluded; (2) POL-702 explicitly prohibits contractors from accessing raw data exports, limiting them only to de-identified query results; (3) POL-703 requires explicit project manager approval with 7-day advance notice before any contractor data access \u2014 no such approval record is present. Additionally, downloading a full customer database backup for local analysis raises serious GDPR (Art. 5, 25, 32) and CCPA compliance concerns including data minimization violations, uncontrolled data residency, and increased breach surface. The 'local analysis' use case does not override any of these controls. Recommended alternatives: redirect contractor to de-identified query interface, or initiate formal escalation/approval process with 7-day notice period.",
+        "applied_constraints": [
+          "DENY: Contractor role is categorically barred from production backup access per POL-701",
+          "DENY: Raw data export prohibited for contractors per POL-702; only de-identified query results permitted",
+          "DENY: No project manager approval on record and 7-day notice requirement not satisfied per POL-703",
+          "GDPR VIOLATION RISK: Full customer database download to local environment violates data minimization (Art. 5(1)(c)) and storage limitation principles",
+          "CCPA VIOLATION RISK: Uncontrolled transfer of customer PII to contractor local environment creates regulatory exposure",
+          "DATA RESIDENCY RISK: Local analysis requirement may violate data residency and sovereignty controls",
+          "ALTERNATIVE: Contractor may submit a formal access request through project manager with 7-day advance notice for scoped, de-identified data access",
+          "ALTERNATIVE: Redirect to de-identified query interface for analytical work within approved scope",
+          "AUDIT: This access attempt must be logged and flagged for security review"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "access_control",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 921,
+      "output_tokens": 463,
+      "cached_tokens": 0,
+      "latency_ms": 8600,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "contractor-dave::download::production_backup.tar.gz",
+            "mongo_value": {
+              "role": "contractor",
+              "access_scope": "temporary",
+              "resource_requested": "production_backup.tar.gz",
+              "action_requested": "download",
+              "approval_on_record": false,
+              "notice_period_satisfied": false
+            },
+            "sql_value": {
+              "POL-701": "fail",
+              "POL-702": "fail",
+              "POL-703": "fail",
+              "gdpr_risk": true,
+              "ccpa_risk": true,
+              "data_residency_risk": true,
+              "prior_approved_accesses": 0,
+              "pending_escalations": 0
+            },
+            "classification": "deny",
+            "rbac_violations": [
+              "POL-701: contractor role categorically excluded from production backup access reserved for full-time DBA employees",
+              "POL-702: raw data export prohibited for contractors; only de-identified query results permitted",
+              "POL-703: no project manager approval on record and 7-day advance notice requirement not satisfied"
+            ],
+            "regulatory_flags": [
+              "GDPR Art. 5(1)(c): data minimization violation \u2014 full database download exceeds minimum necessary scope",
+              "GDPR Art. 25: privacy by design principle violated by uncontrolled local data residency",
+              "GDPR Art. 32: increased breach surface from local analysis environment",
+              "CCPA: uncontrolled transfer of customer PII to contractor local environment creates regulatory exposure",
+              "DATA RESIDENCY: local analysis may breach data sovereignty controls"
+            ],
+            "decision": "deny_with_reason",
+            "recommended_alternatives": [
+              "redirect_to_query: contractor redirected to de-identified query interface for analytical work within approved scope",
+              "escalate_for_approval: contractor may initiate formal access request through project manager with 7-day advance notice for scoped, de-identified data only"
+            ],
+            "audit_required": true,
+            "audit_note": "Access attempt by contractor-dave must be logged and flagged for immediate security review"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.019443,
+  "total_latency_ms": 19973,
+  "cumulative_spend_usd": 8.825811000000005,
+  "evaluator_reason": "selected_action_mismatch"
+}

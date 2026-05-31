@@ -1,0 +1,40 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_analysis",
+        "description": "Query current month spend and 3-month rolling average by vendor/category. Calculate spend delta (absolute and percentage change) and classify anomalies as normal_variance, concerning, or critical based on deviation thresholds.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single SQL subtask using window functions (LAG/AVG OVER) to compute 3-month rolling average and variance metrics in one pass. Assigned mid tier because: (1) requires multi-row window aggregation; (2) includes conditional classification logic (CASE statement for anomaly tier); (3) likely involves joins across spend and vendor/category dimensions. This is more complex than a simple query but does not require cross-source reconciliation or multi-CTE exploration, so frontier is not needed. No cross_recon required\u2014all data is from single spend warehouse. No additional subtasks because classification is embedded in the SQL SELECT, not a separate downstream step."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 745,
+      "output_tokens": 582,
+      "cached_tokens": 0,
+      "latency_ms": 6378,
+      "output": {
+        "sql": "WITH monthly_spend AS (SELECT vendor_name, DATE_TRUNC('month', invoice_date) AS month, SUM(amount_usd) AS spend FROM invoice_facts WHERE invoice_date >= '2023-01-01' GROUP BY vendor_name, DATE_TRUNC('month', invoice_date)), with_avg AS (SELECT vendor_name, month, spend, AVG(spend) OVER (PARTITION BY vendor_name ORDER BY month ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING) AS rolling_3mo_avg FROM monthly_spend) SELECT vendor_name, month, spend AS current_spend, rolling_3mo_avg, (spend - rolling_3mo_avg) AS spend_delta_abs, CASE WHEN rolling_3mo_avg > 0 THEN ((spend - rolling_3mo_avg) / rolling_3mo_avg) * 100 ELSE NULL END AS spend_delta_pct, CASE WHEN rolling_3mo_avg IS NULL OR rolling_3mo_avg = 0 THEN 'normal_variance' WHEN ABS((spend - rolling_3mo_avg) / rolling_3mo_avg) >= 0.50 THEN 'critical' WHEN ABS((spend - rolling_3mo_avg) / rolling_3mo_avg) >= 0.25 THEN 'concerning' ELSE 'normal_variance' END AS anomaly_classification FROM with_avg WHERE rolling_3mo_avg IS NOT NULL ORDER BY month DESC, vendor_name"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.018275,
+  "total_latency_ms": 6378,
+  "cumulative_spend_usd": 1.094888,
+  "evaluator_reason": "no_consumer_node"
+}

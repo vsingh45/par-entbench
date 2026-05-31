@@ -1,0 +1,40 @@
+{
+  "task_id": "MGO-003",
+  "task_class": "mongo_gen",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "adobe_inactive_seats_sql",
+        "description": "Query the license and seat activity database to compute, for each Adobe license, the count of assigned seats inactive for >90 days. Include seats with NULL activity dates as inactive. Join license records with seat assignments and activity history, filter by Adobe product, calculate days since last activity, and count seats meeting the 90-day threshold grouped by license.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single SQL query task, no cross-source reconciliation needed. Requires multi-table join (licenses, seat assignments, activity history) with date calculations and aggregation\u2014mid tier justified. One subtask satisfies the requirement; no unnecessary decomposition.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "adobe_inactive_seats_sql",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 784,
+      "output_tokens": 173,
+      "cached_tokens": 0,
+      "latency_ms": 2368,
+      "output": {
+        "sql": "SELECT license_id, COUNT(DISTINCT user_id) AS inactive_seats FROM consumption_facts WHERE publisher = 'Adobe' AND user_id IN (SELECT user_id FROM consumption_facts WHERE publisher = 'Adobe' GROUP BY user_id HAVING MAX(event_date) IS NULL OR MAX(event_date) < CURRENT_DATE - INTERVAL '90 days') GROUP BY license_id"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.008245,
+  "total_latency_ms": 2368,
+  "cumulative_spend_usd": 1.6124180000000008,
+  "evaluator_reason": "no_pipeline_in_output"
+}

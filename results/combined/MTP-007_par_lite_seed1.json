@@ -1,0 +1,138 @@
+{
+  "task_id": "MTP-007",
+  "task_class": "multitool_plan",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "cloudtrail_audit",
+        "description": "Query CloudTrail logs to extract security-relevant events (failed auth attempts, privilege escalations, policy changes, suspicious API calls) with timestamps and principals",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "iam_policy_scan",
+        "description": "Extract IAM policy documents to identify overly permissive policies, wildcards in actions/resources, unused roles, and cross-account access risks",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "violation_detection",
+        "description": "Reconcile CloudTrail events and IAM policies against security baseline: detect policy violations (unauthorized actions, suspicious patterns), assess risk posture, classify findings by severity, and identify remediation actions",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "cloudtrail_audit",
+          "iam_policy_scan"
+        ]
+      },
+      {
+        "id": "compliance_report",
+        "description": "Evaluate detected violations against security and compliance policy registry (SOC2, CIS, company policy) and generate compliance assessment with policy violations, remediation requirements, and approval status",
+        "specialist": "policy_action",
+        "tier": "frontier",
+        "depends_on": [
+          "violation_detection"
+        ]
+      }
+    ],
+    "cost_rationale": "This security audit requires 4 subtasks in strict dependency order. CloudTrail audit and IAM scan (1 & 2) run in parallel as independent data collection tasks\u2014CloudTrail requires mid-tier SQL to aggregate log events by severity and action type; IAM policy extraction is mid-tier to identify multiple risk patterns in one pass. Violation detection (3, frontier) must follow both data sources and is high-complexity because it requires cross-source reconciliation, multi-signal risk classification, and pattern matching against a security baseline. Compliance report (4, frontier) depends on violation results and involves policy mapping, exception reasoning, and governance approval logic. This is the minimum decomposition\u2014combining audit+scan into one subtask would lose parallelization; combining violation detection with compliance into cross_recon alone would skip mandatory policy evaluation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "cloudtrail_audit",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 473,
+      "output_tokens": 155,
+      "cached_tokens": 0,
+      "latency_ms": 3371,
+      "output": {
+        "sql": "SELECT log_id, user_id, permission, resource, access_time, action, result FROM access_log_facts WHERE result = 'DENY' OR action IN ('DELETE', 'MODIFY', 'ESCALATE', 'OVERRIDE') OR permission IN ('admin', 'root', 'superuser', 'sudo', 'iam:*', 'sts:AssumeRole', 'iam:PutUserPolicy', 'iam:AttachUserPolicy', 'iam:CreateUser', 'iam:DeletePolicy', 'iam:UpdateAssumeRolePolicy') ORDER BY access_time DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "iam_policy_scan",
+      "specialist": "extract",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 252,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 11339,
+      "output": {
+        "raw_output": "{\n  \"security_audit_workflow\": {\n    \"workflow_name\": \"IAM Security Audit & Compliance Report\",\n    \"audit_timestamp\": null,\n    \"audited_account_id\": null,\n    \"audited_region\": null,\n    \"iam_policy_scan\": {\n      \"overly_permissive_policies\": null,\n      \"wildcard_actions_detected\": null,\n      \"wildcard_resources_detected\": null,\n      \"admin_equivalent_policies\": null,\n      \"inline_policies_found\": null,\n      \"managed_policies_found\": null,\n      \"policies_with_notaction\": null,\n      \"policies_with_notresource\": null,\n      \"example_violations\": null\n    },\n    \"unused_roles_audit\": {\n      \"total_roles_scanned\": null,\n      \"unused_roles_count\": null,\n      \"unused_role_names\": null,\n      \"roles_never_used\": null,\n      \"stale_threshold_days\": null,\n      \"last_used_dates\": null\n    },\n    \"cross_account_access_risks\": {\n      \"cross_account_trust_policies_found\": null,\n      \"external_account_ids_referenced\": null,\n      \"roles_with_external_principals\": null,\n      \"confused_deputy_risks\": null,\n      \"wildcard_principal_policies\": null,\n      \"sts_assume_role_risks\": null\n    },\n    \"cloudtrail_audit\": {\n      \"cloudtrail_enabled\": null,\n      \"log_file_validation_enabled\": null,\n      \"multi_region_trail\": null,\n      \"s3_bucket_name\": null,\n      \"kms_encryption_enabled\": null,\n      \"cloudwatch_logs_integration\": null,\n      \"suspicious_api_calls_detected\": null,\n      \"root_account_usage_detected\": null,\n      \"failed_login_attempts\": null,\n      \"policy_change_events\": null,\n      \"privilege_escalation_attempts\": null,\n      \"audit_period_start\": null,\n      \"audit_period_end\": null\n    },\n    \"policy_violations\": {\n      \"total_violations_found\": null,\n      \"critical_violations\": null,\n      \"high_violations\": null,\n      \"medium_violations\": null,\n      \"low_violations\": null,\n      \"violation_details\": null,\n      \"cis_benchmark_failures\": null,\n      \"aws_security_best_practice_failures\": null,\n      \"nist_control_failures\": null,\n      \"pci_dss_failures\": null,\n      \"sox_failures\": null\n    },\n    \"compliance_report\": {\n      \"overall_compliance_score\": null,\n      \"compliance_frameworks_checked\": null,\n      \"passed_controls\": null,\n      \"failed_controls\": null,\n      \"exceptions_noted\": null,\n      \"remediation_recommendations\": null,\n      \"priority_remediation_items\": null,\n      \"estimated_remediation_effort\": null,\n      \"report_generated_by\": null,\n      \"report_version\": null,\n      \"next_audit_date\": null\n    },\n    \"data_sources_used\": {\n      \"iam_policy_documents_provided\": false,\n      \"cloudtrail_"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "violation_detection",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1892,
+      "output_tokens": 109,
+      "cached_tokens": 0,
+      "latency_ms": 2396,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "iam_policy_scan",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "cloudtrail_audit",
+            "mongo_value": null,
+            "sql_value": [],
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "compliance_report",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 699,
+      "output_tokens": 368,
+      "cached_tokens": 0,
+      "latency_ms": 6152,
+      "output": {
+        "selected_action": "escalate",
+        "policy_compliance": {
+          "SOC2-CC6.1": "pending_review",
+          "SOC2-CC7.2": "pending_review",
+          "CIS-1.1": "pending_review",
+          "CIS-3.1": "pending_review",
+          "COMPANY-SEC-001": "pending_review"
+        },
+        "reason": "Upstream violation detection returned null/empty results for both IAM policy scan and CloudTrail audit, classified as 'no_recent_activity'. Cannot confirm whether absence of data reflects true compliance or a failed/incomplete scan. Audit evidence is insufficient to assert pass/fail against SOC2 logging (CC7.2), access control (CC6.1), or CIS benchmarks. Escalation required to re-run scans and validate data source integrity before issuing a compliance determination.",
+        "applied_constraints": [
+          "Re-execute IAM policy scan and CloudTrail audit with verified data sources",
+          "Validate scanner connectivity and permissions before re-assessment",
+          "Hold compliance report issuance pending complete evidence",
+          "Notify security operations of inconclusive audit run"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.04138,
+  "total_latency_ms": 23258,
+  "cumulative_spend_usd": 7.871656000000002,
+  "evaluator_reason": "no_plan_in_output"
+}

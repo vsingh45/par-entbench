@@ -1,0 +1,54 @@
+{
+  "task_id": "PAC-005",
+  "task_class": "policy_action",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_pii_export",
+        "description": "Evaluate the bulk PII export request against data governance and compliance policies. Assess whether the analyst has appropriate authorization, whether the use case meets compliance thresholds, and whether data masking, anonymization, or restricted access controls should be applied. Determine if the export is permitted or requires escalation.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This is a governance and compliance question, not a data retrieval task. The analyst is requesting bulk export of sensitive PII (names, emails, phone numbers), which triggers mandatory policy evaluation. A policy_action subtask (mid tier) is required to assess authorization, data protection obligations, and governance controls. Mid tier is appropriate because PII export evaluation typically involves multiple policy considerations (data protection regulations, role-based access, anonymization requirements, audit logging). No sql_gen subtask is included because the policy decision must occur BEFORE any data extraction is authorized. The plan size is minimal (1 subtask) because this is a governance gate, not a data analytics pipeline."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_pii_export",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 542,
+      "output_tokens": 258,
+      "cached_tokens": 0,
+      "latency_ms": 2757,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-501": "fail",
+          "POL-502": "fail",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "Bulk PII export denied. POL-501 requires explicit Legal and CISO approval which has not been obtained. POL-502 requires data minimization\u2014bulk export of names, emails, and phone numbers without demonstrated business-critical justification violates this principle. POL-503 can be satisfied through audit logging and retention controls, but does not override upstream approval requirements.",
+        "applied_constraints": [
+          "Export blocked pending Legal approval",
+          "Export blocked pending CISO sign-off",
+          "Analyst must provide documented business justification for PII export necessity",
+          "If approved: mandatory audit logging of all access and export events",
+          "If approved: 30-day retention limit with automated purge",
+          "If approved: consider data masking or anonymization alternatives first"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001832,
+  "total_latency_ms": 2757,
+  "cumulative_spend_usd": 8.424363000000001,
+  "evaluator_reason": "selected_action_mismatch"
+}

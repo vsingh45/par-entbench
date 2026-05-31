@@ -1,0 +1,54 @@
+{
+  "task_id": "PAC-003",
+  "task_class": "policy_action",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_emergency_access",
+        "description": "Evaluate emergency access request from u_9981 (senior-engineer role) to db-payments-primary against incident response and access control policies. Verify: (1) user role qualifies for emergency escalation, (2) P1 incident classification justifies emergency access, (3) access duration and scope limits, (4) audit/approval requirements.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask (mid-tier) required because the query explicitly asks for policy evaluation and governance approval of emergency access. This is a multi-signal decision requiring: role qualification check, incident severity validation, policy exception reasoning, and conditional approval with constraints. Mid-tier (Sonnet) is appropriate because it involves multiple policy dimensions (access control + incident response) and conditional logic; Haiku would be insufficient for the nuance of emergency escalation rules and their interactions."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_emergency_access",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 581,
+      "output_tokens": 273,
+      "cached_tokens": 0,
+      "latency_ms": 3261,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-501": "pass",
+          "POL-502": "pass_conditional",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "Senior-engineer role with active P1 incident ticket (INC-20241215-0042) qualifies for emergency access to mission-critical database. P1 severity waives dual approval requirement per POL-502. Access granted with mandatory audit logging and 24-hour review per POL-503.",
+        "applied_constraints": [
+          "access_duration: 4 hours maximum (auto-revoke)",
+          "scope_limitation: read_write on db-payments-primary only",
+          "audit_requirement: all queries logged with timestamp and incident context",
+          "approval_requirement: manager notification within 1 hour of access grant",
+          "review_requirement: security team review within 24 hours post-incident",
+          "incident_ticket_validation: access tied to INC-20241215-0042, revoked if ticket closed"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0019460000000000002,
+  "total_latency_ms": 3261,
+  "cumulative_spend_usd": 5.084185000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

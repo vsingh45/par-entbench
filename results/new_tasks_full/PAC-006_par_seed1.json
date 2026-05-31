@@ -1,0 +1,57 @@
+{
+  "task_id": "PAC-006",
+  "task_class": "policy_action",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_deployment",
+        "description": "Evaluate the proposed Docker image rollout against deployment and change management policies. Check for required staging validation, approval chains, rollback procedures, and compliance requirements for production microservice changes.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This query explicitly requests policy evaluation of a proposed production deployment action against governance requirements. A single policy_action subtask at mid-tier is appropriate because it requires evaluating multiple policy dimensions (staging requirements, approval chains, change management compliance, rollback procedures) and will need to synthesize findings into a clear governance recommendation. No additional subtasks are needed—this is purely a policy compliance check with no data reconciliation or tool orchestration involved."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_deployment",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 517,
+      "output_tokens": 553,
+      "cached_tokens": 0,
+      "latency_ms": 10699,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-601": "fail",
+          "POL-602": "fail",
+          "POL-603": "pending_review"
+        },
+        "reason": "The proposed Docker image rollout to all production microservices is denied due to critical policy violations. POL-601 requires a minimum 48-hour staging validation period which has been explicitly bypassed. POL-602 requires change board approval and post-deployment monitoring setup, neither of which has been established. POL-603 compliance is unverifiable without a submitted rollout strategy document detailing automated rollback and traffic monitoring configurations. The combination of skipped staging, missing change board approval, and unconfirmed rollback readiness represents an unacceptable risk to production stability.",
+        "applied_constraints": [
+          "BLOCK: No staging validation period completed — minimum 48-hour staging run required per POL-601 before any production image rollout",
+          "BLOCK: Change board approval not obtained — formal change request must be submitted and approved per POL-602 prior to any infrastructure change in production",
+          "BLOCK: Post-deployment monitoring setup not confirmed — monitoring dashboards and alerting thresholds must be configured and verified before rollout per POL-602",
+          "BLOCK: Rollout strategy document absent — automated rollback capability (e.g., Helm rollback, ArgoCD sync policy, or kubectl rollout undo) and traffic monitoring plan must be submitted and reviewed per POL-603",
+          "REQUIRED_STEP_1: Deploy image changes to staging environment and maintain for minimum 48 hours with documented test results",
+          "REQUIRED_STEP_2: Submit change request to change board including staging validation report, rollout plan, and rollback procedure",
+          "REQUIRED_STEP_3: Obtain written change board approval before scheduling production rollout",
+          "REQUIRED_STEP_4: Configure and validate production monitoring and alerting for all affected microservices",
+          "REQUIRED_STEP_5: Confirm automated rollback triggers and runbooks are in place and tested",
+          "ESCALATION_NOTE: If an emergency rollout is required (e.g., critical security patch), ops-charlie must escalate to the change board for emergency approval with documented justification before proceeding"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009846,
+  "total_latency_ms": 10699,
+  "cumulative_spend_usd": 8.525902000000004
+}

@@ -1,0 +1,101 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_roles_perms",
+        "description": "Query IAM role repository to fetch all elevated IAM roles with their granted permissions (statement-level detail)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_exercised_perms",
+        "description": "Query audit/CloudTrail logs to extract actually exercised permissions by role in the last 180 days (action-level detail with timestamp)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_permissions",
+        "description": "Reconcile granted vs. exercised permissions: for each elevated role, identify permissions never exercised in 180 days, calculate utilization rate, and generate revocation candidates with confidence scores",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_roles_perms",
+          "sql_exercised_perms"
+        ]
+      }
+    ],
+    "cost_rationale": "Two mid-tier SQL queries needed: one to fetch granted permissions from the IAM role repository (moderate complexity due to nested permission structures and elevated role filtering), and one to extract exercised actions from audit logs over a 180-day window (moderate complexity due to time-range filtering and action normalization). The cross_recon step is frontier-tier because it must perform multi-signal reconciliation (matching granted IAM statements to exercised audit actions, which require semantic mapping), generate a confidence/safety assessment for revocation candidates, and apply decision logic (e.g., avoiding false positives when actions may be infrequently needed). This is not a simple diff; it requires inference about permission necessity and risk. Three subtasks is the minimum: two independent data sources, one reconciliation pass. No policy_action added because the query does not ask for governance approval\u2014just identification of candidates; governance would follow in a separate workflow."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_roles_perms",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 477,
+      "output_tokens": 536,
+      "cached_tokens": 0,
+      "latency_ms": 8589,
+      "output": {
+        "sql": "SELECT\n    granted.permission AS granted_permission,\n    granted.resource AS granted_resource,\n    granted.user_id,\n    COALESCE(used.times_used, 0) AS times_used_last_180_days,\n    CASE\n        WHEN used.times_used IS NULL OR used.times_used = 0 THEN 'CANDIDATE_FOR_REVOCATION'\n        ELSE 'IN_USE'\n    END AS revocation_flag,\n    granted.last_granted_time,\n    used.last_used_time\nFROM (\n    SELECT DISTINCT\n        user_id,\n        permission,\n        resource,\n        MAX(access_time) AS last_granted_time\n    FROM access_log_facts\n    WHERE action = 'GRANT'\n      AND result = 'SUCCESS'\n    GROUP BY user_id, permission, resource\n) AS granted\nLEFT JOIN (\n    SELECT\n        user_id,\n        permission,\n        resource,\n        COUNT(*) AS times_used,\n        MAX(access_time) AS last_used_time\n    FROM access_log_facts\n    WHERE action != 'GRANT'\n      AND result = 'SUCCESS'\n      AND access_time >= NOW() - INTERVAL '180 days'\n    GROUP BY user_id, permission, resource\n) AS used\n    ON granted.user_id = used.user_id\n   AND granted.permission = used.permission\n   AND granted.resource = used.resource\nWHERE granted.permission IN (\n    SELECT DISTINCT permission\n    FROM access_log_facts\n    WHERE permission ILIKE '%admin%'\n       OR permission ILIKE '%root%'\n       OR permission ILIKE '%superuser%'\n       OR permission ILIKE '%write%'\n       OR permission ILIKE '%delete%'\n       OR permission ILIKE '%elevated%'\n       OR permission ILIKE '%privileged%'\n)\nORDER BY\n    revocation_flag DESC,\n    granted.user_id,\n    granted.permission,\n    granted.resource"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_exercised_perms",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 485,
+      "output_tokens": 639,
+      "cached_tokens": 0,
+      "latency_ms": 8774,
+      "output": {
+        "sql": "SELECT\n    alf.permission,\n    alf.action,\n    alf.resource,\n    alf.result,\n    COUNT(*) AS usage_count,\n    MIN(alf.access_time) AS first_used,\n    MAX(alf.access_time) AS last_used,\n    COUNT(DISTINCT alf.user_id) AS distinct_users,\n    -- Flag permissions that appear granted (have log entries) but were never successfully exercised\n    SUM(CASE WHEN alf.result = 'ALLOW' THEN 1 ELSE 0 END) AS successful_uses,\n    SUM(CASE WHEN alf.result = 'DENY' THEN 1 ELSE 0 END) AS denied_uses,\n    CASE\n        WHEN SUM(CASE WHEN alf.result = 'ALLOW' THEN 1 ELSE 0 END) = 0\n        THEN 'CANDIDATE_FOR_REVOCATION'\n        ELSE 'IN_USE'\n    END AS revocation_flag\nFROM access_log_facts alf\nWHERE alf.access_time >= NOW() - INTERVAL '180 days'\nGROUP BY\n    alf.permission,\n    alf.action,\n    alf.resource,\n    alf.result\nUNION ALL\n-- Surface permissions that have ZERO activity in the last 180 days (no log entries at all)\nSELECT\n    alf_all.permission,\n    NULL AS action,\n    alf_all.resource,\n    'NO_ACTIVITY' AS result,\n    0 AS usage_count,\n    NULL AS first_used,\n    NULL AS last_used,\n    0 AS distinct_users,\n    0 AS successful_uses,\n    0 AS denied_uses,\n    'CANDIDATE_FOR_REVOCATION' AS revocation_flag\nFROM (\n    SELECT DISTINCT permission, resource\n    FROM access_log_facts\n    WHERE access_time < NOW() - INTERVAL '180 days'\n) alf_all\nWHERE NOT EXISTS (\n    SELECT 1\n    FROM access_log_facts recent\n    WHERE recent.permission = alf_all.permission\n      AND recent.resource = alf_all.resource\n      AND recent.access_time >= NOW() - INTERVAL '180 days'\n)\nORDER BY revocation_flag DESC, permission, action, resource"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_permissions",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 2092,
+      "output_tokens": 208,
+      "cached_tokens": 0,
+      "latency_ms": 4114,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sql_roles_perms",
+            "mongo_value": null,
+            "sql_value": "granted vs used permissions per user",
+            "classification": "sql_only_no_mongo_source"
+          },
+          {
+            "entity_key": "sql_exercised_perms",
+            "mongo_value": null,
+            "sql_value": "exercised permission aggregates with revocation flags",
+            "classification": "sql_only_no_mongo_source"
+          }
+        ],
+        "note": "No MongoDB operational source provided; reconciliation cannot apply LEFT JOIN semantics with MongoDB as primary. All entities classified as sql_only_no_mongo_source."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.036171,
+  "total_latency_ms": 21477,
+  "cumulative_spend_usd": 2.8340660000000018,
+  "evaluator_reason": "no_mongo_node"
+}

@@ -1,0 +1,134 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "datadog_license_query",
+        "description": "Query license allocation data from the enterprise data warehouse including license type, quantity allocated, license tier, and allocation date to establish baseline license inventory",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "datadog_usage_query",
+        "description": "Query actual Datadog usage metrics from the warehouse including daily/monthly active users, hosts monitored, custom metrics used, log volume ingested, and consumption trends over the analysis period",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "usage_analysis_reconciliation",
+        "description": "Reconcile license allocations with actual usage metrics, calculate utilization rates, identify over/under-provisioning patterns, detect growth trends, and classify usage posture (healthy, at-risk, under-utilized) with trend recommendations",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "datadog_license_query",
+          "datadog_usage_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks are necessary: (1) License query (small tier—simple single-table or straightforward join on allocations), (2) Usage metrics query (mid tier—multiple metrics across different consumption dimensions requiring aggregation and time-series logic), (3) Cross-reconciliation analysis (frontier tier—complex multi-signal analysis combining allocations vs. actual usage, growth rate calculations, utilization thresholds, posture classification, and trend-based recommendations). The frontier tier is justified for the reconciliation because it requires inferential reasoning across two data sources to derive actionable insights on provisioning efficiency and growth patterns, not just a simple comparison."
+  },
+  "node_results": [
+    {
+      "subtask_id": "datadog_license_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 461,
+      "output_tokens": 198,
+      "cached_tokens": 0,
+      "latency_ms": 1520,
+      "output": {
+        "sql": "SELECT cf.license_id, cf.publisher, cf.product, COUNT(DISTINCT cf.event_date) as allocation_days, SUM(cf.daily_active_seats) as total_seats_allocated, cf.fiscal_year, cf.fiscal_quarter, MIN(cf.event_date) as first_allocation_date, MAX(cf.event_date) as last_allocation_date, AVG(cf.daily_active_seats) as avg_daily_seats, SUM(cf.amount_usd) as total_usage_usd FROM consumption_facts cf WHERE cf.event_date >= '2024-01-01' GROUP BY cf.license_id, cf.publisher, cf.product, cf.fiscal_year, cf.fiscal_quarter ORDER BY cf.license_id, cf.event_date"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "datadog_usage_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 471,
+      "output_tokens": 194,
+      "cached_tokens": 0,
+      "latency_ms": 1637,
+      "output": {
+        "sql": "SELECT cf.event_date, cf.license_id, cf.publisher, cf.product, cf.event_type, SUM(cf.amount_usd) as total_amount_usd, SUM(cf.daily_active_seats) as total_daily_active_seats, COUNT(DISTINCT cf.user_id) as unique_users, cf.fiscal_year, cf.fiscal_quarter FROM consumption_facts cf WHERE cf.publisher ILIKE '%datadog%' AND cf.event_date >= '2024-01-01' GROUP BY cf.event_date, cf.license_id, cf.publisher, cf.product, cf.event_type, cf.fiscal_year, cf.fiscal_quarter ORDER BY cf.event_date DESC, cf.license_id"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "usage_analysis_reconciliation",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1022,
+      "output_tokens": 429,
+      "cached_tokens": 0,
+      "latency_ms": 6104,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "datadog_license_allocation",
+            "mongo_value": null,
+            "sql_value": {
+              "source": "consumption_facts",
+              "period_start": "2024-01-01",
+              "grouping": [
+                "license_id",
+                "publisher",
+                "product",
+                "fiscal_year",
+                "fiscal_quarter"
+              ],
+              "metrics": [
+                "allocation_days",
+                "total_seats_allocated",
+                "avg_daily_seats",
+                "total_usage_usd"
+              ]
+            },
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "datadog_actual_usage",
+            "mongo_value": null,
+            "sql_value": {
+              "source": "consumption_facts",
+              "filter": "publisher ILIKE '%datadog%'",
+              "period_start": "2024-01-01",
+              "grouping": [
+                "event_date",
+                "license_id",
+                "publisher",
+                "product",
+                "event_type",
+                "fiscal_year",
+                "fiscal_quarter"
+              ],
+              "metrics": [
+                "total_amount_usd",
+                "total_daily_active_seats",
+                "unique_users"
+              ]
+            },
+            "classification": "no_recent_activity"
+          }
+        ],
+        "notes": "MongoDB operational state was not provided; reconciliation cannot establish primary entity set. SQL outputs are query specifications without result rows, so utilization rates, over/under-provisioning, and growth trends cannot be computed. Re-run with MongoDB license inventory and materialized SQL result rows to produce per-license classifications."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.018727,
+  "total_latency_ms": 9261,
+  "cumulative_spend_usd": 4.9519470000000005
+}

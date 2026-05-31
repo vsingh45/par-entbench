@@ -1,0 +1,225 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "par_no_rationale",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "enumerate_elevated_roles",
+        "description": "Query IAM system to enumerate all roles with elevated/privileged permissions (e.g., admin, power-user, elevated access policies)",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "extract_granted_perms",
+        "description": "Extract the complete set of granted permissions (attached policies, inline policies) for each elevated role",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": [
+          "enumerate_elevated_roles"
+        ]
+      },
+      {
+        "id": "query_activity_logs",
+        "description": "Query CloudTrail/audit logs to retrieve all API calls and actions exercised by each elevated role over the last 180 days",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "extract_exercised_perms",
+        "description": "Parse activity logs to extract the actual permissions/actions that were exercised by each role in the 180-day window",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": [
+          "query_activity_logs"
+        ]
+      },
+      {
+        "id": "cross_recon_perms",
+        "description": "Reconcile granted permissions against exercised permissions for each role; identify gaps (granted but never used)",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "extract_granted_perms",
+          "extract_exercised_perms"
+        ]
+      },
+      {
+        "id": "flag_revocation_candidates",
+        "description": "Compile report of granted-but-never-used permissions per role with risk scoring and recommendations for revocation",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "cross_recon_perms"
+        ]
+      },
+      {
+        "id": "policy_recommendations",
+        "description": "Generate policy actions and approval workflow for revoking unused permissions with audit trail and rollback capability",
+        "specialist": "policy_action",
+        "tier": "frontier",
+        "depends_on": [
+          "flag_revocation_candidates"
+        ]
+      }
+    ],
+    "cost_rationale": "Complex multi-stage reconciliation requiring: IAM enumeration, permission extraction, audit log querying and parsing, cross-dataset reconciliation, risk assessment, and policy action generation. The frontier tier for final policy recommendations ensures robust handling of potentially sensitive permission revocation decisions."
+  },
+  "node_results": [
+    {
+      "subtask_id": "enumerate_elevated_roles",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 483,
+      "output_tokens": 193,
+      "cached_tokens": 0,
+      "latency_ms": 1574,
+      "output": {
+        "sql": "SELECT DISTINCT alf.permission, alf.resource, COUNT(DISTINCT alf.user_id) as users_with_access, COUNT(alf.log_id) as total_actions, MAX(alf.access_time) as last_used, CASE WHEN COUNT(alf.log_id) = 0 THEN 'NEVER_USED' ELSE 'IN_USE' END as usage_status FROM access_log_facts alf WHERE alf.permission IN ('admin', 'power-user', 'elevated_access') AND alf.access_time >= CURRENT_DATE - INTERVAL '180 days' GROUP BY alf.permission, alf.resource ORDER BY usage_status DESC, last_used DESC NULLS LAST"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_activity_logs",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 483,
+      "output_tokens": 580,
+      "cached_tokens": 0,
+      "latency_ms": 8484,
+      "output": {
+        "sql": "SELECT\n    al.permission AS granted_permission,\n    al.user_id AS iam_role,\n    COUNT(CASE WHEN al.action IS NOT NULL AND al.result = 'ALLOW' AND al.access_time >= NOW() - INTERVAL '180 days' THEN 1 END) AS times_used_last_180_days,\n    COUNT(CASE WHEN al.access_time >= NOW() - INTERVAL '180 days' THEN 1 END) AS total_attempts_last_180_days,\n    MAX(CASE WHEN al.result = 'ALLOW' AND al.access_time >= NOW() - INTERVAL '180 days' THEN al.access_time END) AS last_used_timestamp,\n    CASE\n        WHEN COUNT(CASE WHEN al.result = 'ALLOW' AND al.access_time >= NOW() - INTERVAL '180 days' THEN 1 END) = 0\n        THEN 'CANDIDATE_FOR_REVOCATION'\n        ELSE 'IN_USE'\n    END AS revocation_flag,\n    STRING_AGG(DISTINCT al.resource, ', ' ORDER BY al.resource) AS resources_accessed,\n    STRING_AGG(DISTINCT al.action, ', ' ORDER BY al.action) AS actions_performed\nFROM (\n    SELECT DISTINCT user_id, permission\n    FROM access_log_facts\n    WHERE permission IN (\n        SELECT DISTINCT permission\n        FROM access_log_facts\n        WHERE permission ILIKE '%admin%'\n           OR permission ILIKE '%write%'\n           OR permission ILIKE '%delete%'\n           OR permission ILIKE '%root%'\n           OR permission ILIKE '%elevated%'\n           OR permission ILIKE '%superuser%'\n           OR permission ILIKE '%privilege%'\n           OR permission ILIKE '%full%'\n           OR permission ILIKE '%manage%'\n    )\n) elevated_roles\nJOIN access_log_facts al\n    ON al.user_id = elevated_roles.user_id\n    AND al.permission = elevated_roles.permission\nGROUP BY\n    al.permission,\n    al.user_id\nORDER BY\n    revocation_flag DESC,\n    al.user_id,\n    al.permission"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "extract_granted_perms",
+      "specialist": "extract",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 440,
+      "output_tokens": 77,
+      "cached_tokens": 0,
+      "latency_ms": 2124,
+      "output": {
+        "elevated_roles": null,
+        "attached_policies": null,
+        "inline_policies": null,
+        "granted_permissions": null,
+        "exercised_permissions": null,
+        "never_used_permissions": null,
+        "reconciliation_summary": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "extract_exercised_perms",
+      "specialist": "extract",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 843,
+      "output_tokens": 9,
+      "cached_tokens": 0,
+      "latency_ms": 1076,
+      "output": null,
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_perms",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 344,
+      "output_tokens": 247,
+      "cached_tokens": 0,
+      "latency_ms": 5222,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "no_data_available",
+            "mongo_value": {
+              "elevated_roles": null,
+              "attached_policies": null,
+              "inline_policies": null,
+              "granted_permissions": null,
+              "exercised_permissions": null,
+              "never_used_permissions": null,
+              "reconciliation_summary": null
+            },
+            "sql_value": null,
+            "classification": "no_recent_activity",
+            "gap_analysis": {
+              "granted_but_never_used": null,
+              "exercised_permissions": null,
+              "revocation_candidates": null,
+              "coverage_ratio": null
+            },
+            "notes": "Both upstream sources returned empty or null payloads. extract_granted_perms contains all null fields; extract_exercised_perms returned an empty object. No IAM roles could be evaluated. Reconciliation cannot proceed without valid data from both pipelines. Recommend re-running extract_granted_perms and extract_exercised_perms with correct credentials, correct account scope, and a confirmed 180-day CloudTrail or equivalent activity window before retrying reconciliation."
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "flag_revocation_candidates",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 704,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10034,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"principal\": \"orchestrator-service\",\n        \"action\": \"iam:read_roles\",\n        \"resource\": \"*\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"principal\": \"orchestrator-service\",\n        \"action\": \"audit:read_logs\",\n        \"resource\": \"*\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"iam_roles\",\n        \"filter\": {\n          \"elevated\": true\n        },\n        \"projection\": {\n          \"role_id\": 1,\n          \"role_name\": 1,\n          \"attached_policies\": 1,\n          \"inline_policies\": 1,\n          \"granted_permissions\": 1,\n          \"last_activity\": 1,\n          \"created_at\": 1,\n          \"owners\": 1\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT role_name, permission_action, MAX(event_time) AS last_used, COUNT(*) AS usage_count FROM iam_activity_log WHERE event_time >= DATEADD(day, -180, CURRENT_TIMESTAMP()) AND event_status = 'SUCCESS' GROUP BY role_name, permission_action ORDER BY role_name, permission_action\"\n      },\n      \"depends_on\": [2]\n    },\n    {\n      \"tool\": \"sql.postgres.query\",\n      \"arguments\": {\n        \"query\": \"SELECT r.role_name, r.role_id, p.permission_action, p.policy_source, p.risk_classification FROM iam_roles r JOIN iam_granted_permissions p ON r.role_id = p.role_id WHERE r.elevated = true ORDER BY r.role_name, p.permission_action\"\n      },\n      \"depends_on\": [2]\n    },\n    {\n      \"tool\": \"mongo.aggregate\",\n      \"arguments\": {\n        \"collection\": \"iam_activity_log\",\n        \"pipeline\": [\n          {\n            \"$match\": {\n              \"event_time\": {\n                \"$gte\": {\n                  \"$dateSubtract\": {\n                    \"startDate\": \"$$NOW\",\n                    \"unit\": \"day\",\n                    \"amount\": 180\n                  }\n                }\n              },\n              \"event_status\": \"SUCCESS\"\n            }\n          },\n          {\n            \"$group\": {\n              \"_id\": {\n                \"role_name\": \"$role_name\",\n                \"permission_action\": \"$permission_action\"\n              },\n              \"last_used\": { \"$max\": \"$event_time\" },\n              \"usage_count\": { \"$sum\": 1 }\n            }\n          },\n          {\n            \"$project\": {\n              \"role_name\": \"$_id.role_name\",\n              \"permission_action\": \"$_id.permission_action\",\n              \"last_used\": 1,\n              \"usage_count\":"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "policy_recommendations",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1832,
+      "output_tokens": 381,
+      "cached_tokens": 0,
+      "latency_ms": 6522,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-IAM-001": "pass_conditional",
+          "POL-AUDIT-001": "pass",
+          "POL-CHANGE-001": "pass_conditional",
+          "POL-DATA-001": "not_applicable"
+        },
+        "reason": "Revoking unused permissions aligns with least-privilege principles. Requires audit trail, rollback capability, and owner approval before execution.",
+        "applied_constraints": [
+          "All revocation actions must be logged to immutable audit trail with actor, timestamp, role_id, permission_action, and justification",
+          "Each revocation requires approval from role owner(s) identified in iam_roles.owners field",
+          "Rollback snapshot of current permissions must be captured before any revocation and retained for minimum 90 days",
+          "Staged execution: dry-run report first, then phased revocation with 7-day monitoring window per phase",
+          "Exclude break-glass and emergency-access permissions from automatic revocation candidates",
+          "Permissions with risk_classification='critical' require secondary approval and cannot be auto-revoked",
+          "Notification to role owners 14 days prior to revocation with opt-out mechanism"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.05427,
+  "total_latency_ms": 35036,
+  "cumulative_spend_usd": 3.4314990000000023,
+  "evaluator_reason": "no_mongo_node"
+}

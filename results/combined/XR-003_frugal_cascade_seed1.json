@@ -1,0 +1,144 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "frugal_cascade",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "iam_granted_roles",
+        "description": "Query IAM role registry for all roles with elevated permissions (admin, power-user, or custom elevated policy definitions). Return role ID, name, attached policies, and permission grants.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "iam_exercised_perms",
+        "description": "Query CloudTrail or IAM activity logs for the last 180 days to extract which permissions (action:resource pairs) were actually invoked by each IAM role. Return role ID, exercised actions, resource ARNs, invocation timestamps.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_flag",
+        "description": "Cross-reference granted permissions (from iam_granted_roles) against exercised permissions (from iam_exercised_perms). Identify permissions granted but never invoked in 180 days. For each elevated role, produce a summary of revocation candidates with granted-but-unused action:resource tuples, last invocation dates for used permissions, and risk assessment (unused admin vs. unused read-only).",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "iam_granted_roles",
+          "iam_exercised_perms"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks with minimum cardinality: (1) Query IAM role definitions (mid-tier SQL to handle multi-policy joins and elevated permission filtering); (2) Query CloudTrail activity logs for 180-day window (mid-tier SQL for time-windowed log aggregation); (3) Cross-reconcile the two datasets with differential analysis, risk classification, and revocation recommendation generation (frontier-tier cross_recon to handle complex set operations, posture classification of unused elevated permissions, and downstream actionability assessment). This avoids unnecessary duplication and leverages cross_recon's capability to synthesize granted vs. exercised state into a coherent security posture decision."
+  },
+  "node_results": [
+    {
+      "subtask_id": "iam_granted_roles",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 491,
+      "output_tokens": 127,
+      "cached_tokens": 0,
+      "latency_ms": 1950,
+      "output": {
+        "sql": "SELECT al.user_id, al.permission, al.resource, COUNT(*) as exercise_count, MAX(al.access_time) as last_access FROM access_log_facts al WHERE al.access_time >= NOW() - INTERVAL '180 days' AND al.permission IN ('admin', 'power-user') AND al.result = 'success' GROUP BY al.user_id, al.permission, al.resource ORDER BY al.user_id, exercise_count DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "iam_exercised_perms",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 507,
+      "output_tokens": 91,
+      "cached_tokens": 0,
+      "latency_ms": 1259,
+      "output": {
+        "sql": "SELECT user_id, permission, resource, action, access_time, COUNT(*) as invocation_count FROM access_log_facts WHERE access_time >= CURRENT_DATE - INTERVAL '180 days' AND result = 'success' GROUP BY user_id, permission, resource, action, access_time ORDER BY user_id, access_time DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_flag",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 556,
+      "output_tokens": 723,
+      "cached_tokens": 0,
+      "latency_ms": 5528,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "granted_permissions",
+            "mongo_value": null,
+            "sql_value": "iam_granted_roles query executed",
+            "classification": "data_source_mismatch",
+            "note": "MongoDB source not provided; using SQL as primary"
+          },
+          {
+            "entity_key": "exercised_permissions",
+            "mongo_value": null,
+            "sql_value": "iam_exercised_perms query executed",
+            "classification": "data_source_mismatch",
+            "note": "MongoDB source not provided; using SQL as primary"
+          },
+          {
+            "entity_key": "reconciliation_method",
+            "mongo_value": null,
+            "sql_value": "LEFT JOIN: granted_roles LEFT JOIN exercised_perms ON (user_id, permission, resource)",
+            "classification": "procedural",
+            "note": "Identify all granted perms; match against exercised; unmatched = revocation candidates"
+          },
+          {
+            "entity_key": "revocation_candidates",
+            "mongo_value": null,
+            "sql_value": "granted_roles entries with NO corresponding exercised_perms match in 180d window",
+            "classification": "high_risk",
+            "risk_assessment": "CRITICAL if permission='admin'; MEDIUM if permission='power-user'"
+          },
+          {
+            "entity_key": "used_permissions_tracking",
+            "mongo_value": null,
+            "sql_value": "matched (user_id, permission, resource) with last_access from iam_granted_roles + invocation_count, last access_time from iam_exercised_perms",
+            "classification": "stable",
+            "note": "Retain with audit trail"
+          },
+          {
+            "entity_key": "admin_unused_risk",
+            "mongo_value": null,
+            "sql_value": "admin perms in granted_roles with zero matches in exercised_perms",
+            "classification": "at_risk",
+            "action": "IMMEDIATE REVOCATION CANDIDATE - verify business justification"
+          },
+          {
+            "entity_key": "power_user_unused_risk",
+            "mongo_value": null,
+            "sql_value": "power-user perms in granted_roles with zero matches in exercised_perms",
+            "classification": "reduce",
+            "action": "SCHEDULED REVOCATION - 30d notice period recommended"
+          }
+        ],
+        "summary": {
+          "status": "INCOMPLETE_INPUT",
+          "reason": "MongoDB query results not provided in upstream_outputs",
+          "required_data": "iam_granted_roles (MongoDB) and iam_exercised_perms (MongoDB) document sets",
+          "reconciliation_logic": "LEFT JOIN granted_roles as primary; NULL sql_value indicates revocation candidate",
+          "output_ready": false
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.006259000000000001,
+  "total_latency_ms": 8737,
+  "cumulative_spend_usd": 3.1389490000000024,
+  "evaluator_reason": "no_mongo_node"
+}

@@ -1,0 +1,107 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "spend_analysis",
+        "description": "Query spend data for current month and prior 3 months (rolling average), calculate variance metrics, and identify anomalies. Return current month spend, 3-month average, variance percentage, and raw anomaly flags.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "anomaly_classification",
+        "description": "Reconcile spend anomalies from SQL results and classify each anomaly into three tiers (normal_variance, concerning, critical) based on variance magnitude, spend velocity, and contextual thresholds. Return classified anomalies with reasoning.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "spend_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid tier) for multi-month spend aggregation with rolling 3-month average calculation and variance computation\u2014this involves time-windowed aggregation across 4+ months of data, moderate complexity; (2) cross_recon (mid tier) for classification logic, as it reconciles the SQL anomaly signals against threshold policies and assigns risk categories. Both tiers are mid because the spend query requires joins/window functions but not extreme complexity, and the classification applies clear multi-threshold logic without conflicting policies. No policy_action needed because classification is part of the analytical workflow, not governance approval."
+  },
+  "node_results": [
+    {
+      "subtask_id": "spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 492,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8830,
+      "output": {
+        "raw_output": "{\"sql\": \"WITH monthly_spend AS (\\n  SELECT\\n    DATE_TRUNC('month', event_date) AS spend_month,\\n    SUM(amount_usd) AS total_spend\\n  FROM consumption_facts\\n  WHERE event_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months'\\n  GROUP BY DATE_TRUNC('month', event_date)\\n),\\ncurrent_month AS (\\n  SELECT\\n    spend_month,\\n    total_spend AS current_spend\\n  FROM monthly_spend\\n  WHERE spend_month = DATE_TRUNC('month', CURRENT_DATE)\\n),\\nprior_3_months AS (\\n  SELECT\\n    AVG(total_spend) AS avg_3mo_spend,\\n    STDDEV(total_spend) AS stddev_3mo_spend\\n  FROM monthly_spend\\n  WHERE spend_month >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months'\\n    AND spend_month < DATE_TRUNC('month', CURRENT_DATE)\\n),\\nper_publisher_current AS (\\n  SELECT\\n    publisher,\\n    SUM(amount_usd) AS current_month_spend\\n  FROM consumption_facts\\n  WHERE event_date >= DATE_TRUNC('month', CURRENT_DATE)\\n    AND event_date < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'\\n  GROUP BY publisher\\n),\\nper_publisher_prior AS (\\n  SELECT\\n    publisher,\\n    AVG(monthly_spend) AS avg_3mo_spend,\\n    STDDEV(monthly_spend) AS stddev_3mo_spend\\n  FROM (\\n    SELECT\\n      publisher,\\n      DATE_TRUNC('month', event_date) AS spend_month,\\n      SUM(amount_usd) AS monthly_spend\\n    FROM consumption_facts\\n    WHERE event_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months'\\n      AND event_date < DATE_TRUNC('month', CURRENT_DATE)\\n    GROUP BY publisher, DATE_TRUNC('month', event_date)\\n  ) sub\\n  GROUP BY publisher\\n),\\npublisher_anomalies AS (\\n  SELECT\\n    c.publisher,\\n    c.current_month_spend,\\n    COALESCE(p.avg_3mo_spend, 0) AS avg_3mo_spend,\\n    COALESCE(p.stddev_3mo_spend, 0) AS stddev_3mo_spend,\\n    CASE\\n      WHEN COALESCE(p.avg_3mo_spend, 0) = 0 THEN NULL\\n      ELSE ROUND(\\n        ((c.current_month_spend - p.avg_3mo_spend) / p.avg_3mo_spend) * 100, 2\\n      )\\n    END AS variance_pct,\\n    CASE\\n      WHEN COALESCE(p.avg_3mo_spend, 0) = 0 THEN NULL\\n      ELSE ROUND(\\n        ABS(c.current_month_spend -"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "anomaly_classification",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1116,
+      "output_tokens": 507,
+      "cached_tokens": 0,
+      "latency_ms": 10351,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "spend_analysis_aggregate",
+            "mongo_value": null,
+            "sql_value": {
+              "query_status": "partial",
+              "note": "SQL query was truncated mid-execution before publisher_anomalies CTE could be completed and results returned",
+              "completed_ctes": [
+                "monthly_spend",
+                "current_month",
+                "prior_3_months",
+                "per_publisher_current",
+                "per_publisher_prior"
+              ],
+              "incomplete_ctes": [
+                "publisher_anomalies"
+              ],
+              "truncation_point": "ABS(c.current_month_spend -"
+            },
+            "classification": "critical",
+            "reasoning": "SQL output was truncated before anomaly results could be retrieved. No numeric spend data is available from either MongoDB or SQL. Cannot compute variance_pct, z-scores, or spend velocity. All downstream classification is blocked. Recommend re-running the query to retrieve complete results."
+          },
+          {
+            "entity_key": "classification_tier_normal_variance",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "normal_variance",
+            "reasoning": "DEFINITION (applied when data is available): variance_pct between -15% and +15% AND z-score < 1.5. Spend is within expected seasonal and operational bounds. No action required."
+          },
+          {
+            "entity_key": "classification_tier_concerning",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "concerning",
+            "reasoning": "DEFINITION (applied when data is available): variance_pct between +15% and +40% OR z-score between 1.5 and 2.5 OR spend velocity (day-over-day acceleration) > 10% week-over-week. Warrants review and budget owner notification."
+          },
+          {
+            "entity_key": "classification_tier_critical",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "critical",
+            "reasoning": "DEFINITION (applied when data is available): variance_pct > +40% OR z-score > 2.5 OR publisher has zero prior 3-month spend baseline (new unconstrained spend detected) OR stddev = 0 with any positive variance. Requires immediate escalation and possible spend freeze."
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.024429,
+  "total_latency_ms": 19181,
+  "cumulative_spend_usd": 0.862321,
+  "evaluator_reason": "step1_sql_fail: no_sql_in_output"
+}

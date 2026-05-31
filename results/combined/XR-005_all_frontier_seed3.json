@@ -1,0 +1,64 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sf_license_query",
+        "description": "Query Salesforce license and user assignment data to retrieve total licensed seats, assigned seats, active users by license type, and seat gap analysis. Join license entitlements with user assignment records and compute utilization metrics.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "utilization_analysis",
+        "description": "Cross-reference licensed seat capacity against actual assignments and usage patterns to identify unutilized licenses. Classify licenses by utilization tier (full, partial, unused) and generate prioritized recommendations for license optimization.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sf_license_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid tier) to pull license entitlements + user assignments in a single multi-table join with aggregation\u2014complex enough to require mid tier for proper grouping and window function support. (2) cross_recon (mid tier) to reconcile the query results, classify licenses by utilization, and generate optimization recommendations. Cross_recon is appropriate here because we're comparing two data dimensions (licensed capacity vs. actual assignments) and generating actionable classification/recommendations. No policy_action is needed because seat utilization analysis is a data reconciliation and optimization task, not a policy compliance evaluation. No separate multitool_plan is needed since this is a standard BI workflow using SQL + reconciliation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sf_license_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 742,
+      "output_tokens": 138,
+      "cached_tokens": 0,
+      "latency_ms": 1798,
+      "output": {
+        "sql": "SELECT product, SUM(daily_active_seats) AS assigned_seats, COUNT(DISTINCT user_id) AS active_users, SUM(amount_usd) AS total_spend FROM consumption_facts WHERE publisher = 'Salesforce' AND event_date >= '2024-01-01' GROUP BY product ORDER BY assigned_seats DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "utilization_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 593,
+      "output_tokens": 93,
+      "cached_tokens": 0,
+      "latency_ms": 1923,
+      "output": {
+        "error": "Insufficient data: MongoDB primary source output not provided. Only SQL upstream output (sf_license_query) was supplied without execution results. Cannot perform LEFT JOIN reconciliation without MongoDB licensed seat data as the primary source."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.012450000000000001,
+  "total_latency_ms": 3721,
+  "cumulative_spend_usd": 3.1245710000000018,
+  "evaluator_reason": "no_mongo_node"
+}

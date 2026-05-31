@@ -1,0 +1,90 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "router": "par_lite",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "datadog_usage_query",
+        "description": "Query Datadog usage database to extract license allocation counts, actual consumption metrics (hosts monitored, events ingested, custom metrics), and time-series usage data across a rolling period to identify growth patterns and variance between allocated vs. actual usage",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "datadog_state_snapshot",
+        "description": "Retrieve current Datadog license configuration and seat allocation from operational state store (MongoDB), including product tiers, reserved capacity, and contract terms",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "usage_analysis_reconciliation",
+        "description": "Reconcile license allocations against actual usage metrics and growth trends; classify utilization posture (over-provisioned, fully-utilized, under-provisioned); identify growth acceleration/deceleration patterns; generate optimization recommendations based on allocation-to-usage variance",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) sql_gen (mid) to fetch historical usage and growth metrics from the data warehouse with time-series aggregation—this requires multi-table joins across usage, allocation, and metrics tables; (2) mongo_query (small) to retrieve current state configuration from the operational store—straightforward document retrieval; (3) cross_recon (frontier) to reconcile the two sources, identify utilization variance patterns, classify provisioning posture, and generate nuanced recommendations. The frontier tier is necessary for cross_recon because it must synthesize multi-signal data (allocation vs. actual), detect growth patterns, and produce actionable insights requiring inference across multiple dimensions."
+  },
+  "node_results": [
+    {
+      "subtask_id": "datadog_usage_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 484,
+      "output_tokens": 618,
+      "cached_tokens": 0,
+      "latency_ms": 8255,
+      "output": {
+        "sql": "SELECT cf.fiscal_year, cf.fiscal_quarter, cf.event_date, cf.publisher, cf.product, cf.event_type, COUNT(DISTINCT cf.license_id) AS license_count, SUM(cf.daily_active_seats) AS total_allocated_seats, SUM(cf.amount_usd) AS total_amount_usd, COUNT(DISTINCT cf.user_id) AS distinct_users, AVG(cf.daily_active_seats) AS avg_daily_active_seats, MAX(cf.daily_active_seats) AS max_daily_active_seats, MIN(cf.daily_active_seats) AS min_daily_active_seats, SUM(cf.daily_active_seats) - LAG(SUM(cf.daily_active_seats)) OVER (PARTITION BY cf.publisher, cf.product, cf.event_type ORDER BY cf.fiscal_year, cf.fiscal_quarter) AS seat_growth_vs_prev_quarter, ROUND(100.0 * (SUM(cf.daily_active_seats) - LAG(SUM(cf.daily_active_seats)) OVER (PARTITION BY cf.publisher, cf.product, cf.event_type ORDER BY cf.fiscal_year, cf.fiscal_quarter)) / NULLIF(LAG(SUM(cf.daily_active_seats)) OVER (PARTITION BY cf.publisher, cf.product, cf.event_type ORDER BY cf.fiscal_year, cf.fiscal_quarter), 0), 2) AS seat_growth_pct, SUM(SUM(cf.daily_active_seats)) OVER (PARTITION BY cf.publisher, cf.product ORDER BY cf.fiscal_year, cf.fiscal_quarter ROWS BETWEEN 3 PRECEDING AND CURRENT ROW) AS rolling_4qtr_seats, AVG(SUM(cf.amount_usd)) OVER (PARTITION BY cf.publisher, cf.product ORDER BY cf.fiscal_year, cf.fiscal_quarter ROWS BETWEEN 3 PRECEDING AND CURRENT ROW) AS rolling_4qtr_avg_spend, COUNT(DISTINCT cf.event_date) AS active_days_in_period FROM consumption_facts cf WHERE cf.publisher ILIKE '%datadog%' AND cf.event_date >= CURRENT_DATE - INTERVAL '2 years' GROUP BY cf.fiscal_year, cf.fiscal_quarter, cf.event_date, cf.publisher, cf.product, cf.event_type ORDER BY cf.publisher, cf.product, cf.event_type, cf.fiscal_year, cf.fiscal_quarter, cf.event_date"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "datadog_state_snapshot",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1217,
+      "output_tokens": 395,
+      "cached_tokens": 0,
+      "latency_ms": 2822,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Datadog"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "usage_analysis_reconciliation",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 458,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 1007,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.016554000000000003,
+  "total_latency_ms": 12084,
+  "cumulative_spend_usd": 5.114205000000004
+}

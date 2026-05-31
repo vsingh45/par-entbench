@@ -1,0 +1,50 @@
+{
+  "task_id": "PAC-002",
+  "task_class": "policy_action",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_deployment",
+        "description": "Evaluate the deployment request (engineer u_7732, hotfix to prod-us-east-1 at 2:15 AM UTC Tuesday) against governance policies for deployment windows, production access, and change management rules. Determine if the request complies with approved maintenance windows and access control policies.",
+        "specialist": "policy_action",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy evaluation subtask (small tier). The query explicitly asks for a governance/compliance decision: whether the deployment request violates the approved maintenance window policy. This is a straightforward policy_action check requiring only one applicable rule set (deployment windows + production access control). Small tier is sufficient because the evaluation is deterministic\u2014compare the request timestamp (2:15 AM UTC Tuesday) against the policy's approved maintenance window times and engineer/environment access rules."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_deployment",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 557,
+      "output_tokens": 229,
+      "cached_tokens": 0,
+      "latency_ms": 2137,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-401": "pass",
+          "POL-402": "fail",
+          "POL-403": "fail"
+        },
+        "reason": "Deployment denied. User u_7732 has engineer role meeting POL-401 requirements. However, deployment is scheduled for Tuesday 02:15 UTC, which falls outside the approved maintenance window (Saturday 10 PM \u2013 Sunday 6 AM UTC per POL-403). Per POL-402, out-of-window production deployments require Change Advisory Board (CAB) approval, which has not been obtained.",
+        "applied_constraints": [
+          "CAB approval required before deployment can proceed",
+          "Deployment must be rescheduled to approved maintenance window (Saturday 22:00 \u2013 Sunday 06:00 UTC) or formal exception process must be initiated"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0017020000000000002,
+  "total_latency_ms": 2137,
+  "cumulative_spend_usd": 4.886275000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

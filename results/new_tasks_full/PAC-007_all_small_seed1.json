@@ -1,0 +1,74 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "all_small",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "access_check",
+        "description": "Evaluate contractor access request against policy registry: verify access scope (temporary vs. permanent), data classification (customer database is likely sensitive), contractor role, and policy compliance for bulk data export.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "audit_log",
+        "description": "Query audit/security logs to retrieve contractor identity, access history, recent activity, and any prior data export attempts. Cross-check against contractor employment record and access grant terms.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This is a security/access control scenario requiring policy evaluation, not a standard data query. The policy_action agent (mid tier) is needed because the query explicitly asks for governance decision-making: evaluating whether a contractor with temporary access should be allowed to download a full customer database backup. This involves checking multiple policy constraints (access scope, data classification, contractor status). The sql_gen subtask (small tier) is a straightforward audit log retrieval with simple filtering by contractor identity and action type. Two subtasks are minimal: policy evaluation must happen, and audit data retrieval provides supporting context. The policy agent can make the access decision once audit context is provided, so no additional cross_recon is needed—the policy evaluation itself serves as the decision point."
+  },
+  "node_results": [
+    {
+      "subtask_id": "access_check",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 508,
+      "output_tokens": 271,
+      "cached_tokens": 0,
+      "latency_ms": 2566,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "Contractor attempting to download full production database backup violates three critical policies: (1) POL-701 restricts backup access to full-time DBA employees only; (2) POL-702 explicitly prohibits contractors from raw data exports, limiting them to de-identified query results; (3) POL-703 requires explicit project manager approval and 7-day notice for any contractor data access, which has not been obtained. This action represents unauthorized bulk data export by a non-employee with temporary access to sensitive customer data.",
+        "applied_constraints": [
+          "Access denied immediately",
+          "Require project manager written approval before reconsideration",
+          "Require 7-day advance notice per POL-703",
+          "Restrict contractor-dave to de-identified query results only",
+          "Escalate to security team for access attempt logging and audit"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "audit_log",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 598,
+      "output_tokens": 195,
+      "cached_tokens": 0,
+      "latency_ms": 1856,
+      "output": {
+        "sql": "SELECT al.log_id, al.user_id, al.permission, al.resource, al.access_time, al.action, al.result, COUNT(*) OVER (PARTITION BY al.user_id) as total_access_events, STRING_AGG(DISTINCT al.action, ', ') OVER (PARTITION BY al.user_id ORDER BY al.access_time ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as action_history FROM access_log_facts al WHERE al.user_id = 'contractor-dave' AND (al.resource LIKE '%backup%' OR al.resource LIKE '%export%' OR al.action IN ('download', 'export', 'backup')) ORDER BY al.access_time DESC LIMIT 100"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0034360000000000003,
+  "total_latency_ms": 4422,
+  "cumulative_spend_usd": 8.731138000000007
+}

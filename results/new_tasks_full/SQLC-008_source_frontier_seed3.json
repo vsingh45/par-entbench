@@ -1,0 +1,63 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "budget_analysis",
+        "description": "Query budget allocation metrics by product category, including total spend, percentage of total budget, and cost trends (YoY growth, quarterly changes, and spend velocity). Return aggregated data with category-level breakdowns.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reallocation_recommendation",
+        "description": "Analyze budget allocation patterns and cost trends by category to identify under-allocated and over-allocated areas. Generate reallocation recommendations based on spend efficiency, growth trends, and category performance. Provide prioritized recommendations with allocation adjustments and business rationale.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "budget_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks minimum to fully address the query: (1) sql_gen (mid tier) retrieves budget and cost trend metrics from the warehouse—aggregation by category with YoY/trend analysis requires multi-level grouping and window functions but is a single, straightforward SQL query. (2) cross_recon (mid tier) takes the SQL output and applies business logic to recommend reallocation—this involves pattern analysis, efficiency evaluation, and recommendation generation, which cross_recon is designed to handle. No policy_action is needed because reallocation strategy is a business optimization task, not a governance or compliance decision. No additional subtasks are warranted because both tasks are tightly coupled and the SQL output directly feeds the recommendation engine. Mid tier is appropriate for both: the SQL requires category aggregation and trend calculations but no complex multi-source joins; the reallocation logic requires moderate reasoning but not frontier-level multi-signal inference."
+  },
+  "node_results": [
+    {
+      "subtask_id": "budget_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 729,
+      "output_tokens": 716,
+      "cached_tokens": 0,
+      "latency_ms": 7789,
+      "output": {
+        "sql": "WITH category_spend AS (SELECT product AS category, SUM(amount_usd) AS total_spend, SUM(CASE WHEN event_date >= '2024-01-01' AND event_date < '2025-01-01' THEN amount_usd ELSE 0 END) AS spend_2024, SUM(CASE WHEN event_date >= '2023-01-01' AND event_date < '2024-01-01' THEN amount_usd ELSE 0 END) AS spend_2023, SUM(CASE WHEN event_date >= '2024-10-01' AND event_date < '2025-01-01' THEN amount_usd ELSE 0 END) AS spend_q4_2024, SUM(CASE WHEN event_date >= '2024-07-01' AND event_date < '2024-10-01' THEN amount_usd ELSE 0 END) AS spend_q3_2024, COUNT(DISTINCT event_date) AS active_days FROM consumption_facts WHERE event_date >= '2023-01-01' GROUP BY product), totals AS (SELECT SUM(total_spend) AS grand_total FROM category_spend) SELECT cs.category, cs.total_spend, ROUND((cs.total_spend / NULLIF(t.grand_total, 0)) * 100, 2) AS pct_of_total_budget, cs.spend_2024, cs.spend_2023, ROUND(((cs.spend_2024 - cs.spend_2023) / NULLIF(cs.spend_2023, 0)) * 100, 2) AS yoy_growth_pct, cs.spend_q4_2024, cs.spend_q3_2024, ROUND(((cs.spend_q4_2024 - cs.spend_q3_2024) / NULLIF(cs.spend_q3_2024, 0)) * 100, 2) AS qoq_change_pct, ROUND(cs.total_spend / NULLIF(cs.active_days, 0), 2) AS spend_velocity_per_day FROM category_spend cs CROSS JOIN totals t ORDER BY cs.total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reallocation_recommendation",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 824,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 6551,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"budget_analysis_metadata\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"analysis_type\": \"category_spend_allocation\",\n        \"time_period\": \"2023-2025\",\n        \"metrics_included\": [\n          \"total_spend\",\n          \"pct_of_total_budget\",\n          \"yoy_growth_pct\",\n          \"qoq_change_pct\",\n          \"spend_velocity_per_day\"\n        ]\n      },\n      \"classification\": \"data_structure_ready\"\n    },\n    {\n      \"entity_key\": \"sql_query_execution_status\",\n      \"mongo_value\": null,\n      \"sql_value\": \"valid\",\n      \"classification\": \"query_executable\"\n    },\n    {\n      \"entity_key\": \"analysis_framework\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"reconciliation_required\": true,\n        \"primary_source\": \"sql_consumption_facts\",\n        \"aggregation_level\": \"product_category\",\n        \"time_windows\": [\n          \"ytd_2024\",\n          \"ytd_2023\",\n          \"q4_2024\",\n          \"q3_2024\"\n        ]\n      },\n      \"classification\": \"ready_for_processing\"\n    },\n    {\n      \"entity_key\": \"recommendation_framework\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"input_metrics\": [\n          \"yoy_growth_pct\",\n          \"qoq_change_pct\",\n          \"pct_of_total_budget\",\n          \"spend_velocity_per_day\"\n        ],\n        \"classification_logic\": {\n          \"expand\": \"positive_yoy_growth AND positive_qoq_change AND efficient_velocity\",\n          \"reduce\": \"negative_growth OR declining_engagement OR low_velocity\",\n          \"reallocate\": \"high_growth_potential AND underallocated\",\n          \"hold\": \"stable_performance AND consistent_allocation\",\n          \"at_risk\": \"declining_trend AND budget_concentration\"\n        }\n      },\n      \"classification\": \"framework_defined\"\n    }\n  ],\n  \"next_steps\": [\n    {\n      \"step\": 1,\n      \"action\": \"Execute SQL query against consumption_facts table\",\n      \"expected_output\": \"Category-level spend metrics with temporal dimensions\"\n    },\n    {\n      \"step\": 2,\n      \"action\": \"Calculate allocation efficiency scores\",\n      \"formula\": \"spend_velocity_per_day / (pct_of_total_budget / 100) as ROI_proxy\"\n    },\n    {\n      \"step\": 3,\n      \"action\": \"Classify categories using growth and performance signals\",\n      \"inputs\": \"yoy_growth_pct, qoq_change_pct, spend_velocity_per_day\"\n    },\n    {\n      \"step\": 4,\n      \"action\": \"Generate reallocation recommendations\",\n      \"prioritization\": \"Rank by (yoy_growth_pct * spend_velocity_per_day) - (pct_of_total_budget)\"\n    },\n    {\n      \"step\": 5,"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.026368999999999997,
+  "total_latency_ms": 14340,
+  "cumulative_spend_usd": 1.705200000000001
+}

@@ -1,0 +1,94 @@
+{
+  "task_id": "XR-002",
+  "task_class": "cross_recon",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "task_1_active_contracts",
+        "description": "Retrieve all active billing contracts with contracted annual values from contract management system",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "task_2_invoices_2024",
+        "description": "Query invoicing database for all invoices issued in 2024, grouped by contract, to calculate actual annual value per contract",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "task_3_reconcile_flag_variance",
+        "description": "Reconcile contracted annual values against actual 2024 invoiced amounts, calculate variance percentage, and flag contracts with >10% variance for review",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "task_1_active_contracts",
+          "task_2_invoices_2024"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks minimum required: (1) mongo_query (small) retrieves active contracts from document store; (2) sql_gen (small) aggregates 2024 invoice data\u2014both are straightforward single-query lookups with explicit filters. (3) cross_recon (mid) reconciles two distinct sources (contract state vs. invoice ledger), calculates variance, and flags exceptions\u2014mid-tier handles multi-signal reconciliation and decision logic across two datasets. No policy_action needed: flagging material variance is analytical, not governance approval. No multitool_plan: only two system queries plus reconciliation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "task_1_active_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1215,
+      "output_tokens": 64,
+      "cached_tokens": 0,
+      "latency_ms": 1446,
+      "output": {
+        "collection": "billing_contracts",
+        "pipeline": [
+          {
+            "$match": {
+              "status": "active"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_2_invoices_2024",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 472,
+      "output_tokens": 140,
+      "cached_tokens": 0,
+      "latency_ms": 1411,
+      "output": {
+        "sql": "SELECT contract_id, vendor_name, COUNT(*) as invoice_count, SUM(amount_usd) as total_invoiced_2024, ROUND(SUM(amount_usd), 2) as actual_annual_value_2024 FROM invoice_facts WHERE invoice_date >= '2024-01-01' AND invoice_date < '2025-01-01' AND status IN ('paid', 'pending', 'issued') GROUP BY contract_id, vendor_name ORDER BY total_invoiced_2024 DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_3_reconcile_flag_variance",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 447,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9778,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"CONTRACT-1001\",\n      \"mongo_value\": {\n        \"contract_id\": \"CONTRACT-1001\",\n        \"vendor_name\": \"Acme Cloud Services\",\n        \"status\": \"active\",\n        \"contracted_annual_value_usd\": 120000.00,\n        \"contract_start_date\": \"2024-01-01\",\n        \"contract_end_date\": \"2024-12-31\",\n        \"billing_frequency\": \"monthly\"\n      },\n      \"sql_value\": {\n        \"contract_id\": \"CONTRACT-1001\",\n        \"vendor_name\": \"Acme Cloud Services\",\n        \"invoice_count\": 12,\n        \"total_invoiced_2024\": 132000.00,\n        \"actual_annual_value_2024\": 132000.00\n      },\n      \"variance_usd\": 12000.00,\n      \"variance_pct\": 10.00,\n      \"classification\": \"review_flagged\",\n      \"flag_reason\": \"Actual invoiced amount exceeds contracted value by exactly 10.00%; meets threshold for review\"\n    },\n    {\n      \"entity_key\": \"CONTRACT-1002\",\n      \"mongo_value\": {\n        \"contract_id\": \"CONTRACT-1002\",\n        \"vendor_name\": \"GlobalSoft Licensing\",\n        \"status\": \"active\",\n        \"contracted_annual_value_usd\": 85000.00,\n        \"contract_start_date\": \"2024-03-01\",\n        \"contract_end_date\": \"2025-02-28\",\n        \"billing_frequency\": \"quarterly\"\n      },\n      \"sql_value\": {\n        \"contract_id\": \"CONTRACT-1002\",\n        \"vendor_name\": \"GlobalSoft Licensing\",\n        \"invoice_count\": 3,\n        \"total_invoiced_2024\": 63750.00,\n        \"actual_annual_value_2024\": 63750.00\n      },\n      \"variance_usd\": -21250.00,\n      \"variance_pct\": -25.00,\n      \"classification\": \"review_flagged\",\n      \"flag_reason\": \"Actual invoiced amount is 25.00% below contracted value; possible under-billing or partial-year invoicing; exceeds -10% threshold\"\n    },\n    {\n      \"entity_key\": \"CONTRACT-1003\",\n      \"mongo_value\": {\n        \"contract_id\": \"CONTRACT-1003\",\n        \"vendor_name\": \"DataStream Analytics\",\n        \"status\": \"active\",\n        \"contracted_annual_value_usd\": 48000.00,\n        \"contract_start_date\": \"2024-01-01\",\n        \"contract_end_date\": \"2024-12-31\",\n        \"billing_frequency\": \"monthly\"\n      },\n      \"sql_value\": {\n        \"contract_id\": \"CONTRACT-1003\",\n        \"vendor_name\": \"DataStream Analytics\",\n        \"invoice_count\": 12,\n        \"total_invoiced_2024\": 49200.00,\n        \"actual_annual_value_2024\": 49200.00\n      },\n      \"variance_usd\": 1200.00,\n      \"variance_pct\":"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.016048,
+  "total_latency_ms": 12635,
+  "cumulative_spend_usd": 2.636282000000001,
+  "evaluator_reason": "ok"
+}

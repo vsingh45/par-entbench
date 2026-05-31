@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-004",
+  "task_class": "sql_compose",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_vendor_risk",
+        "description": "Query vendor reliability data to retrieve vendor IDs, reliability metrics, and incident history counts. Return rows with vendor identifier, reliability score, total incidents, critical incidents, and incident frequency.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_classify",
+        "description": "Reconcile vendor reliability scores with incident history data and apply risk classification logic. Classify each vendor as low_risk, medium_risk, or high_risk based on incident counts, severity, frequency, and reliability thresholds. Return vendor risk matrix with scores and classifications.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_vendor_risk"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid tier) to query vendor reliability data with multi-table joins across vendor and incident tables; (2) cross_recon (mid tier) to apply classification logic across the reliability metrics and incident history. Classification is part of cross_recon's reconciliation scope, not a separate policy_action, since this is a data-driven posture decision based on metrics, not a governance policy check. Mid tier is appropriate for both because the SQL involves multiple related tables and the classification logic requires moderate reasoning over multiple signals (incident count, severity, frequency, reliability score)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_vendor_risk",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 483,
+      "output_tokens": 260,
+      "cached_tokens": 0,
+      "latency_ms": 1970,
+      "output": {
+        "sql": "SELECT vendor_name AS vendor_identifier, COUNT(CASE WHEN status = 'paid' THEN 1 END)::FLOAT / NULLIF(COUNT(*), 0) AS reliability_score, COUNT(*) AS total_incidents, COUNT(CASE WHEN status != 'paid' THEN 1 END) AS critical_incidents, COUNT(*)::FLOAT / NULLIF(COUNT(DISTINCT DATE_TRUNC('month', invoice_date)), 0) AS incident_frequency, CASE WHEN COUNT(CASE WHEN status = 'paid' THEN 1 END)::FLOAT / NULLIF(COUNT(*), 0) >= 0.9 THEN 'low_risk' WHEN COUNT(CASE WHEN status = 'paid' THEN 1 END)::FLOAT / NULLIF(COUNT(*), 0) >= 0.7 THEN 'medium_risk' ELSE 'high_risk' END AS risk_classification FROM invoice_facts GROUP BY vendor_name ORDER BY reliability_score DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_classify",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 884,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 1200,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.006553,
+  "total_latency_ms": 3170,
+  "cumulative_spend_usd": 0.5347450000000001,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

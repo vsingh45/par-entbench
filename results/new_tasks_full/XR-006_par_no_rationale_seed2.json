@@ -1,0 +1,374 @@
+{
+  "task_id": "XR-006",
+  "task_class": "cross_recon",
+  "router": "par_no_rationale",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_sam_contracts",
+        "description": "Extract Slack contract renewal data from SAM (Software Asset Management) including contract dates, renewal terms, license counts, and renewal status",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "query_consumption_data",
+        "description": "Query consumption data warehouse to retrieve Slack usage trends over time including active users, license utilization rates, and usage patterns",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "correlate_renewals_usage",
+        "description": "Perform cross-reconciliation between SAM contract renewal timelines and consumption usage trends to identify correlation patterns and predict renewal trajectory",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "extract_sam_contracts",
+          "query_consumption_data"
+        ]
+      },
+      {
+        "id": "analyze_trajectory",
+        "description": "Analyze the license renewal trajectory by examining growth rates, utilization gaps, and forecasting future renewal needs based on consumption trends and contract cycles",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "correlate_renewals_usage"
+        ]
+      },
+      {
+        "id": "generate_renewal_report",
+        "description": "Generate actionable insights and recommendations for Slack license renewal planning, including cost optimization opportunities and renewal timing strategy",
+        "specialist": "policy_action",
+        "tier": "small",
+        "depends_on": [
+          "analyze_trajectory"
+        ]
+      }
+    ],
+    "cost_rationale": "Multi-stage workflow combining data extraction, query, reconciliation, and analysis. Extraction and queries use mid-tier for complex data retrieval. Cross-reconciliation uses mid-tier for sophisticated pattern matching. Analysis uses mid-tier for comprehensive forecasting. Final reporting uses small-tier for straightforward recommendation synthesis."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_sam_contracts",
+      "specialist": "extract",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 243,
+      "output_tokens": 230,
+      "cached_tokens": 0,
+      "latency_ms": 3874,
+      "output": {
+        "contract_id": null,
+        "vendor": null,
+        "product": null,
+        "contract_start_date": null,
+        "contract_end_date": null,
+        "renewal_date": null,
+        "renewal_term_months": null,
+        "auto_renewal": null,
+        "cancellation_notice_days": null,
+        "total_licenses_purchased": null,
+        "active_licenses": null,
+        "inactive_licenses": null,
+        "license_type": null,
+        "license_tier": null,
+        "cost_per_license_usd": null,
+        "total_contract_value_usd": null,
+        "annual_contract_value_usd": null,
+        "renewal_status": null,
+        "last_renewal_date": null,
+        "renewal_history": null,
+        "usage_trend": null,
+        "notes": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_consumption_data",
+      "specialist": "mongo_query",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1214,
+      "output_tokens": 799,
+      "cached_tokens": 0,
+      "latency_ms": 9255,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Slack",
+              "status": {
+                "$in": [
+                  "active",
+                  "expired",
+                  "renewed"
+                ]
+              }
+            }
+          },
+          {
+            "$lookup": {
+              "from": "sam_seat_assignments",
+              "localField": "license_id",
+              "foreignField": "license_id",
+              "as": "seat_assignments"
+            }
+          },
+          {
+            "$addFields": {
+              "total_assigned_seats": {
+                "$size": "$seat_assignments"
+              },
+              "active_users": {
+                "$size": {
+                  "$filter": {
+                    "input": "$seat_assignments",
+                    "as": "sa",
+                    "cond": {
+                      "$eq": [
+                        "$$sa.status",
+                        "active"
+                      ]
+                    }
+                  }
+                }
+              },
+              "inactive_users": {
+                "$size": {
+                  "$filter": {
+                    "input": "$seat_assignments",
+                    "as": "sa",
+                    "cond": {
+                      "$ne": [
+                        "$$sa.status",
+                        "active"
+                      ]
+                    }
+                  }
+                }
+              },
+              "users_with_no_activity": {
+                "$size": {
+                  "$filter": {
+                    "input": "$seat_assignments",
+                    "as": "sa",
+                    "cond": {
+                      "$or": [
+                        {
+                          "$eq": [
+                            "$$sa.last_active_date",
+                            null
+                          ]
+                        },
+                        {
+                          "$not": [
+                            {
+                              "$ifNull": [
+                                "$$sa.last_active_date",
+                                false
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "license_utilization_rate": {
+                "$cond": {
+                  "if": {
+                    "$gt": [
+                      "$seat_count",
+                      0
+                    ]
+                  },
+                  "then": {
+                    "$multiply": [
+                      {
+                        "$divide": [
+                          {
+                            "$size": {
+                              "$filter": {
+                                "input": "$seat_assignments",
+                                "as": "sa",
+                                "cond": {
+                                  "$eq": [
+                                    "$$sa.status",
+                                    "active"
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          "$seat_count"
+                        ]
+                      },
+                      100
+                    ]
+                  },
+                  "else": 0
+                }
+              },
+              "unassigned_seats": {
+                "$subtract": [
+                  "$seat_count",
+                  {
+                    "$size": "$seat_assignments"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "$sort": {
+              "term_start": 1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "correlate_renewals_usage",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 873,
+      "output_tokens": 589,
+      "cached_tokens": 0,
+      "latency_ms": 10702,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "slack_contract_renewal_trajectory",
+            "mongo_value": {
+              "collection": "sam_licenses",
+              "pipeline_executed": true,
+              "match_criteria": {
+                "publisher": "Slack",
+                "status": [
+                  "active",
+                  "expired",
+                  "renewed"
+                ]
+              },
+              "computed_fields": [
+                "total_assigned_seats",
+                "active_users",
+                "inactive_users",
+                "users_with_no_activity",
+                "license_utilization_rate",
+                "unassigned_seats"
+              ],
+              "sort_order": "term_start_asc",
+              "data_available": false,
+              "reason": "upstream extract_sam_contracts returned all null fields; no contract anchor data to join against"
+            },
+            "sql_value": {
+              "contract_id": null,
+              "vendor": null,
+              "product": null,
+              "contract_start_date": null,
+              "contract_end_date": null,
+              "renewal_date": null,
+              "renewal_term_months": null,
+              "auto_renewal": null,
+              "cancellation_notice_days": null,
+              "total_licenses_purchased": null,
+              "active_licenses": null,
+              "inactive_licenses": null,
+              "license_type": null,
+              "license_tier": null,
+              "cost_per_license_usd": null,
+              "total_contract_value_usd": null,
+              "annual_contract_value_usd": null,
+              "renewal_status": null,
+              "last_renewal_date": null,
+              "renewal_history": null,
+              "usage_trend": null,
+              "notes": null
+            },
+            "classification": "no_recent_activity",
+            "correlation_signal": {
+              "utilization_rate": null,
+              "unassigned_seats": null,
+              "inactive_users": null,
+              "users_with_no_activity": null,
+              "renewal_proximity_days": null,
+              "auto_renewal_risk": null,
+              "cancellation_notice_window_open": null
+            },
+            "predicted_renewal_trajectory": null,
+            "reconciliation_notes": {
+              "left_join_result": "mongo_primary_present_sql_all_null",
+              "data_quality_issue": "both upstream outputs returned null values; extract_sam_contracts produced no rows and query_consumption_data pipeline has no materialized results available in this context",
+              "recommended_action": "re-execute extract_sam_contracts with valid Slack vendor filter and confirm sam_licenses collection contains documents matching publisher=Slack with status in [active,expired,renewed]",
+              "confidence_score": 0.0,
+              "blocked_on": [
+                "extract_sam_contracts returning null contract_id",
+                "no consumption pipeline result rows to join",
+                "cannot compute correlation without both sides populated"
+              ]
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "analyze_trajectory",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1032,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9744,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"sam_licenses\",\n        \"filter\": {\n          \"publisher\": \"Slack\",\n          \"status\": { \"$in\": [\"active\", \"expired\", \"renewed\"] }\n        },\n        \"projection\": {\n          \"contract_id\": 1,\n          \"publisher\": 1,\n          \"product\": 1,\n          \"term_start\": 1,\n          \"term_end\": 1,\n          \"renewal_date\": 1,\n          \"renewal_term_months\": 1,\n          \"auto_renewal\": 1,\n          \"cancellation_notice_days\": 1,\n          \"total_assigned_seats\": 1,\n          \"active_users\": 1,\n          \"inactive_users\": 1,\n          \"users_with_no_activity\": 1,\n          \"license_utilization_rate\": 1,\n          \"unassigned_seats\": 1,\n          \"status\": 1,\n          \"renewal_history\": 1,\n          \"license_tier\": 1,\n          \"license_type\": 1\n        },\n        \"sort\": { \"term_start\": 1 },\n        \"limit\": 500\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT c.contract_id, c.vendor, c.product, c.contract_start_date, c.contract_end_date, c.renewal_date, c.renewal_term_months, c.auto_renewal, c.cancellation_notice_days, c.total_licenses_purchased, c.active_licenses, c.inactive_licenses, c.license_type, c.license_tier, c.cost_per_license_usd, c.total_contract_value_usd, c.annual_contract_value_usd, c.renewal_status, c.last_renewal_date, c.renewal_history, c.usage_trend, c.notes, DATEDIFF('day', CURRENT_DATE(), c.renewal_date) AS renewal_proximity_days, CASE WHEN c.auto_renewal = true AND DATEDIFF('day', CURRENT_DATE(), c.renewal_date) <= c.cancellation_notice_days THEN true ELSE false END AS cancellation_notice_window_open FROM sam_contracts c WHERE LOWER(c.vendor) LIKE '%slack%' AND c.contract_end_date IS NOT NULL ORDER BY c.contract_start_date ASC\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT month_year, vendor, product, contract_id, monthly_active_users, monthly_messages_sent, monthly_channels_active, monthly_files_shared, total_seats_purchased, seats_used, seats_unused, ROUND(seats_used::FLOAT / NULLIF(total_seats_purchased, 0) * 100, 2) AS utilization_rate_pct, LAG(seats_used) OVER (PARTITION BY contract_id ORDER BY month_year) AS prev_month_seats_used, ROUND((seats_used - LAG("
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "generate_renewal_report",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1265,
+      "output_tokens": 231,
+      "cached_tokens": 0,
+      "latency_ms": 2766,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-001": "not_applicable",
+          "POL-002": "not_applicable",
+          "POL-003": "not_applicable",
+          "POL-004": "fail",
+          "POL-005": "fail"
+        },
+        "reason": "Request cannot be processed due to incomplete upstream data and missing policy registry context. The upstream_outputs contain truncated/malformed SQL queries and incomplete data structures that prevent reliable analysis. Additionally, no policy registry was provided to evaluate against. Request requires: (1) complete, validated upstream query results, (2) explicit policy registry for evaluation, (3) clarification of data access authorization scope.",
+        "applied_constraints": [
+          "Cannot execute analysis without complete upstream data",
+          "Cannot evaluate policy compliance without policy registry",
+          "Requires data validation before processing sensitive license/contract information"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.048776,
+  "total_latency_ms": 36341,
+  "cumulative_spend_usd": 0.4030229999999999
+}

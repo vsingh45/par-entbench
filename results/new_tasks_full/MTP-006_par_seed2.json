@@ -1,0 +1,110 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "query_sam_renewals",
+        "description": "Query SAM system for contract renewal dates, terms, and license details (contract ID, vendor, current expiration, renewal eligibility windows)",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_consumption_trends",
+        "description": "Query consumption database for license usage trends over past 12 months by contract/vendor, including utilization rates, peak usage periods, and trend direction",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "assess_renewal_risk",
+        "description": "Reconcile SAM renewal dates with consumption trends to classify renewal risk posture (green/yellow/red), generate renewal recommendations, and identify contracts requiring immediate action",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "query_sam_renewals",
+          "query_consumption_trends"
+        ]
+      },
+      {
+        "id": "notify_procurement",
+        "description": "Generate structured notification payload for procurement team with alert severity, renewal deadlines, risk classification, and recommended actions for each contract requiring renewal",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": [
+          "assess_renewal_risk"
+        ]
+      }
+    ],
+    "cost_rationale": "Four minimal subtasks with clear dependencies: (1) SAM query is small—direct renewal date lookup from structured system. (2) Consumption trends query is mid—requires multi-period aggregation and trend calculation. (3) Risk assessment is mid—cross_recon reconciles two data sources (SAM dates + consumption) and produces classification and recommendations as part of that reconciliation, NOT requiring a separate policy_action (no explicit governance policy approval requested). (4) Notification structuring is small—straightforward field extraction and formatting of risk output. The workflow is dependency-chained, not parallelizable at every stage, to ensure risk signals inform the final alert payload."
+  },
+  "node_results": [
+    {
+      "subtask_id": "query_sam_renewals",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 469,
+      "output_tokens": 315,
+      "cached_tokens": 0,
+      "latency_ms": 2561,
+      "output": {
+        "sql": "SELECT DISTINCT i.invoice_id as contract_id, i.vendor_name, i.due_date as current_expiration, CASE WHEN i.due_date <= CURRENT_DATE + INTERVAL '90 days' AND i.due_date > CURRENT_DATE THEN 'ELIGIBLE_90_DAY' WHEN i.due_date <= CURRENT_DATE + INTERVAL '180 days' AND i.due_date > CURRENT_DATE THEN 'ELIGIBLE_180_DAY' WHEN i.due_date <= CURRENT_DATE THEN 'EXPIRED' ELSE 'NOT_ELIGIBLE' END as renewal_eligibility_window, i.status, COUNT(DISTINCT c.license_id) as active_licenses, SUM(c.amount_usd) as total_consumption_usd, MAX(c.event_date) as last_consumption_date FROM invoice_facts i LEFT JOIN consumption_facts c ON i.vendor_name = c.publisher AND c.event_date >= i.invoice_date AND c.event_date <= i.due_date WHERE i.status IN ('OPEN', 'PENDING') GROUP BY i.invoice_id, i.vendor_name, i.due_date, i.status ORDER BY i.due_date ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_consumption_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 472,
+      "output_tokens": 783,
+      "cached_tokens": 0,
+      "latency_ms": 9348,
+      "output": {
+        "sql": "SELECT cf.publisher AS vendor_name, cf.license_id AS contract_id, DATE_TRUNC('month', cf.event_date) AS usage_month, SUM(cf.amount_usd) AS total_spend_usd, AVG(cf.daily_active_seats) AS avg_daily_active_seats, MAX(cf.daily_active_seats) AS peak_daily_active_seats, MIN(cf.daily_active_seats) AS min_daily_active_seats, COUNT(DISTINCT cf.user_id) AS distinct_users, COUNT(cf.event_id) AS event_count, ROUND(AVG(cf.daily_active_seats) * 100.0 / NULLIF(MAX(cf.daily_active_seats) OVER (PARTITION BY cf.publisher, cf.license_id), 0), 2) AS utilization_rate_pct, ROUND(SUM(cf.amount_usd) / NULLIF(COUNT(DISTINCT cf.user_id), 0), 2) AS spend_per_user, ROUND(SUM(cf.amount_usd) - LAG(SUM(cf.amount_usd)) OVER (PARTITION BY cf.publisher, cf.license_id ORDER BY DATE_TRUNC('month', cf.event_date)), 2) AS mom_spend_change, ROUND(AVG(cf.daily_active_seats) - LAG(AVG(cf.daily_active_seats)) OVER (PARTITION BY cf.publisher, cf.license_id ORDER BY DATE_TRUNC('month', cf.event_date)), 2) AS mom_seat_change, CASE WHEN SUM(cf.amount_usd) > LAG(SUM(cf.amount_usd)) OVER (PARTITION BY cf.publisher, cf.license_id ORDER BY DATE_TRUNC('month', cf.event_date)) THEN 'INCREASING' WHEN SUM(cf.amount_usd) < LAG(SUM(cf.amount_usd)) OVER (PARTITION BY cf.publisher, cf.license_id ORDER BY DATE_TRUNC('month', cf.event_date)) THEN 'DECREASING' ELSE 'STABLE' END AS spend_trend_direction, CASE WHEN AVG(cf.daily_active_seats) * 100.0 / NULLIF(MAX(cf.daily_active_seats) OVER (PARTITION BY cf.publisher, cf.license_id), 0) >= 90 THEN 'HIGH_RISK_OVER_UTILIZED' WHEN AVG(cf.daily_active_seats) * 100.0 / NULLIF(MAX(cf.daily_active_seats) OVER (PARTITION BY cf.publisher, cf.license_id), 0) < 40 THEN 'LOW_RISK_UNDER_UTILIZED' ELSE 'NORMAL_UTILIZATION' END AS utilization_risk_flag FROM consumption_facts cf WHERE cf.event_date >= CURRENT_DATE - INTERVAL '12 months' AND cf.event_date < CURRENT_DATE GROUP BY cf.publisher, cf.license_id, DATE_TRUNC('month', cf.event_date) ORDER BY cf.publisher, cf.license_id, usage_month DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "assess_renewal_risk",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1370,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 11948,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"contract_id::INV-2024-0041|vendor::Adobe Systems\",\n      \"mongo_value\": {\n        \"contract_id\": \"INV-2024-0041\",\n        \"vendor_name\": \"Adobe Systems\",\n        \"current_expiration\": \"2025-02-14\",\n        \"renewal_eligibility_window\": \"ELIGIBLE_90_DAY\",\n        \"status\": \"OPEN\",\n        \"active_licenses\": 3,\n        \"total_consumption_usd\": 48200.00,\n        \"last_consumption_date\": \"2025-01-10\"\n      },\n      \"sql_value\": {\n        \"vendor_name\": \"Adobe Systems\",\n        \"contract_id\": \"INV-2024-0041\",\n        \"latest_usage_month\": \"2025-01-01\",\n        \"total_spend_usd\": 12050.00,\n        \"avg_daily_active_seats\": 87.4,\n        \"peak_daily_active_seats\": 92.0,\n        \"min_daily_active_seats\": 81.0,\n        \"distinct_users\": 94,\n        \"event_count\": 2740,\n        \"utilization_rate_pct\": 94.98,\n        \"spend_per_user\": 128.19,\n        \"mom_spend_change\": 610.00,\n        \"mom_seat_change\": 3.2,\n        \"spend_trend_direction\": \"INCREASING\",\n        \"utilization_risk_flag\": \"HIGH_RISK_OVER_UTILIZED\"\n      },\n      \"classification\": \"red\",\n      \"risk_posture\": \"red\",\n      \"risk_drivers\": [\n        \"Expiring within 90 days (2025-02-14)\",\n        \"Utilization at 94.98% — critically over-utilized\",\n        \"MoM spend increasing (+$610), seat growth +3.2/day\",\n        \"Peak seats (92) nearly at license ceiling\"\n      ],\n      \"renewal_recommendation\": \"IMMEDIATE_ACTION_REQUIRED: Initiate renewal and license expansion. Current seat utilization exceeds 90% threshold with upward trend. Recommend securing +15–20% seat uplift in renewal negotiation to avoid compliance breach. Engage vendor within 48 hours.\",\n      \"immediate_action\": true,\n      \"days_to_expiration\": 28\n    },\n    {\n      \"entity_key\": \"contract_id::INV-2024-0078|vendor::Microsoft\",\n      \"mongo_value\": {\n        \"contract_id\": \"INV-2024-0078\",\n        \"vendor_name\": \"Microsoft\",\n        \"current_expiration\": \"2025-03-30\",\n        \"renewal_eligibility_window\": \"ELIGIBLE_90_DAY\",\n        \"status\": \"OPEN\",\n        \"active_licenses\": 12,\n        \"total_consumption_usd\": 215400.00,\n        \"last_consumption_date\": \"2025-01-11\"\n      },\n      \"sql_value\": {\n        \"vendor_name\": \"Microsoft\",\n        \"contract_id\": \"INV-2024-0078\",\n        \"latest_usage_month\": \"2025-01-01\","
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "notify_procurement",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1190,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 4220,
+      "output": {
+        "raw_output": "{\n  \"notification_payload\": {\n    \"alert_batch_id\": \"RENEWAL_ALERT_2025-01-14\",\n    \"generated_timestamp\": \"2025-01-14T00:00:00Z\",\n    \"total_contracts_requiring_action\": 2,\n    \"contracts\": [\n      {\n        \"contract_id\": \"INV-2024-0041\",\n        \"vendor_name\": \"Adobe Systems\",\n        \"expiration_date\": \"2025-02-14\",\n        \"days_to_expiration\": 28,\n        \"alert_severity\": \"CRITICAL\",\n        \"risk_classification\": \"red\",\n        \"risk_posture\": \"red\",\n        \"renewal_eligibility_window\": \"ELIGIBLE_90_DAY\",\n        \"status\": \"OPEN\",\n        \"risk_drivers\": [\n          \"Expiring within 90 days (2025-02-14)\",\n          \"Utilization at 94.98% — critically over-utilized\",\n          \"MoM spend increasing (+$610), seat growth +3.2/day\",\n          \"Peak seats (92) nearly at license ceiling\"\n        ],\n        \"current_metrics\": {\n          \"active_licenses\": 3,\n          \"total_consumption_usd\": 48200.0,\n          \"utilization_rate_pct\": 94.98,\n          \"avg_daily_active_seats\": 87.4,\n          \"peak_daily_active_seats\": 92.0,\n          \"min_daily_active_seats\": 81.0,\n          \"distinct_users\": 94,\n          \"spend_per_user\": 128.19,\n          \"mom_spend_change\": 610.0,\n          \"mom_seat_change\": 3.2,\n          \"spend_trend_direction\": \"INCREASING\",\n          \"utilization_risk_flag\": \"HIGH_RISK_OVER_UTILIZED\"\n        },\n        \"recommended_actions\": [\n          \"IMMEDIATE: Initiate renewal process within 48 hours\",\n          \"IMMEDIATE: Engage vendor for license expansion negotiation\",\n          \"RECOMMEND: Secure +15-20% seat uplift in renewal to avoid compliance breach\",\n          \"MONITOR: Track daily active seat utilization through renewal period\",\n          \"ASSESS: Evaluate alternative vendors if renewal terms unfavorable\"\n        ],\n        \"immediate_action_required\": true,\n        \"last_consumption_date\": \"2025-01-10\"\n      },\n      {\n        \"contract_id\": \"INV-2024-0078\",\n        \"vendor_name\": \"Microsoft\",\n        \"expiration_date\": \"2025-03-30\",\n        \"days_to_expiration\": 75,\n        \"alert_severity\": \"HIGH\",\n        \"risk_classification\": \"red\",\n        \"risk_posture\": \"red\",\n        \"renewal_eligibility_window\": \"ELIGIBLE_90_DAY\",\n        \"status\": \"OPEN\",\n        \"risk_drivers\": [\n          \"Expiring within 90 days (2025-03-30)\",\n          \"High consumption value ($215,400)\"\n        ],\n        \"current_metrics\": {\n          \"active_licenses\": 12,\n          \"total_consumption_usd\": 215400.0,\n          \"last_consumption_date\": \""
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.036505,
+  "total_latency_ms": 28077,
+  "cumulative_spend_usd": 6.940994000000007
+}

@@ -1,0 +1,105 @@
+{
+  "task_id": "MTP-008",
+  "task_class": "multitool_plan",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "multitool_orchestration",
+        "description": "Orchestrate multi-tool workflow: retrieve project requirements from Jira API, check team availability via calendar API, schedule standup meeting in calendar system, and post agenda to Slack. This requires coordinating 4 distinct enterprise tools from the registry and sequencing them based on dependencies (requirements → availability check → meeting scheduling → agenda posting).",
+        "specialist": "multitool_plan",
+        "tier": "frontier",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This query explicitly asks for multi-tool orchestration across 4 distinct enterprise tools (Jira, Calendar API, meeting scheduler, Slack) with inter-step dependencies and sequencing logic. This is the textbook use case for multitool_plan specialist. A single frontier-tier subtask is assigned because: (1) the user asks for one unified orchestration workflow, not independent queries; (2) frontier tier is necessary to handle the complexity of tool registry lookup, dependency sequencing, conditional branching (e.g., if availability gaps exist), and data transformation between systems; (3) lower tiers cannot reliably generate correct multi-tool invocation plans with proper error handling and state transitions. One subtask is sufficient because the entire orchestration is a single cohesive workflow, not separate analytical problems."
+  },
+  "node_results": [
+    {
+      "subtask_id": "multitool_orchestration",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 511,
+      "output_tokens": 593,
+      "cached_tokens": 0,
+      "latency_ms": 4231,
+      "output": {
+        "plan": [
+          {
+            "tool": "jira.list_tickets",
+            "arguments": {
+              "project": "requirements",
+              "status": "open",
+              "limit": 50
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "time_min": "2024-01-01T00:00:00Z",
+              "time_max": "2024-01-07T23:59:59Z",
+              "calendar_ids": [
+                "team-primary"
+              ]
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "calendar.create_event",
+            "arguments": {
+              "title": "Team Standup Meeting",
+              "description": "Daily standup to discuss project requirements and progress",
+              "start_time": "2024-01-02T09:00:00Z",
+              "end_time": "2024-01-02T09:30:00Z",
+              "attendees": [
+                "team@company.com"
+              ],
+              "calendar_id": "team-primary"
+            },
+            "depends_on": [
+              2
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#team-standup",
+              "message": "📋 **Team Standup Agenda - Daily Sync**\n\n**Requirements:**\n$1.results\n\n**Meeting Details:**\nTime: $3.start_time\nDuration: 30 minutes\nAttendees: team@company.com\n\n**Action Items:** Please review requirements and come prepared to discuss blockers and progress."
+            },
+            "depends_on": [
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "cross_tool_workflow_completed",
+              "resource_type": "standup_meeting_orchestration",
+              "details": {
+                "jira_tickets_retrieved": "$1.count",
+                "calendar_availability_checked": true,
+                "meeting_scheduled": "$3.event_id",
+                "slack_notification_sent": true
+              },
+              "timestamp": "2024-01-02T08:00:00Z"
+            },
+            "depends_on": [
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.003476,
+  "total_latency_ms": 4231,
+  "cumulative_spend_usd": 8.065565000000003
+}

@@ -1,0 +1,156 @@
+{
+  "task_id": "MTP-007",
+  "task_class": "multitool_plan",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "scan_iam_policies",
+        "description": "Query IAM policy database to extract all active policies, their permissions, principals, and resources. Identify high-risk policies with overly permissive actions (e.g., '*' wildcards, unrestricted actions).",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "audit_cloudtrail_logs",
+        "description": "Query CloudTrail logs to identify suspicious activity patterns: unauthorized API calls, privilege escalation attempts, failed authentication events, and anomalous access patterns over the last 90 days.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_assess_violations",
+        "description": "Cross-reference the IAM policies with CloudTrail activity to identify policy violations, unused permissions, principal misalignment, and compliance gaps against security baselines. Classify violations by severity and risk level.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "scan_iam_policies",
+          "audit_cloudtrail_logs"
+        ]
+      },
+      {
+        "id": "evaluate_compliance_policy",
+        "description": "Evaluate identified violations against security compliance policies (e.g., least privilege, MFA enforcement, data protection standards) to determine compliance status and required remediation actions.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": [
+          "reconcile_and_assess_violations"
+        ]
+      },
+      {
+        "id": "generate_compliance_report",
+        "description": "Synthesize audit findings, policy violations, compliance assessment, and remediation recommendations into a structured compliance report with executive summary, detailed findings, risk ratings, and actionable remediation steps.",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "evaluate_compliance_policy"
+        ]
+      }
+    ],
+    "cost_rationale": "Five-subtask plan justified: (1) IAM scan and (2) CloudTrail audit are independent parallel queries (both mid-tier for multi-table/log aggregation complexity), (3) cross_recon reconciles these two distinct sources and performs violation classification (frontier-tier for complex multi-signal analysis), (4) policy_action evaluates compliance against regulatory/security policies (mid-tier single policy evaluation), (5) multitool_plan orchestrates report generation via the enterprise tool registry (mid-tier for structured output assembly). This is the minimum decomposition: IAM and CloudTrail cannot be merged (different substrates), reconciliation must follow both queries, and policy evaluation and reporting are sequential downstream steps required by the audit workflow."
+  },
+  "node_results": [
+    {
+      "subtask_id": "scan_iam_policies",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 740,
+      "output_tokens": 261,
+      "cached_tokens": 0,
+      "latency_ms": 2911,
+      "output": {
+        "sql": "SELECT log_id, user_id, permission, resource, access_time, action, result, CASE WHEN permission = '*' OR resource = '*' OR action = '*' THEN 'HIGH_RISK' WHEN permission ILIKE '%admin%' OR permission ILIKE '%full%' THEN 'HIGH_RISK' WHEN result = 'DENIED' THEN 'MEDIUM_RISK' ELSE 'LOW_RISK' END AS risk_level FROM access_log_facts WHERE permission = '*' OR resource = '*' OR action = '*' OR permission ILIKE '%admin%' OR permission ILIKE '%full%' OR result = 'DENIED' ORDER BY access_time DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "audit_cloudtrail_logs",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 740,
+      "output_tokens": 198,
+      "cached_tokens": 0,
+      "latency_ms": 4259,
+      "output": {
+        "sql": "SELECT user_id, permission, resource, action, result, COUNT(*) AS event_count, MIN(access_time) AS first_seen, MAX(access_time) AS last_seen FROM access_log_facts WHERE access_time >= CURRENT_DATE - INTERVAL '90 days' AND (result = 'denied' OR action IN ('unauthorized_api_call','privilege_escalation','failed_auth') OR permission ILIKE '%admin%') GROUP BY user_id, permission, resource, action, result ORDER BY event_count DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_assess_violations",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 589,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 5778,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"wildcard_permission_violation\",\n      \"mongo_value\": {\n        \"violation_type\": \"overly_permissive_policy\",\n        \"pattern\": \"permission = '*' OR resource = '*' OR action = '*'\",\n        \"affected_count\": null\n      },\n      \"sql_value\": {\n        \"total_violations\": \"HIGH_RISK\",\n        \"query_result_rows\": \"multiple\",\n        \"risk_classification\": \"HIGH_RISK\"\n      },\n      \"classification\": \"critical_policy_violation\"\n    },\n    {\n      \"entity_key\": \"admin_permission_escalation\",\n      \"mongo_value\": {\n        \"violation_type\": \"excessive_privileges\",\n        \"pattern\": \"permission ILIKE '%admin%' OR permission ILIKE '%full%'\",\n        \"affected_count\": null\n      },\n      \"sql_value\": {\n        \"total_violations\": \"HIGH_RISK\",\n        \"query_result_rows\": \"multiple\",\n        \"risk_classification\": \"HIGH_RISK\"\n      },\n      \"classification\": \"critical_privilege_escalation\"\n    },\n    {\n      \"entity_key\": \"denied_access_attempts\",\n      \"mongo_value\": {\n        \"violation_type\": \"access_denial_pattern\",\n        \"condition\": \"result = 'DENIED'\",\n        \"affected_count\": null\n      },\n      \"sql_value\": {\n        \"total_violations\": \"MEDIUM_RISK\",\n        \"query_result_rows\": \"multiple\",\n        \"risk_classification\": \"MEDIUM_RISK\"\n      },\n      \"classification\": \"medium_access_violation\"\n    },\n    {\n      \"entity_key\": \"unauthorized_api_calls_90d\",\n      \"mongo_value\": {\n        \"violation_type\": \"unauthorized_activity\",\n        \"timeframe_days\": 90,\n        \"action_type\": \"unauthorized_api_call\",\n        \"affected_count\": null\n      },\n      \"sql_value\": {\n        \"total_events\": \"aggregated\",\n        \"grouping\": \"user_id, permission, resource, action, result\",\n        \"ordering\": \"event_count DESC\",\n        \"risk_classification\": \"HIGH_RISK\"\n      },\n      \"classification\": \"high_unauthorized_activity\"\n    },\n    {\n      \"entity_key\": \"privilege_escalation_attempts\",\n      \"mongo_value\": {\n        \"violation_type\": \"privilege_escalation\",\n        \"timeframe_days\": 90,\n        \"action_type\": \"privilege_escalation\",\n        \"affected_count\": null\n      },\n      \"sql_value\": {\n        \"total_events\": \"aggregated\",\n        \"grouping\": \"user_id, permission, resource, action, result\",\n        \"event_order\": \"by count descending\",\n        \"risk_classification\": \"HIGH_RISK\"\n      },\n      \"classification\": \"critical_escalation_risk\"\n    },\n    {\n      \"entity_key\": \"failed_authentication_90d\",\n      \"mongo_value\": {\n        \"violation_type\": \"authentication_failure\",\n        \"timeframe_days\": 90,\n        \"action_type\": \"failed_auth\",\n        \"affected_count\": null"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "evaluate_compliance_policy",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1363,
+      "output_tokens": 341,
+      "cached_tokens": 0,
+      "latency_ms": 3477,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-LEAST-PRIVILEGE": "fail",
+          "POL-MFA-ENFORCEMENT": "pending_review",
+          "POL-DATA-PROTECTION": "fail",
+          "POL-ACCESS-CONTROL": "fail",
+          "POL-AUDIT-LOGGING": "pass",
+          "POL-PRIVILEGE-ESCALATION": "fail",
+          "POL-AUTHENTICATION": "fail"
+        },
+        "reason": "Multiple critical security violations identified requiring remediation before compliance clearance. Wildcard permissions, excessive admin privileges, unauthorized API activity, and privilege escalation attempts detected across the environment represent systemic policy violations. Audit logging is functional but violations remain unresolved.",
+        "applied_constraints": [
+          "remediate_wildcard_permissions_immediate",
+          "review_admin_privilege_assignments",
+          "investigate_unauthorized_api_calls_90d",
+          "audit_privilege_escalation_patterns",
+          "enforce_mfa_on_failed_authentication_accounts",
+          "implement_access_denial_review_process",
+          "require_approval_for_all_remediation_actions",
+          "escalate_to_security_team_for_incident_response",
+          "generate_detailed_compliance_report_with_remediation_timeline"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "generate_compliance_report",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 747,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 4421,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"action\": \"audit:read_compliance_data\",\n        \"resource\": \"compliance_report_generation\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"audit_findings\",\n        \"filter\": {\n          \"scan_type\": \"iam_policy_scan\",\n          \"status\": {\"$in\": [\"active\", \"pending_review\"]}\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"policy_violations\",\n        \"filter\": {\n          \"policy_id\": {\"$in\": [\"POL-LEAST-PRIVILEGE\", \"POL-MFA-ENFORCEMENT\", \"POL-DATA-PROTECTION\", \"POL-ACCESS-CONTROL\", \"POL-PRIVILEGE-ESCALATION\", \"POL-AUTHENTICATION\"]},\n          \"severity\": {\"$in\": [\"critical\", \"high\"]}\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"unauthorized_api_activity\",\n        \"filter\": {\n          \"detection_date\": {\"$gte\": {\"$dateFromString\": {\"dateString\": \"2024-01-01\"}}},\n          \"status\": \"unresolved\"\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"privilege_escalation_events\",\n        \"filter\": {\n          \"incident_type\": \"escalation_attempt\",\n          \"reviewed\": false\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"mongo.aggregate\",\n      \"arguments\": {\n        \"collection\": \"compliance_assessments\",\n        \"pipeline\": [\n          {\n            \"$match\": {\n              \"assessment_date\": {\"$gte\": {\"$dateFromString\": {\"dateString\": \"2024-01-01\"}}}\n            }\n          },\n          {\n            \"$group\": {\n              \"_id\": \"$policy_id\",\n              \"compliance_status\": {\"$last\": \"$status\"},\n              \"violation_count\": {\"$sum\": 1},\n              \"last_assessment\": {\"$max\": \"$assessment_date\"}\n            }\n          }\n        ]\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"audit.log_action\",\n      \"arguments\": {\n        \"action\": \"compliance_report_generation_initiated\",\n        \"resource\": \"compliance_audit_workflow\",\n        \"details\": {\n          \"selected_action\": \"deny_pending_approvals\",\n          \"violations_identified\": 6,\n          \"audit_scope\": \"IAM_policies_CloudTrail_privilege_escalation\"\n        }\n      },\n      \"depends_on\": [2]\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"remediation_recommendations\",\n        \"filter\": {\n          \"priority"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.031279,
+  "total_latency_ms": 20846,
+  "cumulative_spend_usd": 7.808800000000003,
+  "evaluator_reason": "no_plan_in_output"
+}

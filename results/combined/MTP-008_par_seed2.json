@@ -1,0 +1,40 @@
+{
+  "task_id": "MTP-008",
+  "task_class": "multitool_plan",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mtplan_1",
+        "description": "Generate a multi-tool orchestration plan to retrieve Jira project requirements, check calendar API for team availability, schedule a standup meeting, and post agenda to Slack. Plan should specify tool sequence, data mapping between tools, and required API credentials/parameters.",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This query explicitly requests multi-tool orchestration across four distinct systems (Jira, Calendar API, Meeting Scheduler, Slack). A single multitool_plan subtask (mid tier) is appropriate because: (1) the user is asking for a PLAN, not execution of individual queries\u2014one multitool_plan call will generate the complete orchestration strategy; (2) mid tier is sufficient since this involves standard tool registry lookups and sequencing logic (no complex cross-source reconciliation or downstream inference); (3) no sql_gen, mongo_query, or cross_recon subtasks are needed\u2014the multitool_plan agent handles tool coordination and data mapping between systems directly. The plan will output the sequence of tool calls, required parameters, and data flow needed for the collaboration workflow."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mtplan_1",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 482,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10428,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"step\": 1,\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"principal\": \"current_user\",\n        \"resource\": \"jira.projects\",\n        \"action\": \"read\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"step\": 2,\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"principal\": \"current_user\",\n        \"resource\": \"calendar.events\",\n        \"action\": \"read_write\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"step\": 3,\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"principal\": \"current_user\",\n        \"resource\": \"slack.channels\",\n        \"action\": \"post\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"step\": 4,\n      \"tool\": \"jira.list_tickets\",\n      \"arguments\": {\n        \"project_key\": \"PROJ\",\n        \"status_filter\": [\"Open\", \"In Progress\", \"To Do\"],\n        \"fields\": [\"summary\", \"description\", \"assignee\", \"priority\", \"labels\", \"sprint\"],\n        \"max_results\": 50,\n        \"credentials_ref\": \"JIRA_API_TOKEN\",\n        \"_gate\": \"$1.allowed == true\"\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"step\": 5,\n      \"tool\": \"calendar.list_events\",\n      \"arguments\": {\n        \"calendar_ids\": [\"team-engineering@company.com\", \"team-product@company.com\", \"team-design@company.com\"],\n        \"time_min\": \"2025-07-10T08:00:00Z\",\n        \"time_max\": \"2025-07-11T18:00:00Z\",\n        \"fields\": [\"attendees\", \"start\", \"end\", \"status\", \"summary\"],\n        \"credentials_ref\": \"GCAL_SERVICE_ACCOUNT\",\n        \"_gate\": \"$2.allowed == true\"\n      },\n      \"depends_on\": [2]\n    },\n    {\n      \"step\": 6,\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"team_members\",\n        \"filter\": {\n          \"team\": { \"$in\": [\"engineering\", \"product\", \"design\"] },\n          \"active\": true\n        },\n        \"projection\": {\n          \"name\": 1,\n          \"email\": 1,\n          \"slack_handle\": 1,\n          \"timezone\": 1,\n          \"team\": 1\n        }\n      },\n      \"depends_on\": []\n    },\n    {\n      \"step\": 7,\n      \"tool\": \"sql.postgres.query\",\n      \"arguments\": {\n        \"query\": \"SELECT member_email, preferred_standup_time, timezone FROM team_preferences WHERE active = true ORDER BY timezone ASC\",\n        \"database\": \"team_config_db\",\n        \"credentials_ref\": \"POSTGRES_READONLY_CONN\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"step\": 8,\n      \"tool\": \"mongo.aggregate\","
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.013446,
+  "total_latency_ms": 10428,
+  "cumulative_spend_usd": 7.9899230000000045,
+  "evaluator_reason": "no_plan_in_output"
+}

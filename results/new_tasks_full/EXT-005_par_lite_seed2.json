@@ -1,0 +1,54 @@
+{
+  "task_id": "EXT-005",
+  "task_class": "extract",
+  "router": "par_lite",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "Extract line items, total taxes, and payment terms from this invoice document.",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task — Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 442,
+      "output_tokens": 180,
+      "cached_tokens": 0,
+      "latency_ms": 1440,
+      "output": {
+        "line_items": [
+          {
+            "description": "Software License - Annual",
+            "amount_usd": 15000.0
+          },
+          {
+            "description": "Professional Services (40 hours @ $150/hr)",
+            "amount_usd": 6000.0
+          },
+          {
+            "description": "Technical Support (12 months)",
+            "amount_usd": 2400.0
+          }
+        ],
+        "total_taxes_usd": 2578.63,
+        "payment_terms": "Net 30 days. 2% early payment discount if paid within 10 days. Wire transfer to Wells Fargo Bank, Account #987654321."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001342,
+  "total_latency_ms": 1440,
+  "cumulative_spend_usd": 5.491756000000002
+}

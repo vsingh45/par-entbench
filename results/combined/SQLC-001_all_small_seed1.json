@@ -1,0 +1,90 @@
+{
+  "task_id": "SQLC-001",
+  "task_class": "sql_compose",
+  "router": "all_small",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top5_publishers",
+        "description": "Generate SQL query to fetch top 5 publishers by spend in Q4 2024 (October-December 2024), with aggregated spend totals and transaction counts",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_risk_analysis",
+        "description": "Reconcile top 5 publishers spend data with historical patterns and contract/renewal data to classify at-risk posture (e.g., declining spend trends, contract expiry soon, vendor consolidation signals) and generate risk summary and recommendations for SAM team",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_top5_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (small tier) for a straightforward aggregation query filtering Q4 2024 spend with top 5 ranking\u2014this is a simple SELECT with GROUP BY and ORDER BY, no complex CTEs or window functions required. (2) cross_recon (mid tier) to reconcile the spend data with historical trends and contract metadata to identify risk signals and generate posture classification; mid tier handles multi-signal analysis and recommendation generation. This avoids adding unnecessary subtasks\u2014the risk summary and recommendation generation is part of the cross_recon workflow, not a separate policy_action step, since the query asks for analysis-based summary rather than formal policy evaluation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top5_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 490,
+      "output_tokens": 79,
+      "cached_tokens": 0,
+      "latency_ms": 1101,
+      "output": {
+        "sql": "SELECT publisher, SUM(amount_usd) as total_spend, COUNT(*) as transaction_count FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date <= '2024-12-31' GROUP BY publisher ORDER BY total_spend DESC LIMIT 5"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_risk_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 384,
+      "output_tokens": 320,
+      "cached_tokens": 0,
+      "latency_ms": 2705,
+      "output": {
+        "error": "Insufficient data for reconciliation",
+        "reason": "MongoDB operational state not provided",
+        "expected_format": {
+          "mongo_results": [
+            {
+              "publisher": "string",
+              "current_spend_usd": "number",
+              "transaction_count": "number",
+              "contract_status": "string",
+              "renewal_date": "string"
+            }
+          ],
+          "sql_results": [
+            {
+              "publisher": "string",
+              "total_spend": "number",
+              "transaction_count": "number"
+            }
+          ]
+        },
+        "required_inputs": [
+          "MongoDB query result (operational state with current contracts/spend)",
+          "SQL query result (historical Q4 2024 spend data)",
+          "Contract/renewal metadata from either source"
+        ],
+        "sql_query_provided": "SELECT publisher, SUM(amount_usd) as total_spend, COUNT(*) as transaction_count FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date <= '2024-12-31' GROUP BY publisher ORDER BY total_spend DESC LIMIT 5",
+        "next_steps": "Execute provided SQL query and supply MongoDB operational data to enable LEFT JOIN reconciliation and at-risk classification"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.002869,
+  "total_latency_ms": 3806,
+  "cumulative_spend_usd": 0.47283499999999995,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

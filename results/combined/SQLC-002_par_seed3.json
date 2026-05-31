@@ -1,0 +1,97 @@
+{
+  "task_id": "SQLC-002",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_get_building_ltv",
+        "description": "Query TPC-H warehouse for top 10 customers by lifetime value (total order amount) in BUILDING market segment, including customer ID, name, total spending, and order count",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_customer_order_patterns",
+        "description": "Query TPC-H warehouse to extract detailed order patterns for the top 10 BUILDING customers: order frequency by date range, average order size, product categories purchased, seasonal trends, and recency metrics",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": [
+          "sql_get_building_ltv"
+        ]
+      },
+      {
+        "id": "cross_recon_retention_narrative",
+        "description": "Reconcile customer LTV ranking with detailed order patterns; for each of the 10 customers, generate a personalized retention narrative that references their specific order behavior, spending trends, frequency patterns, and strategic importance in the BUILDING segment",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_get_building_ltv",
+          "sql_customer_order_patterns"
+        ]
+      }
+    ],
+    "cost_rationale": "3 subtasks total: (1) Initial LTV ranking is a mid-tier multi-table join/aggregation on TPC-H; (2) Order pattern extraction for 10 specific customers requires window functions and temporal analysis, also mid-tier SQL; (3) Narrative generation requires synthesizing both datasets into personalized text that reflects customer value and behavior patterns\u2014this is frontier-tier cross_recon work combining two data sources with inference and context-aware generation. We do not add a separate policy_action because retention narrative generation and prioritization are part of the cross_recon reconciliation task, not compliance/governance decisions. We keep subtasks minimal by bundling all order pattern metrics into a single SQL query rather than separate calls."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_get_building_ltv",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 491,
+      "output_tokens": 110,
+      "cached_tokens": 0,
+      "latency_ms": 2236,
+      "output": {
+        "sql": "SELECT c.c_custkey, c.c_name, SUM(o.o_totalprice) AS total_spending, COUNT(o.o_orderkey) AS order_count FROM customer c JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name ORDER BY total_spending DESC LIMIT 10"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_customer_order_patterns",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 611,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8794,
+      "output": {
+        "raw_output": "{\"sql\": \"SELECT\\n  c.c_custkey,\\n  c.c_name,\\n  c.c_acctbal,\\n  COUNT(DISTINCT o.o_orderkey) AS order_count,\\n  SUM(o.o_totalprice) AS total_spending,\\n  AVG(o.o_totalprice) AS avg_order_value,\\n  MIN(o.o_orderdate) AS first_order_date,\\n  MAX(o.o_orderdate) AS last_order_date,\\n  CURRENT_DATE - MAX(o.o_orderdate) AS days_since_last_order,\\n  MAX(o.o_orderdate) - MIN(o.o_orderdate) AS customer_tenure_days,\\n  CASE\\n    WHEN COUNT(DISTINCT o.o_orderkey) > 1\\n    THEN (MAX(o.o_orderdate) - MIN(o.o_orderdate)) / (COUNT(DISTINCT o.o_orderkey) - 1)\\n    ELSE NULL\\n  END AS avg_days_between_orders,\\n  COUNT(DISTINCT CASE WHEN o.o_orderdate >= '1993-01-01' AND o.o_orderdate < '1994-01-01' THEN o.o_orderkey END) AS orders_1993,\\n  COUNT(DISTINCT CASE WHEN o.o_orderdate >= '1994-01-01' AND o.o_orderdate < '1995-01-01' THEN o.o_orderkey END) AS orders_1994,\\n  COUNT(DISTINCT CASE WHEN o.o_orderdate >= '1995-01-01' AND o.o_orderdate < '1996-01-01' THEN o.o_orderkey END) AS orders_1995,\\n  COUNT(DISTINCT CASE WHEN o.o_orderdate >= '1996-01-01' AND o.o_orderdate < '1997-01-01' THEN o.o_orderkey END) AS orders_1996,\\n  COUNT(DISTINCT CASE WHEN o.o_orderdate >= '1997-01-01' AND o.o_orderdate < '1998-01-01' THEN o.o_orderkey END) AS orders_1997,\\n  COUNT(DISTINCT CASE WHEN EXTRACT(MONTH FROM o.o_orderdate) IN (1,2,3) THEN o.o_orderkey END) AS orders_q1,\\n  COUNT(DISTINCT CASE WHEN EXTRACT(MONTH FROM o.o_orderdate) IN (4,5,6) THEN o.o_orderkey END) AS orders_q2,\\n  COUNT(DISTINCT CASE WHEN EXTRACT(MONTH FROM o.o_orderdate) IN (7,8,9) THEN o.o_orderkey END) AS orders_q3,\\n  COUNT(DISTINCT CASE WHEN EXTRACT(MONTH FROM o.o_orderdate) IN (10,11,12) THEN o.o_orderkey END) AS orders_q4,\\n  COUNT(DISTINCT CASE WHEN o.o_orderstatus = 'F' THEN o.o_orderkey END) AS fulfilled_orders,\\n  COUNT(DISTINCT CASE"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_retention_narrative",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1825,
+      "output_tokens": 147,
+      "cached_tokens": 0,
+      "latency_ms": 3392,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "unknown",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "insufficient_data"
+          }
+        ],
+        "error": "Upstream SQL outputs contained no usable result rows; sql_get_building_ltv provided only a query string and sql_customer_order_patterns was truncated mid-statement with no returned data. Reconciliation and personalized narratives cannot be generated without actual customer records."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.029756,
+  "total_latency_ms": 14422,
+  "cumulative_spend_usd": 0.6844779999999997,
+  "evaluator_reason": "step2_consumer_narrative_check_failed"
+}

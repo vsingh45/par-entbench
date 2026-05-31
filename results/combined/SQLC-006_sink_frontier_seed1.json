@@ -1,0 +1,71 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "sink_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "spend_metrics",
+        "description": "Query spend database to retrieve current month spend and calculate 3-month rolling average for all cost centers/departments. Return both metrics with variance percentage.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "anomaly_classification",
+        "description": "Analyze current vs. 3-month average spend deltas and classify each anomaly as normal_variance (within threshold), concerning (elevated variance), or critical (significant outlier). Generate classification rules and output structured results with severity levels.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "spend_metrics"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid-tier) to compute spend metrics with rolling averages and variance\u2014multi-table join logic across time periods justifies mid-tier; (2) cross_recon (mid-tier) to classify anomalies based on variance thresholds and produce severity categorization. Cross_recon is appropriate here because it reconciles current state against historical baseline and applies classification logic as part of anomaly detection. No separate policy_action is needed because classification is inherent to the anomaly detection task. Total: 2 subtasks, minimal scope, efficient pipeline."
+  },
+  "node_results": [
+    {
+      "subtask_id": "spend_metrics",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 475,
+      "output_tokens": 467,
+      "cached_tokens": 0,
+      "latency_ms": 3478,
+      "output": {
+        "sql": "WITH monthly_spend AS (SELECT DATE_TRUNC('month', invoice_date)::DATE AS month, vendor_name AS cost_center, SUM(amount_usd) AS monthly_total FROM invoice_facts WHERE invoice_date >= CURRENT_DATE - INTERVAL '3 months' GROUP BY DATE_TRUNC('month', invoice_date), vendor_name), rolling_avg AS (SELECT cost_center, month, monthly_total, AVG(monthly_total) OVER (PARTITION BY cost_center ORDER BY month ROWS BETWEEN 2 PRECEDING AND 1 PRECEDING) AS avg_3month_prior FROM monthly_spend), current_month_data AS (SELECT cost_center, month, monthly_total, avg_3month_prior, CASE WHEN avg_3month_prior IS NULL THEN NULL ELSE ROUND(((monthly_total - avg_3month_prior) / avg_3month_prior * 100)::NUMERIC, 2) END AS variance_pct, CASE WHEN avg_3month_prior IS NULL THEN 'insufficient_data' WHEN ABS((monthly_total - avg_3month_prior) / avg_3month_prior) <= 0.15 THEN 'normal_variance' WHEN ABS((monthly_total - avg_3month_prior) / avg_3month_prior) > 0.15 AND ABS((monthly_total - avg_3month_prior) / avg_3month_prior) <= 0.35 THEN 'concerning' ELSE 'critical' END AS anomaly_classification FROM rolling_avg WHERE month = DATE_TRUNC('month', CURRENT_DATE)::DATE) SELECT cost_center, month, monthly_total AS current_month_spend, avg_3month_prior AS three_month_rolling_avg, variance_pct, anomaly_classification FROM current_month_data ORDER BY ABS(variance_pct) DESC NULLS LAST"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "anomaly_classification",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1162,
+      "output_tokens": 62,
+      "cached_tokens": 0,
+      "latency_ms": 1604,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "spend_metrics",
+            "mongo_value": null,
+            "sql_value": "see_upstream",
+            "classification": "insufficient_data"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01017,
+  "total_latency_ms": 5082,
+  "cumulative_spend_usd": 1.007255,
+  "evaluator_reason": "step2_consumer_classification_missing"
+}

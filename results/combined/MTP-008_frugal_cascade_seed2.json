@@ -1,0 +1,350 @@
+{
+  "task_id": "MTP-008",
+  "task_class": "multitool_plan",
+  "router": "frugal_cascade",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "jira_reqs",
+        "description": "Retrieve project requirements from Jira using the tool registry",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "calendar_availability",
+        "description": "Check team availability from calendar API",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "schedule_standup",
+        "description": "Schedule standup meeting based on project requirements and team availability",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "jira_reqs",
+          "calendar_availability"
+        ]
+      },
+      {
+        "id": "share_agenda",
+        "description": "Compose agenda from project requirements and share via Slack",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "jira_reqs",
+          "schedule_standup"
+        ]
+      }
+    ],
+    "cost_rationale": "This query explicitly requests multi-tool orchestration across 4 external systems (Jira, Calendar API, scheduling service, and Slack), making multitool_plan the appropriate specialist for all subtasks. The plan is decomposed into 4 subtasks reflecting the distinct workflow stages: (1) retrieve requirements independently, (2) check availability independently in parallel, (3) schedule meeting using outputs from steps 1 and 2, and (4) compose and share agenda using outputs from steps 1 and 3. Tier assignments: jira_reqs is mid (may require filtering/parsing complex requirements), calendar_availability is small (straightforward API call), schedule_standup is mid (must coordinate conflicting constraints from two sources), share_agenda is small (simple composition and posting). This is the minimum number of subtasks to sequence the workflow dependencies correctly."
+  },
+  "node_results": [
+    {
+      "subtask_id": "jira_reqs",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 440,
+      "output_tokens": 483,
+      "cached_tokens": 0,
+      "latency_ms": 3530,
+      "output": {
+        "plan": [
+          {
+            "tool": "jira.list_tickets",
+            "arguments": {
+              "project": "requirements",
+              "status": "open"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "time_min": "now",
+              "time_max": "+7d",
+              "calendar_type": "team"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.create_event",
+            "arguments": {
+              "title": "Cross-Team Standup",
+              "description": "Project requirements review and collaboration",
+              "duration_minutes": 60,
+              "attendees": [
+                "team@company.com"
+              ]
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#project-team",
+              "message": "\ud83d\udccb **Project Requirements & Standup Scheduled**\n\n**Requirements Retrieved:** $1.results\n\n**Standup Meeting:** $3.event_link\n\n**Agenda:**\n\u2022 Review project requirements from Jira\n\u2022 Discuss team availability and blockers\n\u2022 Coordinate cross-team collaboration\n\nPlease confirm attendance."
+            },
+            "depends_on": [
+              1,
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "cross_team_collaboration_orchestrated",
+              "details": {
+                "jira_requirements_count": "$1.count",
+                "meeting_created": "$3.event_id",
+                "slack_notification_sent": true
+              },
+              "timestamp": "now"
+            },
+            "depends_on": [
+              1,
+              3,
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "calendar_availability",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 434,
+      "output_tokens": 529,
+      "cached_tokens": 0,
+      "latency_ms": 4190,
+      "output": {
+        "plan": [
+          {
+            "tool": "jira.list_tickets",
+            "arguments": {
+              "project": "all",
+              "status": "open",
+              "limit": 50
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "time_min": "now",
+              "time_max": "+7days",
+              "calendar_type": "team"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.create_event",
+            "arguments": {
+              "title": "Cross-team Standup Meeting",
+              "description": "Project requirements review and alignment",
+              "duration_minutes": 60,
+              "suggested_time": "next_available_slot",
+              "attendees": "$2.available_team_members"
+            },
+            "depends_on": [
+              2
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#team-collaboration",
+              "message": "\ud83d\udccb **Cross-Team Standup Scheduled**\n\n**Project Requirements:**\n$1.results\n\n**Meeting Details:**\nTime: $3.event_time\nDuration: 60 minutes\nAttendees: $3.attendees\n\n**Agenda:**\n- Review open project requirements\n- Discuss team capacity and blockers\n- Align on next steps\n\nCalendar invite sent to all participants."
+            },
+            "depends_on": [
+              1,
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "cross_team_collaboration_orchestrated",
+              "details": {
+                "jira_tickets_retrieved": "$1.count",
+                "team_availability_checked": "$2.count",
+                "standup_scheduled": "$3.event_id",
+                "slack_notification_sent": true
+              }
+            },
+            "depends_on": [
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "schedule_standup",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1233,
+      "output_tokens": 529,
+      "cached_tokens": 0,
+      "latency_ms": 2425,
+      "output": {
+        "plan": [
+          {
+            "tool": "jira.list_tickets",
+            "arguments": {
+              "project": "all",
+              "status": "open",
+              "limit": 50
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "time_min": "now",
+              "time_max": "+7days",
+              "calendar_type": "team"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.create_event",
+            "arguments": {
+              "title": "Cross-Team Standup Meeting",
+              "description": "Project requirements review and alignment",
+              "duration_minutes": 60,
+              "suggested_time": "next_available_slot",
+              "attendees": "$2.available_team_members"
+            },
+            "depends_on": [
+              2
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#team-collaboration",
+              "message": "\ud83d\udccb **Cross-Team Standup Scheduled**\n\n**Project Requirements:**\n$1.results\n\n**Meeting Details:**\nTime: $3.event_time\nDuration: 60 minutes\nAttendees: $3.attendees\n\n**Agenda:**\n- Review open project requirements\n- Discuss team capacity and blockers\n- Align on next steps\n\nCalendar invite sent to all participants."
+            },
+            "depends_on": [
+              1,
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "cross_team_collaboration_orchestrated",
+              "details": {
+                "jira_tickets_retrieved": "$1.count",
+                "team_availability_checked": "$2.count",
+                "standup_scheduled": "$3.event_id",
+                "slack_notification_sent": true
+              }
+            },
+            "depends_on": [
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "share_agenda",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1234,
+      "output_tokens": 530,
+      "cached_tokens": 0,
+      "latency_ms": 2967,
+      "output": {
+        "plan": [
+          {
+            "tool": "jira.list_tickets",
+            "arguments": {
+              "project": "requirements",
+              "status": "open"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "time_min": "now",
+              "time_max": "+7d",
+              "calendar_type": "team"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.create_event",
+            "arguments": {
+              "title": "Cross-Team Standup: Project Requirements Review",
+              "description": "Project requirements review and cross-team collaboration alignment",
+              "duration_minutes": 60,
+              "attendees": [
+                "team@company.com"
+              ]
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#project-team",
+              "message": "\ud83d\udccb **Project Requirements & Standup Scheduled**\n\n**Requirements Retrieved:** $1.results\n\n**Team Availability Checked:** $2.results\n\n**Standup Meeting:** $3.event_link\n\n**Agenda:**\n\u2022 Review open project requirements from Jira\n\u2022 Discuss team availability and capacity\n\u2022 Identify blockers and dependencies\n\u2022 Align on next steps and timeline\n\nPlease confirm your attendance on the calendar invite."
+            },
+            "depends_on": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "cross_team_collaboration_orchestrated",
+              "details": {
+                "jira_requirements_count": "$1.count",
+                "team_events_checked": "$2.count",
+                "standup_meeting_created": "$3.event_id",
+                "slack_notification_sent": true
+              }
+            },
+            "depends_on": [
+              3,
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.013696000000000002,
+  "total_latency_ms": 13112,
+  "cumulative_spend_usd": 8.210672,
+  "evaluator_reason": "missing_tools: {'slack.messages.post', 'calendar.events.create', 'calendar.availability.check', 'jira.issue.get'}"
+}

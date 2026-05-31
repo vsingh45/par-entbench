@@ -1,0 +1,109 @@
+{
+  "task_id": "XR-004",
+  "task_class": "cross_recon",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sam_extract",
+        "description": "Extract licensed user counts and SKU assignments from Software Asset Management (SAM) system for Microsoft products, including license type, quantity, and assignment status.",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "consumption_sql",
+        "description": "Query consumption facts warehouse to aggregate active unique users by Microsoft product SKU over the relevant period, with user activation counts and feature usage metrics.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_posture",
+        "description": "Reconcile SAM licensed user counts against consumption active users by SKU. Classify each product as under-provisioned, over-provisioned, or optimally provisioned. Generate remediation recommendations with quantified delta (licenses needed/excess).",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sam_extract",
+          "consumption_sql"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) extract SAM licensing data (small tier—straightforward structured data pull from asset management); (2) sql_gen for consumption aggregation from warehouse (mid tier—multi-table join likely needed across fact tables and dimension tables to sum active users by SKU and product); (3) cross_recon to reconcile two sources and classify posture with recommendations (mid tier—standard two-source reconciliation with classification logic, no complex multi-signal inference required). Tier assignments are minimal: extraction is simple field pull, SQL is moderately complex aggregation, and reconciliation is straightforward comparison with classification."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sam_extract",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 254,
+      "output_tokens": 200,
+      "cached_tokens": 0,
+      "latency_ms": 1719,
+      "output": {
+        "error": "No document provided",
+        "message": "Unable to extract data - document content required",
+        "expected_fields": {
+          "products": [
+            {
+              "product_name": null,
+              "sku": null,
+              "license_type": null,
+              "licensed_quantity": null,
+              "active_users": null,
+              "assignment_status": null,
+              "provisioning_status": null,
+              "spend_usd": null
+            }
+          ],
+          "summary": {
+            "total_licensed_seats": null,
+            "total_active_users": null,
+            "over_provisioned_seats": null,
+            "under_provisioned_seats": null,
+            "total_spend_usd": null
+          }
+        }
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "consumption_sql",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 471,
+      "output_tokens": 174,
+      "cached_tokens": 0,
+      "latency_ms": 2332,
+      "output": {
+        "sql": "SELECT cf.product, cf.publisher, COUNT(DISTINCT cf.user_id) as active_unique_users, SUM(cf.daily_active_seats) as total_active_seats, COUNT(*) as activation_count, SUM(cf.amount_usd) as total_spend_usd, COUNT(DISTINCT cf.event_date) as usage_days, AVG(cf.daily_active_seats) as avg_daily_seats FROM consumption_facts cf WHERE cf.publisher = 'Microsoft' AND cf.event_date >= '2024-01-01' GROUP BY cf.product, cf.publisher ORDER BY active_unique_users DESC, total_spend_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 899,
+      "output_tokens": 81,
+      "cached_tokens": 0,
+      "latency_ms": 1791,
+      "output": {
+        "reconciled": [],
+        "error": "Unable to reconcile: SAM extract returned no data (no document provided) and consumption_sql contains only the SQL query string without executed results. Both sources lack actual data rows for reconciliation."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009115000000000002,
+  "total_latency_ms": 5842,
+  "cumulative_spend_usd": 2.644724000000001
+}

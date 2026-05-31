@@ -1,0 +1,181 @@
+{
+  "task_id": "MTP-005",
+  "task_class": "multitool_plan",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_current_iam",
+        "description": "Retrieve user's current IAM role and existing permissions from identity management system",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_manager_approval",
+        "description": "Query workflow system to retrieve pending or approved manager authorization for the access request",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "orchestrate_provisioning",
+        "description": "Generate multi-tool plan to update IAM permissions via identity provider API and send confirmation email via notification service",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "fetch_current_iam",
+          "fetch_manager_approval"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) fetch_current_iam uses sql_gen (small tier) to query the IAM database for current role—straightforward single-table lookup. (2) fetch_manager_approval uses mongo_query (small tier) to retrieve approval status from workflow system—simple document lookup. (3) orchestrate_provisioning uses multitool_plan (mid tier) because the query explicitly requires multi-step tool orchestration (IAM permission update + email confirmation) from the enterprise tool registry. Dependencies ensure approvals are fetched before provisioning begins. Total: 3 subtasks, all at minimum viable tier. No policy_action is added because governance/compliance evaluation is not requested—the approval is already fetched from the workflow system."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_current_iam",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 460,
+      "output_tokens": 48,
+      "cached_tokens": 0,
+      "latency_ms": 848,
+      "output": {
+        "sql": "SELECT user_id, permission, resource, action, result FROM access_log_facts WHERE user_id IS NOT NULL ORDER BY access_time DESC LIMIT 100"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_manager_approval",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1213,
+      "output_tokens": 65,
+      "cached_tokens": 0,
+      "latency_ms": 930,
+      "output": {
+        "collection": "iam_roles",
+        "pipeline": [
+          {
+            "$match": {
+              "is_elevated": true
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "orchestrate_provisioning",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 526,
+      "output_tokens": 769,
+      "cached_tokens": 0,
+      "latency_ms": 9838,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "user_id": "$upstream.fetch_current_iam.user_id",
+              "permission": "iam:read",
+              "resource": "iam_roles"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "sql.snowflake.query",
+            "arguments": {
+              "sql": "SELECT user_id, permission, resource, action, result FROM access_log_facts WHERE user_id IS NOT NULL ORDER BY access_time DESC LIMIT 100"
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "mongo.aggregate",
+            "arguments": {
+              "collection": "iam_roles",
+              "pipeline": [
+                {
+                  "$match": {
+                    "is_elevated": true
+                  }
+                }
+              ]
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "user_id": "$upstream.fetch_current_iam.user_id",
+              "permission": "iam:write",
+              "resource": "iam_roles"
+            },
+            "depends_on": [
+              2,
+              3
+            ]
+          },
+          {
+            "tool": "iam.grant_role",
+            "arguments": {
+              "user_id": "$2.results[0].user_id",
+              "role": "$3.results[0].role",
+              "resource": "$3.results[0].resource",
+              "approved_by": "$3.results[0].approver_id",
+              "justification": "Manager approval confirmed via workflow system"
+            },
+            "depends_on": [
+              4
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "iam.grant_role",
+              "actor": "$upstream.fetch_current_iam.user_id",
+              "target_user": "$2.results[0].user_id",
+              "role_granted": "$3.results[0].role",
+              "resource": "$3.results[0].resource",
+              "approval_ref": "$3.results[0].approver_id",
+              "status": "$5.status",
+              "timestamp": "$5.timestamp"
+            },
+            "depends_on": [
+              5
+            ]
+          },
+          {
+            "tool": "email.send",
+            "arguments": {
+              "to": "$2.results[0].user_email",
+              "cc": "$3.results[0].approver_email",
+              "subject": "IAM Access Provisioning Confirmation",
+              "body": "Your IAM role has been updated. Role granted: $3.results[0].role. Resource: $3.results[0].resource. Approved by: $3.results[0].approver_id. Audit reference: $6.log_id. If you did not request this change, please contact your security team immediately."
+            },
+            "depends_on": [
+              6
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.015351,
+  "total_latency_ms": 11616,
+  "cumulative_spend_usd": 6.281103000000005
+}

@@ -1,0 +1,112 @@
+{
+  "task_id": "XR-002",
+  "task_class": "cross_recon",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_active_contracts",
+        "description": "Query MongoDB for all active billing contracts with contract ID, vendor name, contracted annual value, and contract start/end dates. Filter for contracts that are currently active (status='active' OR end_date >= today).",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_2024_invoices",
+        "description": "Query SQL invoice warehouse for all invoices issued in 2024 (invoice_date between 2024-01-01 and 2024-12-31). Return invoice amount, contract_id, vendor, and invoice date. Aggregate total invoice value by contract_id.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_flag",
+        "description": "Reconcile MongoDB active contracts with SQL 2024 invoice totals. For each contract, calculate variance as (actual_2024_invoices - contracted_annual_value) / contracted_annual_value. Flag contracts with absolute variance >10% or \u2264-10%. Return flagged contracts with contract_id, vendor, contracted_value, actual_2024_value, variance_percent, and variance_flag.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "fetch_active_contracts",
+          "fetch_2024_invoices"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) MongoDB query for active contracts is simple single-collection query (small tier). (2) SQL aggregation of 2024 invoices by contract is straightforward single-table aggregation (small tier). (3) Cross-reconciliation requires joining two sources, calculating variance metrics, and applying classification logic (flagging >10% variance), which is the core reconciliation responsibility (mid tier). Cost-effective decomposition: we do not split contract/invoice retrieval into separate queries per vendor since a single query can fetch all contracts and all invoices in parallel, and the variance calculation and flagging is inherently part of the reconciliation step, not a separate policy or downstream action."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_active_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1774,
+      "output_tokens": 85,
+      "cached_tokens": 0,
+      "latency_ms": 1334,
+      "output": {
+        "collection": "billing_contracts",
+        "pipeline": [
+          {
+            "$match": {
+              "status": "active"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_2024_invoices",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 765,
+      "output_tokens": 186,
+      "cached_tokens": 0,
+      "latency_ms": 2556,
+      "output": {
+        "sql": "SELECT contract_id, vendor_name, SUM(amount_usd) AS total_invoice_amount_usd, COUNT(*) AS invoice_count, MIN(invoice_date) AS first_invoice_date, MAX(invoice_date) AS last_invoice_date FROM invoice_facts WHERE invoice_date >= '2024-01-01' AND invoice_date <= '2024-12-31' GROUP BY contract_id, vendor_name ORDER BY total_invoice_amount_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_flag",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 491,
+      "output_tokens": 247,
+      "cached_tokens": 0,
+      "latency_ms": 2430,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "contract_id",
+            "mongo_value": "contracted_annual_value",
+            "sql_value": "total_invoice_amount_usd",
+            "classification": "variance_analysis",
+            "calculation": "(actual_2024_invoices - contracted_annual_value) / contracted_annual_value",
+            "flag_threshold": "absolute_variance > 0.10 or <= -0.10",
+            "output_fields": [
+              "contract_id",
+              "vendor",
+              "contracted_value",
+              "actual_2024_value",
+              "variance_percent",
+              "variance_flag"
+            ],
+            "note": "MongoDB is primary source (LEFT JOIN semantics). Contracts in MongoDB without matching 2024 invoices receive sql_value=null, variance_flag=true (complete underutilization). Contracts in SQL without MongoDB match are excluded per LEFT JOIN semantics."
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.021196,
+  "total_latency_ms": 6320,
+  "cumulative_spend_usd": 2.5630630000000005,
+  "evaluator_reason": "ok"
+}

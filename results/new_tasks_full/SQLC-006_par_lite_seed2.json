@@ -1,0 +1,63 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "par_lite",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_analysis",
+        "description": "Query current month spend and 3-month rolling average spend, calculating variance percentage and absolute variance for anomaly detection. Return vendor/category-level spend with metrics: current_month_spend, avg_3month_spend, variance_pct, variance_abs.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_classify",
+        "description": "Reconcile spend variance results with historical spend patterns and classification thresholds. Classify each anomaly into normal_variance (±10%), concerning (10-25%), or critical (>25% or >$X absolute threshold). Output classified anomalies with rationale.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_spend_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks needed: (1) sql_gen (mid tier) because the query requires multi-table or multi-CTE logic to calculate current month spend, compute a 3-month rolling average using window functions, and derive variance metrics—straightforward multi-column aggregation but not frontier-level complexity. (2) cross_recon (mid tier) to classify anomalies by interpreting variance thresholds and assigning severity buckets; this requires judgment on classification logic based on variance patterns but is moderately scoped. Both tasks are mid-complexity; no frontier escalation needed as the SQL has standard window functions and classification is rule-based without complex multi-source reconciliation.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 502,
+      "output_tokens": 691,
+      "cached_tokens": 0,
+      "latency_ms": 7977,
+      "output": {
+        "sql": "WITH monthly_spend AS (\n  SELECT\n    vendor_name,\n    DATE_TRUNC('month', invoice_date) AS spend_month,\n    SUM(amount_usd) AS monthly_total\n  FROM invoice_facts\n  WHERE invoice_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months'\n  GROUP BY vendor_name, DATE_TRUNC('month', invoice_date)\n),\ncurrent_month AS (\n  SELECT\n    vendor_name,\n    monthly_total AS current_month_spend\n  FROM monthly_spend\n  WHERE spend_month = DATE_TRUNC('month', CURRENT_DATE)\n),\nrolling_avg AS (\n  SELECT\n    vendor_name,\n    AVG(monthly_total) AS avg_3month_spend\n  FROM monthly_spend\n  WHERE spend_month >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months'\n    AND spend_month < DATE_TRUNC('month', CURRENT_DATE)\n  GROUP BY vendor_name\n)\nSELECT\n  cm.vendor_name,\n  cm.current_month_spend,\n  COALESCE(ra.avg_3month_spend, 0) AS avg_3month_spend,\n  ROUND(\n    CASE\n      WHEN COALESCE(ra.avg_3month_spend, 0) = 0 THEN NULL\n      ELSE ((cm.current_month_spend - ra.avg_3month_spend) / ra.avg_3month_spend) * 100\n    END, 2\n  ) AS variance_pct,\n  ROUND(cm.current_month_spend - COALESCE(ra.avg_3month_spend, 0), 2) AS variance_abs,\n  CASE\n    WHEN COALESCE(ra.avg_3month_spend, 0) = 0 THEN 'no_baseline'\n    WHEN ABS((cm.current_month_spend - ra.avg_3month_spend) / ra.avg_3month_spend) * 100 <= 10 THEN 'normal_variance'\n    WHEN ABS((cm.current_month_spend - ra.avg_3month_spend) / ra.avg_3month_spend) * 100 <= 25 THEN 'concerning'\n    ELSE 'critical'\n  END AS anomaly_classification\nFROM current_month cm\nLEFT JOIN rolling_avg ra ON cm.vendor_name = ra.vendor_name\nORDER BY ABS(cm.current_month_spend - COALESCE(ra.avg_3month_spend, 0)) DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_classify",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 993,
+      "output_tokens": 93,
+      "cached_tokens": 0,
+      "latency_ms": 3296,
+      "output": {
+        "raw_output": "I need more information to perform the reconciliation. The task references both a MongoDB source (operational state) and SQL results, but only the SQL query definition was provided — no actual result rows from either source.\n\nSince I must apply LEFT JOIN semantics with MongoDB as the primary source, and no MongoDB documents or SQL result rows were supplied, I will return an empty reconciled set rather than fabricate data.\n\n{\"reconciled\": []}"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.016245000000000002,
+  "total_latency_ms": 11273,
+  "cumulative_spend_usd": 1.150203
+}

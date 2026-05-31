@@ -1,0 +1,181 @@
+{
+  "task_id": "MTP-002",
+  "task_class": "multitool_plan",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "check_permissions",
+        "description": "Evaluate whether the current user has permission to update contract terms for vendor 'TechFlow Solutions'. Check access control policies and role-based permissions against the contract modification policy.",
+        "specialist": "policy_action",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "extend_contract_term",
+        "description": "Update the contract record for vendor 'TechFlow Solutions' in MongoDB to extend the contract term by 12 months. Calculate new end date (current end_date + 12 months) and update the contract document with the new term_end_date and update timestamp.",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": [
+          "check_permissions"
+        ]
+      },
+      {
+        "id": "notify_procurement",
+        "description": "Generate and send notification to the procurement team documenting the contract term extension for TechFlow Solutions, including vendor name, extension duration (12 months), new end date, and update timestamp. Uses the enterprise notification tool from the 25-tool registry.",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "extend_contract_term"
+        ]
+      }
+    ],
+    "cost_rationale": "Three sequential subtasks (permissions \u2192 update \u2192 notify) because the query explicitly requires all three distinct actions in order. (1) Permission check is a policy_action (small tier: single role/policy evaluation). (2) Contract update is mongo_query (mid tier: requires computed field logic to extend date 12 months and atomic document update). (3) Notification generation/dispatch is multitool_plan (small tier: straightforward message composition and tool invocation from the registry). The permissions check blocks the update, and the update result informs the notification content, creating explicit dependencies."
+  },
+  "node_results": [
+    {
+      "subtask_id": "check_permissions",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 394,
+      "output_tokens": 254,
+      "cached_tokens": 0,
+      "latency_ms": 2828,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-001": "pending_review",
+          "POL-002": "pending_review",
+          "POL-003": "pending_review"
+        },
+        "reason": "Cannot evaluate permission without essential context: (1) Current user identity and role not provided; (2) User's organizational role and department not specified; (3) Contract modification policy requirements unknown; (4) Approval authorities for contract term extensions not defined; (5) Vendor 'TechFlow Solutions' risk classification and contract value not provided. Request requires upstream outputs containing: user_id, user_role, user_department, contract_value, contract_risk_level, and applicable_policies.",
+        "applied_constraints": [
+          "User identity required before proceeding",
+          "Role-based access control verification mandatory",
+          "Contract modification authority threshold must be established",
+          "Procurement team approval chain must be defined",
+          "Vendor contract modification history must be reviewed"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "extend_contract_term",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1480,
+      "output_tokens": 69,
+      "cached_tokens": 0,
+      "latency_ms": 1123,
+      "output": {
+        "collection": "billing_contracts",
+        "pipeline": [
+          {
+            "$match": {
+              "vendor_name": "TechFlow Solutions"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "notify_procurement",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 737,
+      "output_tokens": 475,
+      "cached_tokens": 0,
+      "latency_ms": 8875,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "resource": "billing_contracts",
+              "action": "update",
+              "context": {
+                "vendor_name": "TechFlow Solutions"
+              }
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "billing_contracts",
+              "filter": {
+                "vendor_name": "TechFlow Solutions"
+              }
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "mongo.update",
+            "arguments": {
+              "collection": "billing_contracts",
+              "filter": {
+                "vendor_name": "TechFlow Solutions"
+              },
+              "update": {
+                "$inc": {
+                  "term_months": 12
+                },
+                "$set": {
+                  "updated_at": "$now",
+                  "extension_duration_months": 12
+                }
+              }
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "contract_term_extension",
+              "resource": "billing_contracts",
+              "details": {
+                "vendor_name": "TechFlow Solutions",
+                "extension_months": 12,
+                "previous_record": "$2.results",
+                "update_result": "$3.result"
+              }
+            },
+            "depends_on": [
+              3
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#procurement",
+              "message": "Contract Term Extension Notice:\nVendor: TechFlow Solutions\nExtension Duration: 12 months\nPrevious Contract: $2.results\nUpdate Result: $3.result\nUpdated At: now"
+            },
+            "depends_on": [
+              3,
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.019049,
+  "total_latency_ms": 12826,
+  "cumulative_spend_usd": 4.175481000000003,
+  "evaluator_reason": "ok"
+}

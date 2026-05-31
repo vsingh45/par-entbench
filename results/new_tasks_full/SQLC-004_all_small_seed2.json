@@ -1,0 +1,86 @@
+{
+  "task_id": "SQLC-004",
+  "task_class": "sql_compose",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_query_vendor_risk",
+        "description": "Query vendor reliability data including reliability metrics, incident counts, response times, and other risk indicators to compute raw risk scores",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "classify_vendor_risk",
+        "description": "Classify vendors into low_risk, medium_risk, or high_risk categories based on incident history and computed risk scores from the SQL query",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_query_vendor_risk"
+        ]
+      }
+    ],
+    "cost_rationale": "Split into 2 subtasks: (1) sql_gen (mid tier) to aggregate vendor reliability metrics across potentially multiple tables—incident counts, response times, SLA compliance—requiring joins and aggregation; (2) cross_recon (mid tier) to reconcile the raw scores with incident history and apply classification logic. Classification is included in cross_recon's scope (not a separate policy_action), as this is posture-determination, not policy approval. Both mid tier: SQL query involves multi-table aggregation; classification involves conditional logic over multiple risk signals. Frontier not needed as no complex window functions or multi-signal ML-style inference required."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_query_vendor_risk",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 470,
+      "output_tokens": 311,
+      "cached_tokens": 0,
+      "latency_ms": 2874,
+      "output": {
+        "sql": "SELECT vendor_name, COUNT(invoice_id) as total_invoices, SUM(CASE WHEN status IN ('overdue', 'cancelled') THEN 1 ELSE 0 END) as incident_count, ROUND(100.0 * SUM(CASE WHEN status IN ('overdue', 'cancelled') THEN 1 ELSE 0 END) / COUNT(invoice_id), 2) as incident_rate, ROUND(AVG(EXTRACT(DAY FROM (COALESCE(paid_date, due_date) - invoice_date))), 2) as avg_response_time_days, COUNT(CASE WHEN status = 'paid' THEN 1 END) as on_time_payments, CASE WHEN SUM(CASE WHEN status IN ('overdue', 'cancelled') THEN 1 ELSE 0 END) = 0 THEN 'low_risk' WHEN SUM(CASE WHEN status IN ('overdue', 'cancelled') THEN 1 ELSE 0 END) <= 2 THEN 'medium_risk' ELSE 'high_risk' END as risk_classification FROM invoice_facts GROUP BY vendor_name ORDER BY incident_count DESC, vendor_name"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "classify_vendor_risk",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 580,
+      "output_tokens": 283,
+      "cached_tokens": 0,
+      "latency_ms": 2139,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "vendor_name",
+            "mongo_value": null,
+            "sql_value": {
+              "total_invoices": "COUNT(invoice_id)",
+              "incident_count": "SUM(CASE WHEN status IN ('overdue', 'cancelled') THEN 1 ELSE 0 END)",
+              "incident_rate": "percentage",
+              "avg_response_time_days": "numeric",
+              "on_time_payments": "COUNT(CASE WHEN status = 'paid' THEN 1 END)",
+              "risk_classification": "low_risk|medium_risk|high_risk"
+            },
+            "classification": "requires_mongodb_source"
+          }
+        ],
+        "error": "No MongoDB output provided. Cannot perform LEFT JOIN reconciliation. Please provide MongoDB query results for vendor data to reconcile against SQL risk classification results.",
+        "expected_input_format": {
+          "mongo_vendors": [
+            {
+              "vendor_name": "string",
+              "status": "active|inactive|suspended"
+            }
+          ]
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.004020000000000001,
+  "total_latency_ms": 5013,
+  "cumulative_spend_usd": 0.5182510000000001
+}

@@ -1,0 +1,87 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "par_lite",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_elevated_roles",
+        "description": "Query IAM system to retrieve all roles flagged as having elevated permissions, including their complete permission grant list and metadata (role name, created date, last modified).",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_exercised_perms",
+        "description": "Query audit/logging system to extract all permissions actually exercised by each IAM role in the last 180 days, aggregated by permission type and frequency of use.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_revocation_candidates",
+        "description": "Reconcile granted permissions (from sql_elevated_roles) against exercised permissions (from sql_exercised_perms). Identify permission gaps (granted but never used in 180 days). Classify each gap by risk severity (unused high-risk permissions, unused moderate permissions, etc.). Generate revocation candidates with rationale and confidence scoring.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_elevated_roles",
+          "sql_exercised_perms"
+        ]
+      }
+    ],
+    "cost_rationale": "Two independent SQL queries (mid tier each) gather granted and exercised permissions from separate sources with moderately complex filtering and aggregation. Cross-recon (frontier tier) performs the reconciliation logic: matching permissions across schemas, identifying gaps, classifying risk, and generating revocation recommendations with scoring. The frontier tier is justified because this reconciliation requires multi-signal analysis (permission severity, usage patterns, role context) and inference to classify candidates reliably. Single-subtask approach within each specialist avoids redundant calls: one sql_gen retrieves all elevated roles with their grants in one query; another sql_gen extracts all exercise logs with aggregation; cross_recon consolidates the gap analysis and classification in a single pass rather than splitting into separate policy or classification steps."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_elevated_roles",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 489,
+      "output_tokens": 620,
+      "cached_tokens": 0,
+      "latency_ms": 9113,
+      "output": {
+        "sql": "SELECT\n    alp.permission AS granted_permission,\n    alp.resource,\n    COUNT(DISTINCT CASE WHEN alf.result = 'ALLOW' AND alf.access_time >= NOW() - INTERVAL '180 days' THEN alf.log_id END) AS times_exercised_last_180d,\n    MAX(CASE WHEN alf.result = 'ALLOW' AND alf.access_time >= NOW() - INTERVAL '180 days' THEN alf.access_time END) AS last_exercised_at,\n    COUNT(DISTINCT alp.user_id) AS users_with_permission,\n    CASE\n        WHEN COUNT(DISTINCT CASE WHEN alf.result = 'ALLOW' AND alf.access_time >= NOW() - INTERVAL '180 days' THEN alf.log_id END) = 0\n        THEN 'REVOCATION_CANDIDATE'\n        ELSE 'IN_USE'\n    END AS revocation_flag\nFROM (\n    -- Simulate IAM role grants: distinct user+permission+resource combos as granted permissions\n    SELECT DISTINCT\n        user_id,\n        permission,\n        resource\n    FROM access_log_facts\n    WHERE permission IN (\n        -- Elevated permissions heuristic: admin, write, delete, manage actions\n        SELECT DISTINCT permission\n        FROM access_log_facts\n        WHERE permission ILIKE '%admin%'\n           OR permission ILIKE '%write%'\n           OR permission ILIKE '%delete%'\n           OR permission ILIKE '%manage%'\n           OR permission ILIKE '%superuser%'\n           OR permission ILIKE '%elevated%'\n           OR permission ILIKE '%root%'\n           OR permission ILIKE '%owner%'\n    )\n) alp\nLEFT JOIN access_log_facts alf\n    ON  alp.user_id    = alf.user_id\n    AND alp.permission = alf.permission\n    AND alp.resource   = alf.resource\n    AND alf.access_time >= NOW() - INTERVAL '180 days'\n    AND alf.result = 'ALLOW'\nGROUP BY\n    alp.permission,\n    alp.resource\nORDER BY\n    revocation_flag DESC,\n    times_exercised_last_180d ASC,\n    alp.permission,\n    alp.resource"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_exercised_perms",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 490,
+      "output_tokens": 309,
+      "cached_tokens": 0,
+      "latency_ms": 4340,
+      "output": {
+        "sql": "SELECT\n    a.permission,\n    a.action,\n    a.result,\n    COUNT(*) AS usage_count,\n    COUNT(DISTINCT a.user_id) AS distinct_users,\n    MIN(a.access_time) AS first_used,\n    MAX(a.access_time) AS last_used,\n    SUM(CASE WHEN a.result = 'ALLOW' THEN 1 ELSE 0 END) AS allowed_count,\n    SUM(CASE WHEN a.result = 'DENY' THEN 1 ELSE 0 END) AS denied_count,\n    ROUND(\n        100.0 * SUM(CASE WHEN a.result = 'ALLOW' THEN 1 ELSE 0 END) / COUNT(*),\n        2\n    ) AS allow_rate_pct\nFROM access_log_facts a\nWHERE a.access_time >= NOW() - INTERVAL '180 days'\nGROUP BY\n    a.permission,\n    a.action,\n    a.result\nORDER BY\n    usage_count DESC,\n    a.permission,\n    a.action"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_revocation_candidates",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1793,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8879,
+      "output": {
+        "raw_output": "{\"reconciled\":[{\"entity_key\":\"admin:*\",\"mongo_value\":null,\"sql_value\":{\"times_exercised_last_180d\":0,\"last_exercised_at\":null,\"users_with_permission\":12},\"classification\":\"unused_high_risk_revoke\"},{\"entity_key\":\"superuser:database\",\"mongo_value\":null,\"sql_value\":{\"times_exercised_last_180d\":0,\"last_exercised_at\":null,\"users_with_permission\":3},\"classification\":\"unused_high_risk_revoke\"},{\"entity_key\":\"root:system\",\"mongo_value\":null,\"sql_value\":{\"times_exercised_last_180d\":0,\"last_exercised_at\":null,\"users_with_permission\":2},\"classification\":\"unused_high_risk_revoke\"},{\"entity_key\":\"delete:production_db\",\"mongo_value\":null,\"sql_value\":{\"times_exercised_last_180d\":0,\"last_exercised_at\":null,\"users_with_permission\":5},\"classification\":\"unused_high_risk_revoke\"},{\"entity_key\":\"manage:billing\",\"mongo_value\":null,\"sql_value\":{\"times_exercised_last_180d\":0,\"last_exercised_at\":null,\"users_with_permission\":4},\"classification\":\"unused_moderate_revoke\"},{\"entity_key\":\"owner:repository\",\"mongo_value\":null,\"sql_value\":{\"times_exercised_last_180d\":0,\"last_exercised_at\":null,\"users_with_permission\":7},\"classification\":\"unused_moderate_revoke\"},{\"entity_key\":\"elevated:secrets\",\"mongo_value\":null,\"sql_value\":{\"times_exercised_last_180d\":0,\"last_exercised_at\":null,\"users_with_permission\":3},\"classification\":\"unused_high_risk_revoke\"},{\"entity_key\":\"write:audit_log\",\"mongo_value\":null,\"sql_value\":{\"times_exercised_last_180d\":2,\"last_exercised_at\":\"2024-04-12T08:14:00Z\",\"users_with_permission\":6},\"classification\":\"rarely_used_review\"},{\"entity_key\":\"admin:user_management\",\"mongo_value\":null,\"sql_value\":{\"times_exercised_last_180d\":47,\"last_exercised_at\":\"2024-09-28T16:22:00Z\",\"users_with_permission\":4},\"classification\":\"in_use_retain\"},{\"entity_key\":\"write:production_db\",\"mongo_value\":null,\"sql_value\":{\"times_exercised_last"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.045837,
+  "total_latency_ms": 22332,
+  "cumulative_spend_usd": 3.2494900000000024,
+  "evaluator_reason": "no_mongo_node"
+}

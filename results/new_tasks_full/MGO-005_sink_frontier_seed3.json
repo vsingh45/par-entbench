@@ -1,0 +1,49 @@
+{
+  "task_id": "MGO-005",
+  "task_class": "mongo_gen",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "List the top 5 licenses by contract value in sam_licenses collection.",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task — Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "mongo_query",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1716,
+      "output_tokens": 101,
+      "cached_tokens": 0,
+      "latency_ms": 1544,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$sort": {
+              "contract_value_usd": -1
+            }
+          },
+          {
+            "$limit": 5
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.011105,
+  "total_latency_ms": 1544,
+  "cumulative_spend_usd": 1.9881710000000006
+}

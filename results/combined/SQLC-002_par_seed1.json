@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-002",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top10_customers",
+        "description": "Query TPC-H data warehouse to identify top 10 customers by lifetime value in BUILDING market segment. Return customer ID, name, nation, and total lifetime value with aggregated metrics (order count, average order value, order frequency).",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "generate_narratives",
+        "description": "For each of the top 10 customers identified, generate a personalized retention narrative that references their specific order pattern (frequency, size, seasonality, category preferences if available). Narratives should highlight customer value and suggest retention messaging.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_top10_customers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen at mid tier\u2014multi-table join across customer, orders, and market segment dimensions with aggregation and ranking (RANK/ROW_NUMBER window function) is moderately complex but standard TPC-H query work. (2) cross_recon at frontier tier\u2014takes SQL result as input and must synthesize personalized narratives for 10 customers by inferring patterns, reasoning about retention drivers, and generating contextual prose. This synthesis task requires high-capability language reasoning and contextual understanding of customer behavior patterns. Total: 2 subtasks (minimal decomposition\u2014no split of SQL metrics, no separate narrative-per-customer subtasks, no unnecessary policy/multitool layers)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top10_customers",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 503,
+      "output_tokens": 244,
+      "cached_tokens": 0,
+      "latency_ms": 3966,
+      "output": {
+        "sql": "SELECT c.c_custkey, c.c_name, c.c_nationkey, COUNT(o.o_orderkey) AS order_count, SUM(o.o_totalprice) AS total_lifetime_value, AVG(o.o_totalprice) AS avg_order_value, MAX(o.o_orderdate) AS last_order_date, MIN(o.o_orderdate) AS first_order_date, ROUND(COUNT(o.o_orderkey)::NUMERIC / NULLIF(EXTRACT(DAY FROM (MAX(o.o_orderdate) - MIN(o.o_orderdate))), 0) * 30, 4) AS orders_per_30_days FROM customer c JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name, c.c_nationkey ORDER BY total_lifetime_value DESC LIMIT 10"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "generate_narratives",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 815,
+      "output_tokens": 13,
+      "cached_tokens": 0,
+      "latency_ms": 993,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009569000000000001,
+  "total_latency_ms": 4959,
+  "cumulative_spend_usd": 0.6353869999999997,
+  "evaluator_reason": "step2_consumer_narrative_check_failed"
+}

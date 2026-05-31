@@ -1,0 +1,86 @@
+{
+  "task_id": "SQLC-004",
+  "task_class": "sql_compose",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_query_vendor_risk",
+        "description": "Query vendor reliability data including incident history, uptime, SLA compliance, and other risk metrics to compute risk scores for each vendor",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "classify_vendor_risk",
+        "description": "Classify each vendor into low_risk, medium_risk, or high_risk categories based on computed risk scores and incident history patterns",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_query_vendor_risk"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen at mid tier to query vendor reliability metrics and incident history with joins/aggregations across reliability tables; (2) cross_recon at mid tier to classify vendors by risk level based on the retrieved data\u2014this is a classification and decision task that belongs in cross_recon, not a separate policy_action, since it's applying a straightforward risk scoring framework to single-source data. Both tiers are mid because the SQL involves moderate joins and aggregations, and the classification requires multi-signal reasoning over the risk metrics."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_query_vendor_risk",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 473,
+      "output_tokens": 483,
+      "cached_tokens": 0,
+      "latency_ms": 3227,
+      "output": {
+        "sql": "SELECT vendor_name, COUNT(DISTINCT invoice_id) as total_invoices, SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as paid_invoices, ROUND(100.0 * SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) / COUNT(DISTINCT invoice_id), 2) as payment_completion_rate, ROUND(AVG(EXTRACT(DAY FROM (paid_date - invoice_date)))::NUMERIC, 2) as avg_days_to_payment, COUNT(DISTINCT CASE WHEN paid_date > due_date THEN invoice_id END) as late_payments, ROUND(100.0 * COUNT(DISTINCT CASE WHEN paid_date > due_date THEN invoice_id END) / COUNT(DISTINCT invoice_id), 2) as late_payment_rate, CASE WHEN ROUND(100.0 * SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) / COUNT(DISTINCT invoice_id), 2) >= 95 AND ROUND(100.0 * COUNT(DISTINCT CASE WHEN paid_date > due_date THEN invoice_id END) / COUNT(DISTINCT invoice_id), 2) <= 5 THEN 'low_risk' WHEN ROUND(100.0 * SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) / COUNT(DISTINCT invoice_id), 2) >= 80 AND ROUND(100.0 * COUNT(DISTINCT CASE WHEN paid_date > due_date THEN invoice_id END) / COUNT(DISTINCT invoice_id), 2) <= 15 THEN 'medium_risk' ELSE 'high_risk' END as risk_classification FROM invoice_facts GROUP BY vendor_name ORDER BY risk_classification ASC, payment_completion_rate DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "classify_vendor_risk",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 750,
+      "output_tokens": 283,
+      "cached_tokens": 0,
+      "latency_ms": 2656,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "vendor_risk_classification",
+            "mongo_value": null,
+            "sql_value": {
+              "classification_logic": "payment_completion_rate >= 95 AND late_payment_rate <= 5 \u2192 low_risk; payment_completion_rate >= 80 AND late_payment_rate <= 15 \u2192 medium_risk; else \u2192 high_risk",
+              "metrics_evaluated": [
+                "total_invoices",
+                "paid_invoices",
+                "payment_completion_rate",
+                "avg_days_to_payment",
+                "late_payments",
+                "late_payment_rate",
+                "risk_classification"
+              ]
+            },
+            "classification": "schema_definition_only",
+            "note": "No MongoDB data provided for reconciliation. SQL query defines vendor risk classification schema. To complete reconciliation, provide MongoDB operational vendor state data containing vendor_name and risk-related metrics."
+          }
+        ],
+        "reconciliation_status": "incomplete",
+        "missing_data": "MongoDB query results not provided",
+        "sql_schema_available": true
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.005053,
+  "total_latency_ms": 5883,
+  "cumulative_spend_usd": 0.60457,
+  "evaluator_reason": "step1_sql_fail: generated_sql_execution_error"
+}

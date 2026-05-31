@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-002",
+  "task_class": "sql_compose",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top_10_ltv",
+        "description": "Query TPC-H database to identify top 10 customers by lifetime value (total spent) in market segment 'BUILDING'. Return custkey, name, lifetime_value, and order metrics needed for narrative (order_count, avg_order_value, most_recent_order_date, product_categories).",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_narratives",
+        "description": "Reconcile customer LTV rankings with order pattern details to generate personalized retention narratives for each of the top 10 customers. Each narrative should reference their specific order frequency, average order size, purchase recency, and product preferences to create targeted retention messaging.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_top_10_ltv"
+        ]
+      }
+    ],
+    "cost_rationale": "Split into 2 subtasks: (1) sql_gen (mid-tier) to query TPC-H for top 10 BUILDING segment customers with LTV and order pattern metrics in one multi-table join\u2014mid-tier because it requires joining customer, orders, and lineitem tables with aggregation and ranking. (2) cross_recon (mid-tier) to transform the LTV data into personalized narratives by synthesizing order patterns\u2014mid-tier because it requires multi-signal synthesis (frequency, recency, categories) into coherent messaging, not a frontier-level inference task. No multitool_plan needed (single data substrate). No policy_action needed (retention narrative is business logic, not compliance). No separate extract subtask (data is already structured from SQL)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top_10_ltv",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 519,
+      "output_tokens": 201,
+      "cached_tokens": 0,
+      "latency_ms": 1606,
+      "output": {
+        "sql": "SELECT c.c_custkey, c.c_name, SUM(o.o_totalprice) AS lifetime_value, COUNT(o.o_orderkey) AS order_count, AVG(o.o_totalprice) AS avg_order_value, MAX(o.o_orderdate) AS most_recent_order_date, STRING_AGG(DISTINCT l.l_linestatus, ', ') AS product_categories FROM customer c INNER JOIN orders o ON c.c_custkey = o.o_custkey INNER JOIN lineitem l ON o.o_orderkey = l.l_orderkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name ORDER BY lifetime_value DESC LIMIT 10"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_narratives",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 759,
+      "output_tokens": 13,
+      "cached_tokens": 0,
+      "latency_ms": 802,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.005644000000000001,
+  "total_latency_ms": 2408,
+  "cumulative_spend_usd": 0.8361949999999997,
+  "evaluator_reason": "step2_consumer_narrative_check_failed"
+}

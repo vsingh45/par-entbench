@@ -1,0 +1,118 @@
+{
+  "task_id": "XR-006",
+  "task_class": "cross_recon",
+  "router": "all_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_query_sam_renewals",
+        "description": "Query SAM MongoDB to retrieve Slack contract renewal data including renewal dates, license count, contract terms, and vendor renewal terms",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_consumption_trends",
+        "description": "Query consumption data warehouse to extract Slack usage trends over time, including active users, seat utilization rate, and usage patterns (daily/monthly metrics)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal_trajectory",
+        "description": "Reconcile SAM renewal contract dates and license counts with consumption usage trends to identify trajectory alignment, forecast future renewal needs, and assess renewal posture (over-provisioned, under-provisioned, right-sized)",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "mongo_query_sam_renewals",
+          "sql_consumption_trends"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) mongo_query to extract SAM renewal contract details (mid-tier for filtering and field aggregation), (2) sql_gen for consumption warehouse queries producing multi-metric usage trends (mid-tier for joins and time-series aggregation), (3) cross_recon at frontier tier to reconcile two data sources with temporal alignment, calculate trajectory divergence, classify renewal posture (over/under/right-sized), and generate actionable renewal forecasts. The frontier tier is necessary because cross-recon must synthesize conflicting signals from two sources, apply time-series analysis, and produce probabilistic renewal recommendations."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_query_sam_renewals",
+      "specialist": "mongo_query",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1742,
+      "output_tokens": 142,
+      "cached_tokens": 0,
+      "latency_ms": 1951,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Slack"
+            }
+          },
+          {
+            "$lookup": {
+              "from": "billing_contracts",
+              "localField": "publisher",
+              "foreignField": "vendor_name",
+              "as": "contract_info"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_consumption_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 718,
+      "output_tokens": 218,
+      "cached_tokens": 0,
+      "latency_ms": 32974,
+      "output": {
+        "sql": "SELECT DATE_TRUNC('month', event_date) AS usage_month, COUNT(DISTINCT user_id) AS active_users, SUM(daily_active_seats) AS total_active_seats, AVG(daily_active_seats) AS avg_daily_active_seats, SUM(amount_usd) AS total_spend_usd, COUNT(DISTINCT event_date) AS active_days FROM consumption_facts WHERE product ILIKE '%slack%' AND event_date >= '2024-01-01' GROUP BY DATE_TRUNC('month', event_date) ORDER BY usage_month"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal_trajectory",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 779,
+      "output_tokens": 148,
+      "cached_tokens": 0,
+      "latency_ms": 2860,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "Slack",
+            "mongo_value": {
+              "publisher": "Slack",
+              "contracted_licenses": 500,
+              "renewal_date": "2025-03-15",
+              "contract_value_usd": 180000
+            },
+            "sql_value": {
+              "avg_monthly_active_users": 342,
+              "avg_daily_active_seats": 315,
+              "total_spend_usd": 162000,
+              "trend": "declining"
+            },
+            "classification": "over-provisioned"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.028895,
+  "total_latency_ms": 37785,
+  "cumulative_spend_usd": 3.5923380000000016
+}

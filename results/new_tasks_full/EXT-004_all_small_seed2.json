@@ -1,0 +1,55 @@
+{
+  "task_id": "EXT-004",
+  "task_class": "extract",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_contract_parties",
+        "description": "Extract all party names, their roles, and contact addresses from the multi-party contract",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single extraction task with moderate complexity (multiple fields across potentially multiple parties in a structured format). Assigned to mid tier because extract must identify and structure multiple related entities (party names, roles, addresses) from a document, which requires reasonable inference and consistent field population across variable numbers of parties. This is more complex than a fixed-schema single-entity extraction, but does not require cross-document inference or multi-signal reconciliation (frontier). No additional subtasks needed: party extraction, role identification, and address capture are all handled within one extract call.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_contract_parties",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 381,
+      "output_tokens": 156,
+      "cached_tokens": 0,
+      "latency_ms": 1079,
+      "output": {
+        "parties": [
+          {
+            "name": "Acme Corporation",
+            "role": "Service Provider",
+            "address": "123 Business Ave, San Francisco, CA 94105"
+          },
+          {
+            "name": "TechCorp Inc.",
+            "role": "Primary Client",
+            "address": "456 Innovation Drive, San Jose, CA 95110"
+          },
+          {
+            "name": "Global Partners LLC",
+            "role": "Secondary Partner",
+            "address": "789 Enterprise Boulevard, Las Vegas, NV 89101"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.0011610000000000001,
+  "total_latency_ms": 1079,
+  "cumulative_spend_usd": 5.356332000000003
+}

@@ -1,0 +1,338 @@
+{
+  "task_id": "XR-004",
+  "task_class": "cross_recon",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sam_query",
+        "description": "Query SAM system for Microsoft licensed users and seat allocations by product/tenant",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "consumption_query",
+        "description": "Query consumption facts warehouse for active users and spend by Microsoft product/service",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconciliation",
+        "description": "Cross-reconcile SAM licensed seats against consumption active users, calculate provisioning gaps (under/over), generate classification (under-provisioned, optimized, over-provisioned) with recommendations",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sam_query",
+          "consumption_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: (1) mongo_query (mid tier) retrieves SAM licensing data with multi-document joins across license catalogs; (2) sql_gen (mid tier) aggregates consumption facts with multi-table joins to active user metrics; (3) cross_recon (frontier tier) performs multi-signal reconciliation across two sources with gap analysis, posture classification, and provisioning recommendations—this requires inference across license types, mapping of products, and nuanced under/over-provisioning logic that frontier capability provides. Frontier tier for cross_recon is necessary because the reconciliation must handle complex mappings between licensing SKUs and consumption metrics, calculate deltas, classify posture, and recommend action—a mid-tier agent cannot reliably infer the nuanced provisioning decisions across heterogeneous license dimensions."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sam_query",
+      "specialist": "mongo_query",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1215,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9494,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Microsoft",
+              "status": "active"
+            }
+          },
+          {
+            "$lookup": {
+              "from": "sam_seat_assignments",
+              "localField": "license_id",
+              "foreignField": "license_id",
+              "as": "seat_assignments"
+            }
+          },
+          {
+            "$addFields": {
+              "total_assigned_seats": {
+                "$size": "$seat_assignments"
+              },
+              "active_assigned_seats": {
+                "$size": {
+                  "$filter": {
+                    "input": "$seat_assignments",
+                    "as": "sa",
+                    "cond": {
+                      "$eq": [
+                        "$$sa.status",
+                        "active"
+                      ]
+                    }
+                  }
+                }
+              },
+              "inactive_assigned_seats": {
+                "$size": {
+                  "$filter": {
+                    "input": "$seat_assignments",
+                    "as": "sa",
+                    "cond": {
+                      "$ne": [
+                        "$$sa.status",
+                        "active"
+                      ]
+                    }
+                  }
+                }
+              },
+              "never_active_seats": {
+                "$size": {
+                  "$filter": {
+                    "input": "$seat_assignments",
+                    "as": "sa",
+                    "cond": {
+                      "$or": [
+                        {
+                          "$eq": [
+                            "$$sa.last_active_date",
+                            null
+                          ]
+                        },
+                        {
+                          "$not": [
+                            {
+                              "$gt": [
+                                "$$sa.last_active_date",
+                                null
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "unassigned_seats": {
+                "$subtract": [
+                  "$seat_count",
+                  {
+                    "$size": "$seat_assignments"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "$addFields": {
+              "provisioning_delta": {
+                "$subtract": [
+                  "$seat_count",
+                  "$active_assigned_seats"
+                ]
+              },
+              "provisioning_status": {
+                "$switch": {
+                  "branches": [
+                    {
+                      "case": {
+                        "$gt": [
+                          {
+                            "$subtract": [
+                              "$seat_count",
+                              "$active_assigned_seats"
+                            ]
+                          },
+                          0
+                        ]
+                      },
+                      "then": "OVER_PROVISIONED"
+                    },
+                    {
+                      "case": {
+                        "$lt": [
+                          {
+                            "$subtract": [
+                              "$seat_count",
+                              "$active_assigned_seats"
+                            ]
+                          },
+                          0
+                        ]
+                      },
+                      "then": "UNDER_PROVISIONED"
+                    }
+                  ],
+                  "default": "FULLY_UTILIZED"
+                }
+              },
+              "wasted_spend_usd": {
+                "$multiply": [
+                  "$cost_per_seat_usd",
+                  {
+                    "$max": [
+                      {
+                        "$subtract": [
+                          "$seat_count",
+                          "$active_assigned_seats"
+                        ]
+                      },
+                      0
+                    ]
+                  }
+                ]
+              },
+              "utilization_pct": {
+                "$cond": [
+                  {
+                    "$gt": [
+                      "$seat_count",
+                      0
+                    ]
+                  },
+                  {
+                    "$multiply": [
+                      {
+                        "$divide": [
+                          "$active_assigned_seats",
+                          "$seat_count"
+                        ]
+                      },
+                      100
+                    ]
+                  },
+                  0
+                ]
+              }
+            }
+          },
+          {
+            "$sort": {
+              "wasted_spend_usd": -1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "consumption_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 459,
+      "output_tokens": 218,
+      "cached_tokens": 0,
+      "latency_ms": 3580,
+      "output": {
+        "sql": "SELECT product, SUM(amount_usd) AS total_spend_usd, SUM(daily_active_seats) AS total_active_seat_days, AVG(daily_active_seats) AS avg_daily_active_seats, COUNT(DISTINCT user_id) AS distinct_users, COUNT(DISTINCT license_id) AS distinct_licenses, COUNT(DISTINCT event_id) AS event_count, MIN(event_date) AS earliest_event, MAX(event_date) AS latest_event, SUM(CASE WHEN event_type = 'activation' THEN 1 ELSE 0 END) AS activations, SUM(CASE WHEN event_type = 'deactivation' THEN 1 ELSE 0 END) AS deactivations FROM consumption_facts WHERE publisher ILIKE '%microsoft%' GROUP BY product ORDER BY total_spend_usd DESC NULLS LAST"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconciliation",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1610,
+      "output_tokens": 658,
+      "cached_tokens": 0,
+      "latency_ms": 7232,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "Microsoft 365 E5",
+            "mongo_value": {
+              "seat_count": 500,
+              "active_assigned_seats": 320,
+              "provisioning_delta": 180,
+              "wasted_spend_usd": 10800,
+              "utilization_pct": 64.0
+            },
+            "sql_value": {
+              "total_spend_usd": 380000,
+              "avg_daily_active_seats": 310,
+              "distinct_users": 345
+            },
+            "classification": "over-provisioned"
+          },
+          {
+            "entity_key": "Microsoft 365 E3",
+            "mongo_value": {
+              "seat_count": 1000,
+              "active_assigned_seats": 1050,
+              "provisioning_delta": -50,
+              "wasted_spend_usd": 0,
+              "utilization_pct": 105.0
+            },
+            "sql_value": {
+              "total_spend_usd": 260000,
+              "avg_daily_active_seats": 1040,
+              "distinct_users": 1080
+            },
+            "classification": "under-provisioned"
+          },
+          {
+            "entity_key": "Power BI Pro",
+            "mongo_value": {
+              "seat_count": 200,
+              "active_assigned_seats": 200,
+              "provisioning_delta": 0,
+              "wasted_spend_usd": 0,
+              "utilization_pct": 100.0
+            },
+            "sql_value": {
+              "total_spend_usd": 24000,
+              "avg_daily_active_seats": 195,
+              "distinct_users": 210
+            },
+            "classification": "optimized"
+          },
+          {
+            "entity_key": "Visio Plan 2",
+            "mongo_value": {
+              "seat_count": 150,
+              "active_assigned_seats": 40,
+              "provisioning_delta": 110,
+              "wasted_spend_usd": 1650,
+              "utilization_pct": 26.67
+            },
+            "sql_value": {
+              "total_spend_usd": 18000,
+              "avg_daily_active_seats": 38,
+              "distinct_users": 45
+            },
+            "classification": "over-provisioned"
+          },
+          {
+            "entity_key": "Project Plan 3",
+            "mongo_value": {
+              "seat_count": 75,
+              "active_assigned_seats": 70,
+              "provisioning_delta": 5,
+              "wasted_spend_usd": 150,
+              "utilization_pct": 93.33
+            },
+            "sql_value": null,
+            "classification": "optimized"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.044792,
+  "total_latency_ms": 20306,
+  "cumulative_spend_usd": 2.7835530000000013
+}

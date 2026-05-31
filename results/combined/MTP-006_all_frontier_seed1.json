@@ -1,0 +1,128 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "all_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sam_contract_check",
+        "description": "Query SAM system to extract contract renewal dates, vendor names, and current contract terms for active licenses",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "consumption_query",
+        "description": "Query consumption database (SQL warehouse) to calculate usage trends and spend metrics for each license/vendor over past 12 months",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "risk_assessment",
+        "description": "Reconcile SAM contract data with consumption trends to assess renewal risk (renewal urgency, budget impact, utilization gaps) and classify each contract by risk tier",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sam_contract_check",
+          "consumption_query"
+        ]
+      },
+      {
+        "id": "notify_procurement",
+        "description": "Generate and send renewal alerts to procurement team with risk classification, renewal dates, recommendations, and budget impact summaries for contracts flagged as high/medium risk",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "risk_assessment"
+        ]
+      }
+    ],
+    "cost_rationale": "Minimum 4 subtasks: SAM retrieval requires multitool_plan (1) to orchestrate vendor system integration; consumption analysis is single SQL query (1, mid-tier for multi-table join and window functions); risk reconciliation (1, frontier-tier) combines contract + consumption data with classification logic\u2014not split further because reconciliation and decision-making are unified; notification is multitool_plan (1, mid-tier) for email/alert system integration. Total: 4 focused subtasks. Tier choices: multitool_plan for external system calls (SAM, notification); sql_gen sufficient for consumption metrics (mid-tier multi-table query); frontier-tier for cross_recon given multi-signal reconciliation and risk classification requirement."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sam_contract_check",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 624,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10488,
+      "output": {
+        "raw_output": "{\"plan\":[{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT contract_id, vendor_name, license_name, renewal_date, contract_terms, annual_cost, license_count FROM sam.contracts WHERE status = 'active' AND renewal_date <= DATEADD(day, 90, CURRENT_DATE()) ORDER BY renewal_date ASC\"},\"depends_on\":[]},{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT contract_id, vendor_name, AVG(daily_active_users) AS avg_dau, MAX(peak_usage) AS peak_usage, SUM(license_consumption) AS total_consumption, COUNT(DISTINCT user_id) AS unique_users FROM sam.license_usage WHERE usage_date >= DATEADD(day, -180, CURRENT_DATE()) GROUP BY contract_id, vendor_name\",\"contracts\":\"$1.results\"},\"depends_on\":[1]},{\"tool\":\"mongo.aggregate\",\"arguments\":{\"collection\":\"risk_assessments\",\"pipeline\":[{\"$match\":{\"contract_id\":{\"$in\":\"$1.results.contract_id\"}}},{\"$project\":{\"contract_id\":1,\"risk_score\":1,\"utilization_rate\":1,\"renewal_recommendation\":1,\"cost_optimization_opportunity\":1}}]},\"depends_on\":[1,2]},{\"tool\":\"confluence.create_page\",\"arguments\":{\"space\":\"PROC\",\"title\":\"License Renewal Risk Report - Upcoming 90 Days\",\"content\":\"Contracts: $1.results\\nUsage trends: $2.results\\nRisk assessments: $3.results\"},\"depends_on\":[1,2,3]},{\"tool\":\"jira.create_ticket\",\"arguments\":{\"project\":\"PROC\",\"issue_type\":\"Task\",\"summary\":\"License Renewal Review - Upcoming Contracts\",\"description\":\"Review attached risk report and renewal recommendations. Contracts: $1.results, Risk: $3.results\",\"priority\":\"High\",\"labels\":[\"license-renewal\",\"procurement\"]},\"depends_on\":[1,3]},{\"tool\":\"slack.post_message\",\"arguments\":{\"channel\":\"#procurement-team\",\"message\":\"\u26a0\ufe0f License Renewal Alert: $1.results contracts require review within 90 days. Risk report: $4.page_url | Jira tic"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "consumption_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 717,
+      "output_tokens": 242,
+      "cached_tokens": 0,
+      "latency_ms": 3059,
+      "output": {
+        "sql": "SELECT license_id, publisher, product, DATE_TRUNC('month', event_date) AS usage_month, SUM(amount_usd) AS monthly_spend_usd, AVG(daily_active_seats) AS avg_daily_active_seats, SUM(daily_active_seats) AS total_seat_days, COUNT(DISTINCT user_id) AS unique_users, COUNT(*) AS event_count FROM consumption_facts WHERE event_date >= CURRENT_DATE - INTERVAL '12 months' GROUP BY license_id, publisher, product, DATE_TRUNC('month', event_date) ORDER BY license_id, publisher, product, usage_month"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "risk_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1657,
+      "output_tokens": 137,
+      "cached_tokens": 0,
+      "latency_ms": 2354,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "contract_id",
+            "mongo_value": {
+              "risk_score": null,
+              "utilization_rate": null,
+              "renewal_recommendation": null
+            },
+            "sql_value": {
+              "monthly_spend_usd": null,
+              "avg_daily_active_seats": null,
+              "total_seat_days": null,
+              "unique_users": null,
+              "event_count": null
+            },
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "notify_procurement",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 790,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8645,
+      "output": {
+        "raw_output": "{\"plan\":[{\"tool\":\"mongo.find\",\"arguments\":{\"collection\":\"contracts\",\"filter\":{\"risk_classification\":{\"$in\":[\"high\",\"medium\"]},\"renewal_date\":{\"$gte\":\"$NOW\",\"$lte\":\"$NOW+90d\"}},\"projection\":{\"contract_id\":1,\"vendor\":1,\"renewal_date\":1,\"risk_classification\":1,\"annual_value_usd\":1,\"product\":1}},\"depends_on\":[]},{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT contract_id, SUM(monthly_spend_usd) AS ytd_spend, AVG(avg_daily_active_seats) AS avg_seats, AVG(utilization_rate) AS avg_util FROM license_consumption_facts WHERE contract_id IN ($1.results[*].contract_id) AND event_date >= DATEADD(month,-12,CURRENT_DATE) GROUP BY contract_id\"},\"depends_on\":[1]},{\"tool\":\"mongo.aggregate\",\"arguments\":{\"collection\":\"contracts\",\"pipeline\":[{\"$match\":{\"contract_id\":{\"$in\":\"$1.results[*].contract_id\"}}},{\"$lookup\":{\"from\":\"risk_assessments\",\"localField\":\"contract_id\",\"foreignField\":\"contract_id\",\"as\":\"risk\"}},{\"$project\":{\"contract_id\":1,\"vendor\":1,\"renewal_date\":1,\"risk_classification\":1,\"annual_value_usd\":1,\"risk_score\":{\"$arrayElemAt\":[\"$risk.risk_score\",0]},\"renewal_recommendation\":{\"$arrayElemAt\":[\"$risk.renewal_recommendation\",0]}}}]},\"depends_on\":[1]},{\"tool\":\"iam.check_permission\",\"arguments\":{\"role\":\"procurement_notifier\",\"action\":\"send_renewal_alert\",\"resource\":\"contracts\"},\"depends_on\":[]},{\"tool\":\"confluence.create_page\",\"arguments\":{\"space\":\"PROCUREMENT\",\"title\":\"License Renewal Alerts - High/Medium Risk Contracts\",\"content\":\"Renewal alert summary. Contracts: $3.results. Consumption trends: $2.results. Includes risk classification, renewal dates, recommendations, and budget impact.\"},\"depends_on\":[2,3,4]},{\"tool\":\"jira.create_ticket\",\"arguments\":{\"project\":\"P"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.068415,
+  "total_latency_ms": 24546,
+  "cumulative_spend_usd": 7.0523480000000065,
+  "evaluator_reason": "no_plan_in_output"
+}

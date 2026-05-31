@@ -1,0 +1,136 @@
+{
+  "task_id": "XR-001",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_adobe_state",
+        "description": "Query sam_licenses MongoDB collection to retrieve current Adobe contracted state (product line, license count, contract terms, pricing) for all active Adobe licenses",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_spend_usage",
+        "description": "Query consumption_facts SQL table to retrieve Q4 2024 actual spend by Adobe product line and 90-day usage trend (sum and trajectory) to identify growth/decline patterns",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_trajectory",
+        "description": "Reconcile Adobe contracted state with Q4 spend and 90-day usage trends. Analyze consumption-to-contract ratios, trend direction, and cost per unit. Generate renewal trajectory (expand, hold, reduce recommendations) by product line with confidence and rationale.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "mongo_adobe_state",
+          "sql_spend_usage"
+        ]
+      }
+    ],
+    "cost_rationale": "3 subtasks required: (1) mongo_query to fetch contracted state\u2014small tier because it's a single-collection query with standard filters on product vendor and status; (2) sql_gen to compute Q4 spend and 90-day trend across consumption_facts\u2014mid tier because it requires aggregation, date windowing, and per-product-line metrics; (3) cross_recon at frontier tier to synthesize contract vs. spend/usage signals, compute utilization ratios, detect trend patterns, and generate strategic recommendations (expand/hold/reduce) with multi-signal reasoning and business context. The frontier tier is warranted because trajectory decisions require inference across three data streams with confidence scoring. Separate policy_action not needed\u2014renewal posture is a recommendation, not governance approval."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_adobe_state",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1247,
+      "output_tokens": 341,
+      "cached_tokens": 0,
+      "latency_ms": 2232,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Adobe",
+              "status": "active"
+            }
+          },
+          {
+            "$group": {
+              "_id": "$product",
+              "product_line": {
+                "$first": "$product"
+              },
+              "total_licenses": {
+                "$sum": "$seat_count"
+              },
+              "total_contract_value_usd": {
+                "$sum": "$contract_value_usd"
+              },
+              "avg_cost_per_seat_usd": {
+                "$avg": "$cost_per_seat_usd"
+              },
+              "contracts": {
+                "$push": {
+                  "license_id": "$license_id",
+                  "seat_count": "$seat_count",
+                  "contract_value_usd": "$contract_value_usd",
+                  "term_start": "$term_start",
+                  "term_end": "$term_end",
+                  "renewal_terms": "$renewal_terms",
+                  "assigned_team": "$assigned_team",
+                  "criticality_tier": "$criticality_tier"
+                }
+              }
+            }
+          },
+          {
+            "$sort": {
+              "total_contract_value_usd": -1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_spend_usage",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 503,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10082,
+      "output": {
+        "raw_output": "{\"sql\": \"WITH q4_2024_spend AS (\\n    SELECT\\n        product,\\n        SUM(amount_usd) AS q4_total_spend,\\n        SUM(daily_active_seats) AS q4_total_active_seats,\\n        COUNT(DISTINCT user_id) AS q4_distinct_users,\\n        COUNT(DISTINCT event_id) AS q4_event_count\\n    FROM consumption_facts\\n    WHERE publisher ILIKE '%Adobe%'\\n      AND event_date >= '2024-10-01'\\n      AND event_date < '2025-01-01'\\n      AND fiscal_year = 2024\\n      AND fiscal_quarter = 4\\n    GROUP BY product\\n),\\ntrailing_90_day AS (\\n    SELECT\\n        product,\\n        event_date,\\n        SUM(amount_usd) AS daily_spend,\\n        SUM(daily_active_seats) AS daily_seats\\n    FROM consumption_facts\\n    WHERE publisher ILIKE '%Adobe%'\\n      AND event_date >= CURRENT_DATE - INTERVAL '90 days'\\n      AND event_date < CURRENT_DATE\\n    GROUP BY product, event_date\\n),\\ntrend_calc AS (\\n    SELECT\\n        product,\\n        COUNT(DISTINCT event_date) AS active_days,\\n        SUM(daily_spend) AS trailing_90d_spend,\\n        SUM(daily_seats) AS trailing_90d_seats,\\n        AVG(daily_spend) AS avg_daily_spend,\\n        STDDEV(daily_spend) AS stddev_daily_spend,\\n        -- Early half vs late half to determine trajectory\\n        SUM(CASE WHEN event_date < (CURRENT_DATE - INTERVAL '45 days') THEN daily_spend ELSE 0 END) AS first_half_spend,\\n        SUM(CASE WHEN event_date >= (CURRENT_DATE - INTERVAL '45 days') THEN daily_spend ELSE 0 END) AS second_half_spend,\\n        SUM(CASE WHEN event_date < (CURRENT_DATE - INTERVAL '45 days') THEN daily_seats ELSE 0 END) AS first_half_seats,\\n        SUM(CASE WHEN event_date >= (CURRENT_DATE - INTERVAL '45 days') THEN daily_seats ELSE 0 END) AS second_half_seats\\n    FROM trailing_90_day\\n    GROUP BY product\\n)\\nSELECT\\n    COALESCE(q.product, t.product) AS product_line,\\n    -- Q4 2024 actuals\\n    COALESCE(q.q4_total_spend, 0) AS q4_2024_spend_usd,\\n    COALESCE(q.q4_total_active_seats, 0) AS q4_active_seats,\\n    COALESCE(q.q4_distinct_users, 0) AS q4_distinct_users,\\n    -- 90-day trailing metrics\\n    COALESCE(t.trailing_90d_spend, 0) AS trailing_90d_spend_usd,\\n    COALESCE(t"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_trajectory",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 2006,
+      "output_tokens": 55,
+      "cached_tokens": 0,
+      "latency_ms": 1642,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "Creative Cloud",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "hold"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.027866000000000002,
+  "total_latency_ms": 13956,
+  "cumulative_spend_usd": 1.666777000000001,
+  "evaluator_reason": "stage1_mongo_fail: doc_bag_mismatch"
+}

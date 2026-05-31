@@ -1,0 +1,109 @@
+{
+  "task_id": "XR-006",
+  "task_class": "cross_recon",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongodb_slack_contracts",
+        "description": "Query MongoDB SAM for Slack contract records: renewal dates, license counts, contract terms, and any active renewal flags. Return all Slack contracts with their renewal trajectory metadata.",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_slack_consumption",
+        "description": "Query SQL consumption warehouse for Slack usage trends: historical active user counts, seats consumed, monthly spend, and trend direction. Aggregate by month to align with renewal cycle data.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_renewal_usage",
+        "description": "Cross-reconcile SAM contract renewals with SQL consumption trends. Match renewal dates and license allocations to usage patterns. Identify gaps between contracted seats and actual consumption, trend direction (growing/flat/declining), and generate renewal posture assessment (right-size, over-provisioned, under-provisioned). Classify renewal recommendation (renew as-is, negotiate down, negotiate up, consolidate).",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "mongodb_slack_contracts",
+          "sql_slack_consumption"
+        ]
+      }
+    ],
+    "cost_rationale": "3 subtasks required: (1) MongoDB SAM query for contract baseline (small tier—straightforward contract document retrieval), (2) SQL consumption query for usage trends (small tier—time-series aggregation without complex windows), (3) cross_recon to reconcile both sources and generate posture/renewal recommendation (mid tier—requires matching temporal data, gap analysis, trend classification, and multi-signal decision logic). No policy_action needed because the output is a posture recommendation, not a governance approval. No multitool_plan needed because this is a standard three-source reconciliation workflow, not a registry-based tool orchestration."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongodb_slack_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1758,
+      "output_tokens": 89,
+      "cached_tokens": 0,
+      "latency_ms": 1483,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Slack"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_slack_consumption",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 730,
+      "output_tokens": 146,
+      "cached_tokens": 0,
+      "latency_ms": 2332,
+      "output": {
+        "sql": "SELECT DATE_TRUNC('month', event_date) AS month, SUM(daily_active_seats) AS total_active_seats, COUNT(DISTINCT user_id) AS active_users, SUM(amount_usd) AS monthly_spend FROM consumption_facts WHERE product = 'Slack' GROUP BY DATE_TRUNC('month', event_date) ORDER BY month"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_renewal_usage",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 719,
+      "output_tokens": 138,
+      "cached_tokens": 0,
+      "latency_ms": 2576,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "slack_contract_001",
+            "mongo_value": {
+              "publisher": "Slack",
+              "contracted_seats": 500,
+              "renewal_date": "2024-12-31",
+              "annual_cost_usd": 90000
+            },
+            "sql_value": {
+              "avg_active_seats": 320,
+              "trend": "declining",
+              "last_month_spend": 7500
+            },
+            "classification": "over-provisioned, negotiate down"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.02536,
+  "total_latency_ms": 6391,
+  "cumulative_spend_usd": 3.6479030000000017
+}

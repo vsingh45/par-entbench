@@ -1,0 +1,133 @@
+{
+  "task_id": "XR-002",
+  "task_class": "cross_recon",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_contracts",
+        "description": "Retrieve all active billing contracts with contracted annual value from MongoDB contract management system",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_invoices_2024",
+        "description": "Query invoices issued in 2024, grouped by contract ID with total billed amount and count, to compute actual spend per contract",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_variance",
+        "description": "Reconcile contracted annual values from MongoDB against 2024 actual invoiced amounts from SQL; calculate variance percentage, identify material variances (>10%), and classify contract status (in-line, over-billed, under-billed)",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "mongo_contracts",
+          "sql_invoices_2024"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks (minimum): (1) mongo_query (small) retrieves active contracts with annual value\u2014straightforward collection query; (2) sql_gen (small) aggregates 2024 invoices by contract\u2014simple GROUP BY on date range; (3) cross_recon (mid) reconciles the two sources, calculates variance percentages, and flags material variances >10%\u2014mid tier because it involves multi-source reconciliation, numeric comparison logic, and classification output. No policy_action needed (variance thresholding is a reporting rule, not a governance policy). No multitool_plan needed (data sourcing is localized to two known systems)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1216,
+      "output_tokens": 150,
+      "cached_tokens": 0,
+      "latency_ms": 1089,
+      "output": {
+        "collection": "billing_contracts",
+        "pipeline": [
+          {
+            "$match": {
+              "status": "active"
+            }
+          },
+          {
+            "$addFields": {
+              "contract_id": "$contract_id",
+              "vendor_name": "$vendor_name",
+              "annual_value_usd": "$annual_value_usd",
+              "term_months": "$term_months",
+              "payment_terms_days": "$payment_terms_days",
+              "early_payment_discount_pct": "$early_payment_discount_pct"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_invoices_2024",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 474,
+      "output_tokens": 99,
+      "cached_tokens": 0,
+      "latency_ms": 1073,
+      "output": {
+        "sql": "SELECT i.contract_id, COUNT(*) as invoice_count, SUM(i.amount_usd) as total_billed_amount FROM invoice_facts i WHERE i.invoice_date >= '2024-01-01' AND i.invoice_date < '2025-01-01' GROUP BY i.contract_id ORDER BY i.contract_id"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_variance",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 505,
+      "output_tokens": 403,
+      "cached_tokens": 0,
+      "latency_ms": 3227,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "contract_id",
+            "mongo_field": "annual_value_usd",
+            "sql_field": "total_billed_amount",
+            "variance_pct": "((sql_value - mongo_value) / mongo_value) * 100",
+            "classification_logic": {
+              "in_line": "variance_pct between -10 and 10",
+              "over_billed": "variance_pct > 10",
+              "under_billed": "variance_pct < -10",
+              "no_sql_match": "contract in mongo but not in sql results"
+            },
+            "output_schema": {
+              "contract_id": "string",
+              "vendor_name": "string",
+              "contracted_annual_value_usd": "number",
+              "actual_2024_billed_usd": "number or null",
+              "invoice_count_2024": "number or null",
+              "variance_usd": "number or null",
+              "variance_pct": "number or null",
+              "classification": "string",
+              "material_variance_flag": "boolean",
+              "payment_terms_days": "number",
+              "early_payment_discount_pct": "number",
+              "term_months": "number"
+            }
+          }
+        ],
+        "join_semantics": "LEFT JOIN on contract_id (MongoDB left, SQL right)",
+        "note": "Execute MongoDB pipeline first, then SQL query, then perform row-by-row reconciliation with null/0 substitution for unmatched SQL records"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.005455000000000001,
+  "total_latency_ms": 5389,
+  "cumulative_spend_usd": 2.620234000000001,
+  "evaluator_reason": "ok"
+}

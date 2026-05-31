@@ -1,0 +1,134 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "datadog_usage_query",
+        "description": "Query SQL warehouse to retrieve Datadog license allocations (by license tier/type), actual usage metrics (events, dashboards, monitors, log volume), and historical time-series data to establish growth patterns over the past 12 months",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "datadog_mongo_state",
+        "description": "Query MongoDB to retrieve current Datadog subscription state, entitlements, configured thresholds, and any usage warnings or overage records",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "usage_analysis_recon",
+        "description": "Reconcile SQL usage metrics and growth trends against MongoDB subscription state and entitlements. Classify current posture (under-utilized, optimized, at-risk, overagebound). Identify utilization gaps, predict near-term capacity needs, and generate optimization recommendations based on growth trajectory",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Three subtasks: (1) sql_gen at mid tier for multi-metric usage query with time-series grouping and growth calculation; (2) mongo_query at small tier for straightforward subscription state retrieval; (3) cross_recon at frontier tier because reconciliation requires synthesizing disparate data sources (allocations vs. actuals), inferring growth patterns, classifying multi-dimensional posture (utilization, cost risk, capacity), and generating tailored recommendations\u2014this demands high-level reasoning across signals. The plan minimizes subtasks by combining all SQL metrics into one query and all MongoDB state into one query, avoiding artificial splitting."
+  },
+  "node_results": [
+    {
+      "subtask_id": "datadog_usage_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 483,
+      "output_tokens": 230,
+      "cached_tokens": 0,
+      "latency_ms": 2069,
+      "output": {
+        "sql": "SELECT cf.license_id, cf.publisher, cf.product, cf.fiscal_year, cf.fiscal_quarter, DATE_TRUNC('month', cf.event_date)::DATE AS month, cf.event_type, COUNT(DISTINCT cf.event_id) AS event_count, SUM(cf.daily_active_seats) AS total_active_seats, SUM(cf.amount_usd) AS usage_amount_usd, COUNT(DISTINCT cf.user_id) AS unique_users FROM consumption_facts cf WHERE cf.publisher = 'Datadog' AND cf.event_date >= CURRENT_DATE - INTERVAL '12 months' GROUP BY cf.license_id, cf.publisher, cf.product, cf.fiscal_year, cf.fiscal_quarter, DATE_TRUNC('month', cf.event_date)::DATE, cf.event_type ORDER BY cf.license_id, month DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "datadog_mongo_state",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1216,
+      "output_tokens": 221,
+      "cached_tokens": 0,
+      "latency_ms": 1666,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Datadog"
+            }
+          },
+          {
+            "$lookup": {
+              "from": "sam_seat_assignments",
+              "localField": "license_id",
+              "foreignField": "license_id",
+              "as": "seat_assignments"
+            }
+          },
+          {
+            "$addFields": {
+              "assigned_seats": {
+                "$size": "$seat_assignments"
+              },
+              "active_assignments": {
+                "$size": {
+                  "$filter": {
+                    "input": "$seat_assignments",
+                    "as": "assignment",
+                    "cond": {
+                      "$eq": [
+                        "$$assignment.status",
+                        "active"
+                      ]
+                    }
+                  }
+                }
+              },
+              "inactive_assignments": {
+                "$size": {
+                  "$filter": {
+                    "input": "$seat_assignments",
+                    "as": "assignment",
+                    "cond": {
+                      "$ne": [
+                        "$$assignment.status",
+                        "active"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "usage_analysis_recon",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 292,
+      "output_tokens": 418,
+      "cached_tokens": 0,
+      "latency_ms": 3575,
+      "output": {
+        "raw_output": "{\n  \"error\": \"insufficient_data\",\n  \"message\": \"No upstream outputs provided for reconciliation\",\n  \"expected_inputs\": {\n    \"mongodb_query\": \"subscription state, entitlements, license allocations\",\n    \"sql_query\": \"usage metrics, growth trends, historical consumption\"\n  },\n  \"reconciled\": [],\n  \"recommendations\": [\n    {\n      \"action\": \"provide_mongodb_results\",\n      \"details\": \"Query MongoDB for current subscription state, entitlement records, and allocated license counts\"\n    },\n    {\n      \"action\": \"provide_sql_results\",\n      \"details\": \"Query SQL for historical usage metrics, growth rates, and consumption trends\"\n    },\n    {\n      \"action\": \"define_entity_key\",\n      \"details\": \"Specify primary key (e.g., subscription_id, org_id, license_type) for reconciliation\"\n    }\n  ],\n  \"reconciliation_ready\": false\n}\n```\n\n**To proceed with reconciliation, provide:**\n\n1. **MongoDB output** (operational state):\n   - `subscription_id`, `license_type`, `allocated_units`, `entitlements`, `enabled_features`\n\n2. **SQL output** (historical metrics):\n   - `subscription_id`, `usage_units`, `growth_rate`, `peak_usage`, `trend_direction`, `days_since_last_usage`\n\n3. **Classification thresholds** (usage ratios for):\n   - `under_utilized` (e.g., <30% of allocation)\n   - `optimized` (e.g., 70-90%)\n   - `at_risk` (e.g., 90-100%)\n   - `overage_bound` (e.g., >100%)"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0063360000000000005,
+  "total_latency_ms": 7310,
+  "cumulative_spend_usd": 5.056306000000002,
+  "evaluator_reason": "stage2_sql_fail: result_bag_mismatch"
+}

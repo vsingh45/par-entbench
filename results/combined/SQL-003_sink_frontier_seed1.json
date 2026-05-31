@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-003",
+  "task_class": "sql_gen",
+  "router": "sink_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_gen_1",
+        "description": "Query SQL warehouse for 2024 quarterly spend by publisher (Adobe, Microsoft) and product. Calculate Q1, Q2, Q3, Q4 totals and QoQ changes. Rank products within each publisher by Q4 spend.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This is a single SQL query requiring multi-quarter aggregation, windowing functions to compute QoQ changes, and ranking within publisher groups. A mid-tier sql_gen agent can handle the multiple CTEs and window functions (ROW_NUMBER/RANK over publisher and quarter partitions) needed to compute both QoQ deltas and product rankings in one call. No cross-source reconciliation or multi-tool orchestration is needed\u2014all data comes from the SQL warehouse."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_gen_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 770,
+      "output_tokens": 494,
+      "cached_tokens": 0,
+      "latency_ms": 6505,
+      "output": {
+        "sql": "WITH quarterly AS (SELECT publisher, product, fiscal_quarter, SUM(amount_usd) AS spend FROM consumption_facts WHERE event_date >= '2024-01-01' AND event_date < '2025-01-01' AND publisher IN ('Adobe','Microsoft') GROUP BY publisher, product, fiscal_quarter), pivoted AS (SELECT publisher, product, SUM(CASE WHEN fiscal_quarter=1 THEN spend END) AS q1_spend, SUM(CASE WHEN fiscal_quarter=2 THEN spend END) AS q2_spend, SUM(CASE WHEN fiscal_quarter=3 THEN spend END) AS q3_spend, SUM(CASE WHEN fiscal_quarter=4 THEN spend END) AS q4_spend FROM quarterly GROUP BY publisher, product) SELECT publisher, product, q1_spend, q2_spend, q3_spend, q4_spend, (q2_spend - q1_spend) AS qoq_q2_change, (q3_spend - q2_spend) AS qoq_q3_change, (q4_spend - q3_spend) AS qoq_q4_change, RANK() OVER (PARTITION BY publisher ORDER BY q4_spend DESC NULLS LAST) AS q4_rank FROM pivoted ORDER BY publisher, q4_rank"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0162,
+  "total_latency_ms": 6505,
+  "cumulative_spend_usd": 0.23856099999999997,
+  "evaluator_reason": "result_bag_mismatch"
+}

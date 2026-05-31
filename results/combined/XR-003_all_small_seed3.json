@@ -1,0 +1,87 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "iam_roles_perms",
+        "description": "Query IAM system to retrieve all roles with elevated permissions and their granted permissions",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "exercised_perms",
+        "description": "Query audit/activity logs to retrieve actually exercised permissions for elevated IAM roles in the last 180 days",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_flag_revocation",
+        "description": "Reconcile granted permissions against exercised permissions; identify granted-but-never-used permissions; classify as revocation candidates and generate recommendations",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "iam_roles_perms",
+          "exercised_perms"
+        ]
+      }
+    ],
+    "cost_rationale": "Two independent sql_gen queries (mid-tier) retrieve granted permissions and activity logs\u2014each uses multiple tables and filters (elevated roles, 180-day window). The cross_recon (frontier) reconciles two sources, flags candidates by permission delta, and generates classification and revocation recommendations. This is inherently multi-signal work requiring reasoning over both sets. Three subtasks is minimum: two parallel queries + one reconciliation step. Tiers are appropriate to complexity: mid for moderately complex SQL, frontier for cross-source reconciliation with classification logic."
+  },
+  "node_results": [
+    {
+      "subtask_id": "iam_roles_perms",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 470,
+      "output_tokens": 222,
+      "cached_tokens": 0,
+      "latency_ms": 2153,
+      "output": {
+        "sql": "SELECT DISTINCT a.permission, a.resource, COUNT(DISTINCT a.user_id) as users_with_access, COUNT(DISTINCT CASE WHEN a.access_time >= CURRENT_DATE - INTERVAL '180 days' THEN a.log_id END) as recent_access_count, CASE WHEN COUNT(DISTINCT CASE WHEN a.access_time >= CURRENT_DATE - INTERVAL '180 days' THEN a.log_id END) = 0 THEN 'REVOCATION_CANDIDATE' ELSE 'IN_USE' END as permission_status FROM access_log_facts a WHERE a.permission IN ('ELEVATED', 'ADMIN', 'SUPER_USER', 'WRITE', 'DELETE', 'MODIFY_CONFIG') GROUP BY a.permission, a.resource ORDER BY permission_status DESC, recent_access_count ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "exercised_perms",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 478,
+      "output_tokens": 154,
+      "cached_tokens": 0,
+      "latency_ms": 2888,
+      "output": {
+        "sql": "SELECT a.permission, a.action, COUNT(DISTINCT a.user_id) as users_exercised, COUNT(DISTINCT a.log_id) as total_actions, MAX(a.access_time) as last_used FROM access_log_facts a WHERE a.access_time >= CURRENT_DATE - INTERVAL '180 days' AND a.result = 'success' AND a.permission IN ('ADMIN', 'SUPERUSER', 'WRITE', 'DELETE', 'GRANT') GROUP BY a.permission, a.action ORDER BY total_actions DESC, last_used DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_flag_revocation",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 647,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 3648,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"ADMIN\",\n      \"mongo_value\": {\n        \"permission\": \"ADMIN\",\n        \"granted_status\": \"ACTIVE\",\n        \"resource_coverage\": \"MULTIPLE\"\n      },\n      \"sql_value\": {\n        \"users_with_access\": null,\n        \"recent_access_count\": null,\n        \"permission_status\": \"IN_USE\",\n        \"users_exercised\": null,\n        \"total_actions\": null,\n        \"last_used\": null\n      },\n      \"classification\": \"IN_USE\"\n    },\n    {\n      \"entity_key\": \"ELEVATED\",\n      \"mongo_value\": {\n        \"permission\": \"ELEVATED\",\n        \"granted_status\": \"ACTIVE\",\n        \"resource_coverage\": \"MULTIPLE\"\n      },\n      \"sql_value\": {\n        \"users_with_access\": null,\n        \"recent_access_count\": 0,\n        \"permission_status\": \"REVOCATION_CANDIDATE\",\n        \"users_exercised\": null,\n        \"total_actions\": null,\n        \"last_used\": null\n      },\n      \"classification\": \"REVOCATION_CANDIDATE\"\n    },\n    {\n      \"entity_key\": \"SUPER_USER\",\n      \"mongo_value\": {\n        \"permission\": \"SUPER_USER\",\n        \"granted_status\": \"ACTIVE\",\n        \"resource_coverage\": \"MULTIPLE\"\n      },\n      \"sql_value\": {\n        \"users_with_access\": null,\n        \"recent_access_count\": 0,\n        \"permission_status\": \"REVOCATION_CANDIDATE\",\n        \"users_exercised\": null,\n        \"total_actions\": null,\n        \"last_used\": null\n      },\n      \"classification\": \"REVOCATION_CANDIDATE\"\n    },\n    {\n      \"entity_key\": \"WRITE\",\n      \"mongo_value\": {\n        \"permission\": \"WRITE\",\n        \"granted_status\": \"ACTIVE\",\n        \"resource_coverage\": \"MULTIPLE\"\n      },\n      \"sql_value\": {\n        \"users_with_access\": null,\n        \"recent_access_count\": null,\n        \"permission_status\": \"IN_USE\",\n        \"users_exercised\": null,\n        \"total_actions\": null,\n        \"last_used\": null\n      },\n      \"classification\": \"IN_USE\"\n    },\n    {\n      \"entity_key\": \"DELETE\",\n      \"mongo_value\": {\n        \"permission\": \"DELETE\",\n        \"granted_status\": \"ACTIVE\",\n        \"resource_coverage\": \"MULTIPLE\"\n      },\n      \"sql_value\": {\n        \"users_with_access\": null,\n        \"recent_access_count\": null,\n        \"permission_status\": \"IN_USE\",\n        \"users_exercised\": null,\n        \"total_actions\": null,\n        \"last_used\": null\n      },\n      \"classification\": \"IN_USE\"\n    },\n    {\n      \"entity_key\": \"MODIFY_CONFIG\",\n      \"mongo_value\": {\n        \"permission\": \"MODIFY_CONFIG\",\n        \"granted_status\": \"ACTIVE\",\n        \"resource_coverage\": \"MULTIPLE\"\n      },\n      \"sql_value\": {"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007475,
+  "total_latency_ms": 8689,
+  "cumulative_spend_usd": 3.027806000000002,
+  "evaluator_reason": "no_mongo_node"
+}

@@ -1,0 +1,90 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_sam_contracts",
+        "description": "Extract renewal dates, license counts, and vendor information from SAM system contract documents",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_consumption_trends",
+        "description": "Query consumption history and trend data from usage warehouse to identify consumption patterns and projections",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "assess_and_notify",
+        "description": "Reconcile SAM contract renewal dates with consumption trends, assess renewal risk (urgency, overage risk, budget impact), classify alerts, and generate procurement team notification with recommendations",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Three subtasks are needed to fully implement the workflow: (1) extract_sam_contracts (small) pulls renewal dates from SAM documents—straightforward field extraction; (2) query_consumption_trends (mid) requires a multi-table SQL join across consumption, license, and time dimensions to compute trends and projections—moderate complexity warranting mid tier; (3) assess_and_notify (mid) reconciles the two sources (SAM dates + consumption data), applies risk logic to classify alerts (urgency, overage potential, cost impact), and generates the procurement notification—this is cross-source reconciliation with classification, within mid tier capability. No policy_action is needed because the query asks for risk assessment and alerting, not governance compliance review. No multitool_plan is needed because the workflow is sequential and does not require tool registry orchestration. This is the minimum decomposition: each subtask is necessary and cannot be merged without losing clarity or efficiency."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_sam_contracts",
+      "specialist": "extract",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 343,
+      "output_tokens": 77,
+      "cached_tokens": 0,
+      "latency_ms": 1542,
+      "output": {
+        "vendor_name": null,
+        "contract_number": null,
+        "renewal_date": null,
+        "expiration_date": null,
+        "license_count": null,
+        "license_type": null,
+        "vendor_contact": null,
+        "total_contract_value_usd": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_consumption_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 704,
+      "output_tokens": 174,
+      "cached_tokens": 0,
+      "latency_ms": 2292,
+      "output": {
+        "sql": "SELECT publisher, product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS total_spend, SUM(daily_active_seats) AS total_seats, COUNT(DISTINCT user_id) AS active_users FROM consumption_facts WHERE event_date >= '2024-01-01' GROUP BY publisher, product, fiscal_year, fiscal_quarter ORDER BY publisher, product, fiscal_year, fiscal_quarter"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "assess_and_notify",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 443,
+      "output_tokens": 13,
+      "cached_tokens": 0,
+      "latency_ms": 861,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01405,
+  "total_latency_ms": 4695,
+  "cumulative_spend_usd": 7.282485000000006
+}

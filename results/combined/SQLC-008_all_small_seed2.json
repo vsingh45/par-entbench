@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_budget_analysis",
+        "description": "Query budget allocation by product category with historical cost trends (YoY comparison, monthly trend lines, category share of total budget)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_reallocation",
+        "description": "Reconcile budget allocation patterns with cost trend signals, classify spending efficiency by category, and generate reallocation recommendations with rationale",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_budget_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid-tier) to extract budget and cost trend data across categories\u2014requires multi-table joins (budgets, transactions/spend tables, category hierarchies) with aggregation and time-series grouping, but no complex window functions needed yet; (2) cross_recon (frontier-tier) to synthesize budget vs. actual spend, classify efficiency signals, and produce strategic reallocation recommendations with trade-off reasoning. Frontier is justified because recommendation generation requires multi-signal inference (spending patterns, category growth, risk factors) and structured narrative rationale. No separate policy_action needed\u2014governance alignment is part of the reallocation logic. No multitool_plan needed\u2014this is purely analytical. Plan is minimal: the SQL captures all data needed, cross_recon performs all downstream analysis and recommendation in a single synthesizing call."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_budget_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 457,
+      "output_tokens": 567,
+      "cached_tokens": 0,
+      "latency_ms": 3683,
+      "output": {
+        "sql": "WITH monthly_costs AS (SELECT DATE_TRUNC('month', cf.event_date)::DATE AS month, cf.product, SUM(cf.amount_usd) AS monthly_cost FROM consumption_facts cf WHERE cf.event_date >= '2023-01-01' GROUP BY DATE_TRUNC('month', cf.event_date)::DATE, cf.product), yearly_totals AS (SELECT EXTRACT(YEAR FROM cf.event_date)::INT AS year, cf.product, SUM(cf.amount_usd) AS yearly_cost FROM consumption_facts cf WHERE cf.event_date >= '2023-01-01' GROUP BY EXTRACT(YEAR FROM cf.event_date)::INT, cf.product), category_share AS (SELECT cf.product, SUM(cf.amount_usd) AS total_budget, SUM(cf.amount_usd) * 100.0 / (SELECT SUM(amount_usd) FROM consumption_facts WHERE event_date >= '2023-01-01') AS pct_of_total FROM consumption_facts cf WHERE cf.event_date >= '2023-01-01' GROUP BY cf.product), yoy_comparison AS (SELECT yt1.product, yt1.year AS year_current, yt2.year AS year_prior, yt1.yearly_cost AS current_year_cost, yt2.yearly_cost AS prior_year_cost, CASE WHEN yt2.yearly_cost > 0 THEN ((yt1.yearly_cost - yt2.yearly_cost) / yt2.yearly_cost * 100) ELSE NULL END AS yoy_growth_pct FROM yearly_totals yt1 LEFT JOIN yearly_totals yt2 ON yt1.product = yt2.product AND yt1.year = yt2.year + 1) SELECT mc.product, mc.month, mc.monthly_cost, cs.total_budget, cs.pct_of_total, yc.year_current, yc.current_year_cost, yc.prior_year_cost, yc.yoy_growth_pct FROM monthly_costs mc LEFT JOIN category_share cs ON mc.product = cs.product LEFT JOIN yoy_comparison yc ON mc.product = yc.product ORDER BY mc.product, mc.month DESC;"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_reallocation",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 817,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 5939,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"budget_allocation_analysis\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"analysis_type\": \"cross_temporal_budget_tracking\",\n        \"data_structure\": \"monthly_costs + category_share + yoy_comparison\",\n        \"time_range\": \"2023-01-01 onwards\",\n        \"aggregations\": [\"monthly\", \"yearly\", \"category_share\", \"yoy_growth\"]\n      },\n      \"classification\": \"data_source_available_sql_only\"\n    },\n    {\n      \"entity_key\": \"product_category_budget_share\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"metric\": \"pct_of_total\",\n        \"calculation\": \"SUM(amount_usd) * 100 / total_spend\",\n        \"status\": \"computed\"\n      },\n      \"classification\": \"metric_requires_sql_source\"\n    },\n    {\n      \"entity_key\": \"yoy_cost_growth\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"metric\": \"yoy_growth_pct\",\n        \"calculation\": \"(current_year_cost - prior_year_cost) / prior_year_cost * 100\",\n        \"comparison_scope\": \"year_over_year\"\n      },\n      \"classification\": \"trend_signal_available\"\n    },\n    {\n      \"entity_key\": \"monthly_cost_trajectory\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"metric\": \"monthly_cost\",\n        \"granularity\": \"month\",\n        \"ordering\": \"product, month DESC\",\n        \"recency_bias\": \"latest_months_prioritized\"\n      },\n      \"classification\": \"temporal_pattern_detectable\"\n    },\n    {\n      \"entity_key\": \"reallocation_recommendation_framework\",\n      \"mongo_value\": null,\n      \"sql_value\": null,\n      \"classification\": \"no_data_available_requires_synthesis\",\n      \"recommendation_logic\": {\n        \"high_growth_threshold\": \"yoy_growth_pct > 25\",\n        \"action\": \"expand\",\n        \"rationale\": \"Categories with >25% YoY growth show strong demand; allocate additional budget\"\n      }\n    },\n    {\n      \"entity_key\": \"reallocation_recommendation_framework\",\n      \"mongo_value\": null,\n      \"sql_value\": null,\n      \"classification\": \"no_data_available_requires_synthesis\",\n      \"recommendation_logic\": {\n        \"moderate_growth_threshold\": \"15 <= yoy_growth_pct <= 25\",\n        \"action\": \"hold\",\n        \"rationale\": \"Stable growth categories warrant current allocation levels\"\n      }\n    },\n    {\n      \"entity_key\": \"reallocation_recommendation_framework\",\n      \"mongo_value\": null,\n      \"sql_value\": null,\n      \"classification\": \"no_data_available_requires_synthesis\",\n      \"recommendation_logic\": {\n        \"negative_growth_threshold\": \"yoy_growth_pct < 0\",\n        \"action\": \"reduce\",\n        \"rationale\": \"Categories with declining YoY costs show reduced utilization; realloc"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.008109,
+  "total_latency_ms": 9622,
+  "cumulative_spend_usd": 1.585365000000001,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

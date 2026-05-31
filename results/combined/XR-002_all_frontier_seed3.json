@@ -1,0 +1,94 @@
+{
+  "task_id": "XR-002",
+  "task_class": "cross_recon",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_active_contracts",
+        "description": "Query MongoDB to retrieve all active billing contracts with contract ID, vendor name, contracted annual value, and contract status. Filter for status = 'active'.",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_2024_invoices",
+        "description": "Query SQL to fetch all invoices issued in 2024, grouped by contract ID, calculating total invoiced amount per contract. Include invoice dates and amounts.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_variance",
+        "description": "Reconcile contracted annual values from MongoDB against actual 2024 invoiced amounts from SQL. Calculate variance percentage for each contract. Flag contracts with >10% variance (both over and under). Produce a reconciliation report with contract ID, vendor, contracted value, invoiced total, variance amount, variance percentage, and flag status.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "mongo_active_contracts",
+          "sql_2024_invoices"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks with minimal decomposition: (1) MongoDB query to fetch active contracts is simple single-collection retrieval (small tier). (2) SQL query to aggregate 2024 invoices is straightforward GROUP BY aggregation (small tier). (3) Cross-reconciliation tier is mid because it must join and reconcile data from two distinct sources, calculate derived metrics (variance %), and produce classification/flagging logic\u2014this requires multi-signal reasoning to determine which contracts meet the >10% variance threshold and generate the reconciliation report. The classification and flagging are integral to cross_recon output, not a separate policy step."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_active_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1759,
+      "output_tokens": 85,
+      "cached_tokens": 0,
+      "latency_ms": 1400,
+      "output": {
+        "collection": "billing_contracts",
+        "pipeline": [
+          {
+            "$match": {
+              "status": "active"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_2024_invoices",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 733,
+      "output_tokens": 247,
+      "cached_tokens": 0,
+      "latency_ms": 3053,
+      "output": {
+        "sql": "SELECT contract_id, SUM(amount_usd) AS total_invoiced_2024, COUNT(invoice_id) AS invoice_count, MIN(invoice_date) AS first_invoice_date, MAX(invoice_date) AS last_invoice_date, ARRAY_AGG(invoice_date ORDER BY invoice_date) AS invoice_dates, ARRAY_AGG(amount_usd ORDER BY invoice_date) AS invoice_amounts FROM invoice_facts WHERE invoice_date >= '2024-01-01' AND invoice_date < '2025-01-01' GROUP BY contract_id ORDER BY total_invoiced_2024 DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_variance",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 799,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8967,
+      "output": {
+        "raw_output": "{\"reconciled\":[{\"entity_key\":\"CTR-1001\",\"mongo_value\":{\"vendor\":\"Acme Cloud Services\",\"contracted_annual_value\":240000},\"sql_value\":{\"total_invoiced_2024\":252000,\"invoice_count\":12},\"variance_amount\":12000,\"variance_pct\":5.0,\"flag\":\"within_tolerance\",\"classification\":\"stable\"},{\"entity_key\":\"CTR-1002\",\"mongo_value\":{\"vendor\":\"Globex Data Systems\",\"contracted_annual_value\":480000},\"sql_value\":{\"total_invoiced_2024\":612000,\"invoice_count\":14},\"variance_amount\":132000,\"variance_pct\":27.5,\"flag\":\"over_variance\",\"classification\":\"expand\"},{\"entity_key\":\"CTR-1003\",\"mongo_value\":{\"vendor\":\"Initech Analytics\",\"contracted_annual_value\":180000},\"sql_value\":{\"total_invoiced_2024\":90000,\"invoice_count\":6},\"variance_amount\":-90000,\"variance_pct\":-50.0,\"flag\":\"under_variance\",\"classification\":\"at_risk\"},{\"entity_key\":\"CTR-1004\",\"mongo_value\":{\"vendor\":\"Umbrella Logistics\",\"contracted_annual_value\":360000},\"sql_value\":{\"total_invoiced_2024\":355200,\"invoice_count\":12},\"variance_amount\":-4800,\"variance_pct\":-1.33,\"flag\":\"within_tolerance\",\"classification\":\"stable\"},{\"entity_key\":\"CTR-1005\",\"mongo_value\":{\"vendor\":\"Stark Integrations\",\"contracted_annual_value\":120000},\"sql_value\":{\"total_invoiced_2024\":144000,\"invoice_count\":12},\"variance_amount\":24000,\"variance_pct\":20.0,\"flag\":\"over_variance\",\"classification\":\"growing\"},{\"entity_key\":\"CTR-1006\",\"mongo_value\":{\"vendor\":\"Wayne Security\",\"contracted_annual_value\":600000},\"sql_value\":{\"total_invoiced_2024\":540000,\"invoice_count\":11},\"variance_amount\":-60000,\"variance_pct\":-10.0,\"flag\":\"within_tolerance\",\"classification\":\"hold\"},{\"entity_key\":\"CTR-1007\",\"mongo_value\":{\"vendor\":\"Hooli Platform\",\"contracted_annual_value\":300000},\"sql_value\":{\"total_invoiced_2024\":255000,\"invo"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.044755,
+  "total_latency_ms": 13420,
+  "cumulative_spend_usd": 2.484454000000001,
+  "evaluator_reason": "ok"
+}

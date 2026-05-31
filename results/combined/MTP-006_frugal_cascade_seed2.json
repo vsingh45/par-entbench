@@ -1,0 +1,136 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "frugal_cascade",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_sam_contracts",
+        "description": "Extract contract renewal dates, vendor names, and license IDs from SAM system documents. Return structured contract data with renewal date, status, and vendor information.",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_consumption",
+        "description": "Query consumption trends from the license management database. Calculate average monthly usage, trend direction, and utilization rates for the past 12 months grouped by license/vendor.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_assess",
+        "description": "Reconcile SAM contract data with consumption trends. Assess renewal risk by comparing renewal dates to consumption patterns, identify high-risk renewals (imminent dates with high/critical consumption), and generate risk classification and notification recommendations for procurement team.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "extract_sam_contracts",
+          "query_consumption"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks (minimum necessary): (1) extract_sam_contracts (small tier) \u2014 straightforward document field extraction from SAM contracts, no complex logic required; (2) query_consumption (mid tier) \u2014 multi-month aggregation with trends requires JOIN and window function logic; (3) reconcile_and_assess (mid tier) \u2014 combines two sources (extracted contracts + SQL consumption data) to classify risk and recommend actions, which is core cross_recon work including risk posture decision logic. No policy_action is needed because risk assessment and renewal recommendations are analytical outputs of reconciliation, not governance policy checks. No multitool_plan is added because the workflow uses only standard extract\u2192query\u2192reconcile agents, not the 25-tool enterprise registry."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_sam_contracts",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 252,
+      "output_tokens": 75,
+      "cached_tokens": 0,
+      "latency_ms": 824,
+      "output": {
+        "renewal_date": null,
+        "status": null,
+        "vendor_name": null,
+        "license_id": null,
+        "contract_value_usd": null,
+        "effective_date": null,
+        "expiration_date": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_consumption",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 474,
+      "output_tokens": 350,
+      "cached_tokens": 0,
+      "latency_ms": 3627,
+      "output": {
+        "sql": "SELECT DATE_TRUNC('month', cf.event_date)::DATE AS month, cf.license_id, cf.publisher, AVG(cf.amount_usd) AS avg_monthly_usage, AVG(cf.daily_active_seats) AS avg_active_seats, COUNT(DISTINCT cf.event_id) AS event_count, CASE WHEN LAG(AVG(cf.amount_usd)) OVER (PARTITION BY cf.license_id ORDER BY DATE_TRUNC('month', cf.event_date)) IS NULL THEN 0 WHEN AVG(cf.amount_usd) > LAG(AVG(cf.amount_usd)) OVER (PARTITION BY cf.license_id ORDER BY DATE_TRUNC('month', cf.event_date)) THEN 1 ELSE -1 END AS trend_direction, ROUND(100.0 * AVG(cf.daily_active_seats) / NULLIF(MAX(cf.daily_active_seats) OVER (PARTITION BY cf.license_id), 0), 2) AS utilization_rate_pct FROM consumption_facts cf WHERE cf.event_date >= CURRENT_DATE - INTERVAL '12 months' GROUP BY DATE_TRUNC('month', cf.event_date), cf.license_id, cf.publisher ORDER BY cf.license_id, DATE_TRUNC('month', cf.event_date) DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_assess",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 687,
+      "output_tokens": 395,
+      "cached_tokens": 0,
+      "latency_ms": 3797,
+      "output": {
+        "reconciled": [],
+        "status": "incomplete",
+        "reason": "No data available for reconciliation",
+        "details": {
+          "sam_contracts": {
+            "status": "no_data",
+            "message": "extract_sam_contracts returned null values for all contract fields",
+            "fields_expected": [
+              "renewal_date",
+              "status",
+              "vendor_name",
+              "license_id",
+              "contract_value_usd",
+              "effective_date",
+              "expiration_date"
+            ]
+          },
+          "consumption_data": {
+            "status": "no_data",
+            "message": "query_consumption SQL query defined but no result set provided",
+            "query_status": "pending_execution",
+            "fields_expected": [
+              "month",
+              "license_id",
+              "publisher",
+              "avg_monthly_usage",
+              "avg_active_seats",
+              "event_count",
+              "trend_direction",
+              "utilization_rate_pct"
+            ]
+          },
+          "reconciliation_blocked": true,
+          "required_inputs": [
+            "MongoDB/SAM contract records with renewal_date and license_id",
+            "SQL consumption facts result set with license_id and utilization metrics"
+          ],
+          "next_steps": [
+            "Execute extract_sam_contracts query against SAM system",
+            "Execute query_consumption SQL against consumption_facts table",
+            "Re-submit with populated upstream_outputs",
+            "Reconciliation will then classify licenses as: high_risk (imminent renewal + critical consumption), medium_risk (near renewal + elevated consumption), low_risk (distant renewal or declining consumption), no_recent_activity (null consumption data)"
+          ]
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0055130000000000005,
+  "total_latency_ms": 8248,
+  "cumulative_spend_usd": 7.372982000000005,
+  "evaluator_reason": "no_plan_in_output"
+}

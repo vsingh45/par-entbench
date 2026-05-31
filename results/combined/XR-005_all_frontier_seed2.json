@@ -1,0 +1,62 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sf_seats_query",
+        "description": "Query Salesforce to retrieve total licensed seats and current seat assignments by license type (Standard, Professional, etc.), filtered to show utilization metrics: licensed_seats, assigned_seats, unassigned_seats, utilization_percentage",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "unutilized_analysis",
+        "description": "Reconcile licensed vs assigned seat data and identify unutilized licenses. Classify licenses by utilization tier (high >80%, medium 50-80%, low <50%), flag licenses with >20% unutilized capacity, and prioritize for cost optimization. Include department/team breakdown and recommendations for license type consolidation or reallocation",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid tier) to pull licensed vs assigned seat counts with aggregations by license type/department from Salesforce metadata\u2014a straightforward multi-table join with aggregation but not complex enough for frontier; (2) cross_recon (mid tier) to reconcile the license inventory against assignments, classify utilization posture, and generate prioritized recommendations for unused seat recovery. Both are mid-tier: the SQL is multi-table but not requiring window functions or CTEs; the reconciliation involves classification logic and prioritization but applies a single reconciliation strategy (licensed vs assigned) without multi-signal inference requiring frontier-level reasoning."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sf_seats_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 754,
+      "output_tokens": 278,
+      "cached_tokens": 0,
+      "latency_ms": 3488,
+      "output": {
+        "sql": "SELECT product AS license_type, SUM(daily_active_seats) AS licensed_seats, SUM(CASE WHEN user_id IS NOT NULL THEN 1 ELSE 0 END) AS assigned_seats, SUM(daily_active_seats) - SUM(CASE WHEN user_id IS NOT NULL THEN 1 ELSE 0 END) AS unassigned_seats, ROUND(100.0 * SUM(CASE WHEN user_id IS NOT NULL THEN 1 ELSE 0 END) / NULLIF(SUM(daily_active_seats), 0), 2) AS utilization_percentage FROM consumption_facts WHERE publisher = 'Salesforce' GROUP BY product ORDER BY licensed_seats DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "unutilized_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 489,
+      "output_tokens": 13,
+      "cached_tokens": 0,
+      "latency_ms": 848,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01349,
+  "total_latency_ms": 4336,
+  "cumulative_spend_usd": 3.112121000000002,
+  "evaluator_reason": "no_mongo_node"
+}

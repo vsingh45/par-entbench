@@ -1,0 +1,177 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_sam_contracts",
+        "description": "Extract renewal dates, license count, and key contract terms from SAM (System for Award Management) contract documents",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_consumption_sql",
+        "description": "Query license usage and consumption trends over the past 6-12 months from the enterprise data warehouse, including monthly/quarterly utilization metrics and growth patterns",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_risk_assess",
+        "description": "Cross-reference SAM contract renewal dates with consumption trends, assess renewal risk (high/medium/low) based on upcoming expiration windows and usage patterns, generate renewal recommendations and priority ranking",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "extract_sam_contracts",
+          "query_consumption_sql"
+        ]
+      },
+      {
+        "id": "notify_procurement",
+        "description": "Generate and format renewal alert notifications for procurement team with risk tier, renewal deadline, consumption summary, and recommended actions",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "reconcile_and_risk_assess"
+        ]
+      }
+    ],
+    "cost_rationale": "The workflow requires 4 subtasks (minimum to cover the full pipeline): (1) SAM extraction is small—straightforward field parsing of contract metadata. (2) Consumption query is mid—multi-table join across usage history with time-series aggregation and trend calculation. (3) Risk assessment is mid—cross_recon reconciles two sources (SAM dates + SQL trends), applies classification logic, and produces recommendations; this is the natural home for risk scoring and posture decisions without a separate policy_action (renewal alerts are operational, not governance policy). (4) Notification is small and uses multitool_plan to invoke email/Slack/ticketing tools from the enterprise registry to broadcast alerts to procurement. This avoids hallucinating a standalone policy_action (renewals are not policy compliance) and keeps reconciliation and classification together in cross_recon per the consolidation rule."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_sam_contracts",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 243,
+      "output_tokens": 181,
+      "cached_tokens": 0,
+      "latency_ms": 1772,
+      "output": {
+        "raw_output": "{\n  \"renewal_dates\": null,\n  \"license_count\": null,\n  \"key_contract_terms\": null,\n  \"effective_date\": null,\n  \"expiration_date\": null,\n  \"contract_value_usd\": null,\n  \"vendor_name\": null,\n  \"contract_number\": null,\n  \"contract_type\": null,\n  \"payment_terms\": null,\n  \"renewal_terms\": null,\n  \"auto_renewal_clause\": null,\n  \"notice_period_days\": null\n}\n```\n\n**Note**: No document was provided in the task. To extract SAM contract data, please provide the actual contract document or SAM database export containing the renewal dates, license counts, and contract terms for analysis."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_consumption_sql",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 472,
+      "output_tokens": 268,
+      "cached_tokens": 0,
+      "latency_ms": 2184,
+      "output": {
+        "sql": "SELECT fiscal_year, fiscal_quarter, license_id, publisher, product, DATE_TRUNC('month', event_date)::DATE AS month, COUNT(DISTINCT event_id) AS event_count, COUNT(DISTINCT user_id) AS unique_users, SUM(amount_usd) AS total_consumption_usd, AVG(daily_active_seats) AS avg_active_seats, MAX(daily_active_seats) AS peak_active_seats, ROUND(100.0 * COUNT(DISTINCT event_id) / LAG(COUNT(DISTINCT event_id)) OVER (PARTITION BY license_id, publisher, product ORDER BY DATE_TRUNC('month', event_date)) - 100, 2) AS month_over_month_growth_pct FROM consumption_facts WHERE event_date >= CURRENT_DATE - INTERVAL '12 months' GROUP BY fiscal_year, fiscal_quarter, license_id, publisher, product, DATE_TRUNC('month', event_date) ORDER BY license_id, DATE_TRUNC('month', event_date) DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_risk_assess",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 756,
+      "output_tokens": 318,
+      "cached_tokens": 0,
+      "latency_ms": 4364,
+      "output": {
+        "reconciled": [],
+        "summary": {
+          "status": "INCOMPLETE_DATA",
+          "reason": "MongoDB (SAM contracts) source returned null values - no contract data available for reconciliation",
+          "upstream_issue": "extract_sam_contracts task failed to retrieve contract documents",
+          "sql_data_status": "READY - consumption trends query is valid but has no matching contracts to join against",
+          "recommendation": "BLOCKING ISSUE: Cannot proceed with renewal risk assessment without SAM contract data",
+          "required_action": "Provide SAM contract document or database export with: vendor_name, contract_number, expiration_date, license_id, auto_renewal_clause, notice_period_days",
+          "next_steps": [
+            "1. Supply actual SAM contract data source (MongoDB collection or SAM export)",
+            "2. Re-execute extract_sam_contracts with valid input document",
+            "3. Execute LEFT JOIN: SAM contracts (primary) LEFT JOIN consumption_trends (secondary) ON license_id",
+            "4. Then apply renewal risk classification logic"
+          ]
+        },
+        "left_join_semantics_note": "Cannot perform LEFT JOIN - left side (MongoDB SAM contracts) contains no records. SQL consumption query is syntactically valid but orphaned without contract keys to join on."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "notify_procurement",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 724,
+      "output_tokens": 684,
+      "cached_tokens": 0,
+      "latency_ms": 5283,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "resource": "procurement_alerts",
+              "action": "create_notification",
+              "context": "renewal_alert_workflow"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "renewal_alert_generation_blocked",
+              "status": "FAILED_PRECONDITION",
+              "reason": "Upstream task reconcile_and_risk_assess returned INCOMPLETE_DATA",
+              "details": {
+                "missing_data": "SAM contract documents (MongoDB returned null)",
+                "blocking_issue": "extract_sam_contracts failed - no contract data available",
+                "impact": "Cannot generate renewal alerts without contract reconciliation",
+                "required_inputs": [
+                  "vendor_name",
+                  "contract_number",
+                  "expiration_date",
+                  "license_id",
+                  "auto_renewal_clause",
+                  "notice_period_days"
+                ]
+              }
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#procurement-team",
+              "message": "⚠️ RENEWAL ALERT GENERATION BLOCKED\n\n*Issue:* Cannot generate license renewal alerts - SAM contract data unavailable\n\n*Root Cause:* extract_sam_contracts task failed to retrieve contract documents from MongoDB\n\n*Impact:* Risk assessment and renewal notifications cannot be generated\n\n*Required Actions:*\n1. Verify MongoDB SAM contracts collection contains documents\n2. Provide SAM contract data export with required fields: vendor_name, contract_number, expiration_date, license_id, auto_renewal_clause, notice_period_days\n3. Re-execute extract_sam_contracts with valid input\n4. Re-run reconciliation and risk assessment\n\n*SQL Status:* Consumption trends query is syntactically valid but orphaned without contract keys for join operation\n\n*Next Steps:* Supply SAM contract document/database export and re-trigger workflow"
+            },
+            "depends_on": [
+              2
+            ]
+          }
+        ],
+        "workflow_status": "BLOCKED",
+        "error_summary": {
+          "task": "Generate renewal alert notifications",
+          "blocker": "INCOMPLETE_DATA from upstream reconcile_and_risk_assess",
+          "root_cause": "extract_sam_contracts failed - no MongoDB contract documents available",
+          "cannot_proceed": "No contract data to reconcile against consumption trends or assess renewal risk",
+          "resolution": "Provide SAM contract source data and re-execute from extract_sam_contracts"
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.00945,
+  "total_latency_ms": 13603,
+  "cumulative_spend_usd": 7.167310000000008
+}

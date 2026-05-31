@@ -1,0 +1,255 @@
+{
+  "task_id": "XR-006",
+  "task_class": "cross_recon",
+  "router": "par_no_rationale",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sam_contract_extract",
+        "description": "Extract Slack contract renewal data from SAM system including renewal dates, license counts, terms, and pricing",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "consumption_data_query",
+        "description": "Query consumption data for Slack usage trends including active users, login frequency, and feature adoption over time",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_contract_consumption",
+        "description": "Cross-reconcile SAM contract renewal data with consumption trends to identify alignment and gaps",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sam_contract_extract",
+          "consumption_data_query"
+        ]
+      },
+      {
+        "id": "trajectory_analysis_plan",
+        "description": "Develop comprehensive analysis plan for tracking renewal trajectory with forecasting models and risk assessment",
+        "specialist": "multitool_plan",
+        "tier": "frontier",
+        "depends_on": [
+          "reconcile_contract_consumption"
+        ]
+      },
+      {
+        "id": "renewal_policy_action",
+        "description": "Generate renewal recommendations and policy actions based on trajectory analysis, including negotiation strategy and optimization opportunities",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": [
+          "trajectory_analysis_plan"
+        ]
+      }
+    ],
+    "cost_rationale": "Multi-stage workflow requiring extraction from SAM, querying consumption data, cross-reconciliation, advanced forecasting analysis, and policy-driven recommendations. Frontier tier needed for comprehensive trajectory modeling and predictive insights."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sam_contract_extract",
+      "specialist": "extract",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 237,
+      "output_tokens": 186,
+      "cached_tokens": 0,
+      "latency_ms": 3227,
+      "output": {
+        "effective_date": null,
+        "expiration_date": null,
+        "renewal_date": null,
+        "contract_id": null,
+        "vendor": null,
+        "product_name": null,
+        "license_count": null,
+        "active_users": null,
+        "inactive_users": null,
+        "utilization_rate_pct": null,
+        "contract_term_months": null,
+        "billing_frequency": null,
+        "price_per_license_usd": null,
+        "total_contract_value_usd": null,
+        "auto_renewal": null,
+        "cancellation_notice_days": null,
+        "tier": null,
+        "notes": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "consumption_data_query",
+      "specialist": "mongo_query",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1210,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9534,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Slack",
+              "status": {
+                "$in": [
+                  "active",
+                  "expired",
+                  "renewed"
+                ]
+              }
+            }
+          },
+          {
+            "$sort": {
+              "term_start": 1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_contract_consumption",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 458,
+      "output_tokens": 629,
+      "cached_tokens": 0,
+      "latency_ms": 11560,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "slack_contract_renewal_trajectory",
+            "mongo_value": {
+              "collection": "sam_licenses",
+              "pipeline_executed": true,
+              "publisher_filter": "Slack",
+              "status_filter": [
+                "active",
+                "expired",
+                "renewed"
+              ],
+              "sort_field": "term_start",
+              "sort_order": "ascending",
+              "records_returned": null,
+              "data_available": false,
+              "reason": "No documents returned from MongoDB pipeline; collection may be empty, publisher/status filters returned no matches, or collection does not exist"
+            },
+            "sql_value": {
+              "effective_date": null,
+              "expiration_date": null,
+              "renewal_date": null,
+              "contract_id": null,
+              "vendor": null,
+              "product_name": null,
+              "license_count": null,
+              "active_users": null,
+              "inactive_users": null,
+              "utilization_rate_pct": null,
+              "contract_term_months": null,
+              "billing_frequency": null,
+              "price_per_license_usd": null,
+              "total_contract_value_usd": null,
+              "auto_renewal": null,
+              "cancellation_notice_days": null,
+              "tier": null,
+              "notes": null,
+              "records_returned": 0,
+              "data_available": false,
+              "reason": "All SAM contract fields are null; no historical contract records found for Slack"
+            },
+            "classification": "no_recent_activity",
+            "reconciliation_notes": {
+              "alignment_status": "both_sources_empty",
+              "left_join_result": "mongo_primary_null_sql_null",
+              "gap_identified": true,
+              "gap_description": "Neither MongoDB consumption data nor SQL SAM contract records contain Slack license data. Unable to compute renewal trajectory, utilization trends, or license alignment.",
+              "recommended_actions": [
+                "Verify 'sam_licenses' MongoDB collection exists and contains Slack records with status in ['active','expired','renewed']",
+                "Confirm SAM contract extract query was executed against the correct database and table",
+                "Check if Slack is tracked under an alternate publisher name (e.g., 'Slack Technologies', 'Salesforce')",
+                "Validate ETL pipeline has populated both data sources with current contract cycle data",
+                "If data genuinely absent, initiate manual SAM audit for Slack licensing"
+              ],
+              "data_quality_flags": [
+                "mongo_collection_returned_no_results",
+                "sql_extract_all_fields_null",
+                "renewal_trajectory_cannot_be_computed",
+                "utilization_rate_unavailable",
+                "cancellation_notice_window_unknown"
+              ],
+              "risk_assessment": {
+                "renewal_risk": "unknown",
+                "over_licensing_risk": "unknown",
+                "under_licensing_risk": "unknown",
+                "auto_renewal_exposure": "unknown",
+                "cancellation_deadline_proximity": "unknown"
+              }
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "trajectory_analysis_plan",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1524,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8619,
+      "output": {
+        "raw_output": "{\"plan\":[{\"tool\":\"mongo.aggregate\",\"arguments\":{\"collection\":\"sam_licenses\",\"pipeline\":[{\"$match\":{\"publisher\":{\"$in\":[\"Slack\",\"Slack Technologies\",\"Salesforce\"]},\"status\":{\"$in\":[\"active\",\"expired\",\"renewed\",\"pending_renewal\"]}}},{\"$sort\":{\"term_start\":1}},{\"$project\":{\"contract_id\":1,\"publisher\":1,\"product_name\":1,\"status\":1,\"term_start\":1,\"term_end\":1,\"renewal_date\":1,\"license_count\":1,\"active_users\":1,\"utilization_rate\":1,\"auto_renewal\":1,\"cancellation_notice_days\":1,\"total_contract_value_usd\":1}}]},\"depends_on\":[]},{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT contract_id, vendor, product_name, effective_date, expiration_date, renewal_date, license_count, active_users, inactive_users, utilization_rate_pct, contract_term_months, billing_frequency, price_per_license_usd, total_contract_value_usd, auto_renewal, cancellation_notice_days, tier FROM sam.contracts WHERE LOWER(vendor) IN ('slack','slack technologies','salesforce') AND product_name ILIKE '%slack%' ORDER BY effective_date ASC\"},\"depends_on\":[]},{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT date_trunc('month', usage_date) AS usage_month, COUNT(DISTINCT user_id) AS active_users, SUM(messages_sent) AS total_messages, AVG(session_duration_min) AS avg_session_min FROM consumption.slack_usage WHERE usage_date >= DATEADD(month, -24, CURRENT_DATE) GROUP BY 1 ORDER BY 1 ASC\"},\"depends_on\":[]},{\"tool\":\"datadog.query_metric\",\"arguments\":{\"metric\":\"saas.slack.active_users\",\"from\":\"now-24mo\",\"to\":\"now\",\"aggregation\":\"avg\"},\"depends_on\":[]},{\"tool\":\"confluence.create_page\",\"arguments\":{\"space\":\"SAM\",\"title\":\"Slack Renewal Trajectory & Forecasting Analysis Plan\",\"content\":\"# Slack License Renewal Trajectory Analysis\\n\\n##"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "renewal_policy_action",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 988,
+      "output_tokens": 401,
+      "cached_tokens": 0,
+      "latency_ms": 8665,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-001": "fail",
+          "POL-002": "fail",
+          "POL-003": "not_applicable",
+          "POL-004": "pending_review",
+          "POL-005": "not_applicable"
+        },
+        "reason": "The upstream trajectory_analysis_plan output is incomplete and malformed — the confluence.create_page content field is truncated mid-string, indicating the plan was never fully validated or executed. Generating renewal recommendations, negotiation strategies, and optimization actions based on an incomplete or unverified upstream analysis plan poses significant risk: (1) recommendations may be based on missing or corrupted data, (2) negotiation strategies derived from incomplete trajectory data could result in unfavorable contract terms or missed cancellation windows, (3) no confirmation exists that the mongo.aggregate, snowflake, or datadog queries were actually executed and returned verified results. Action is denied until the upstream analysis plan is completed, all data sources are confirmed to have returned valid results, and the plan output is reviewed by a human approver.",
+        "applied_constraints": [
+          "Upstream plan output is truncated and unvalidated — confluence.create_page content is incomplete",
+          "No confirmed execution results from mongo.aggregate, sql.snowflake.query (x2), or datadog.query_metric",
+          "Negotiation strategy generation requires verified utilization and trajectory data before proceeding",
+          "Human review required before any renewal or policy action recommendations are produced",
+          "Do not initiate any contract-touching actions (renewal, cancellation, negotiation) until upstream data is confirmed complete and accurate"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.066539,
+  "total_latency_ms": 41605,
+  "cumulative_spend_usd": 0.46956199999999987
+}

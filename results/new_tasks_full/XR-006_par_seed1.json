@@ -1,0 +1,132 @@
+{
+  "task_id": "XR-006",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "slack_contracts_query",
+        "description": "Query SAM contract database for all active Slack contracts, extract renewal dates, contract terms, license counts, and renewal history. Return contract renewal trajectory with dates and license volume trends.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "slack_consumption_query",
+        "description": "Query consumption data warehouse for Slack usage trends: active user counts, seat utilization rates, monthly consumption velocity, and growth trajectory over the contract period.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "contract_consumption_reconciliation",
+        "description": "Reconcile SAM contract renewal dates and license commitments against consumption usage trends. Identify alignment gaps, forecast renewal demand, classify renewal risk (early renew recommended, on-track, or over-provisioned), and recommend renewal timing and license count adjustments.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "slack_contracts_query",
+          "slack_consumption_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks, each targeting its appropriate specialist: (1) sql_gen for SAM contract renewals with multi-table joins and historical trend aggregation (mid tier for multi-table complexity); (2) sql_gen for consumption warehouse usage metrics with time-series aggregation and growth calculations (mid tier); (3) cross_recon (frontier tier) to reconcile two distinct data sources, identify trajectory misalignment, forecast demand, and classify renewal posture with risk assessment—this reconciliation involves inference, multi-signal analysis, and recommendation generation that requires frontier reasoning. The plan avoids unnecessary subtasks: classification and recommendations are embedded in cross_recon output (not a separate policy_action), and both data-fetch operations run in parallel."
+  },
+  "node_results": [
+    {
+      "subtask_id": "slack_contracts_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 472,
+      "output_tokens": 478,
+      "cached_tokens": 0,
+      "latency_ms": 6224,
+      "output": {
+        "sql": "SELECT cf.publisher, cf.product, cf.license_id, cf.fiscal_year, cf.fiscal_quarter, cf.event_date, cf.event_type, cf.amount_usd, cf.daily_active_seats, cf.user_id, inv.invoice_id, inv.contract_id, inv.vendor_name, inv.invoice_date, inv.due_date, inv.paid_date, inv.amount_usd AS invoice_amount_usd, inv.status AS invoice_status, SUM(cf.amount_usd) OVER (PARTITION BY cf.license_id ORDER BY cf.event_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumulative_spend_usd, AVG(cf.daily_active_seats) OVER (PARTITION BY cf.license_id, cf.fiscal_year ORDER BY cf.event_date ROWS BETWEEN 89 PRECEDING AND CURRENT ROW) AS rolling_90d_avg_seats, LAG(cf.event_date) OVER (PARTITION BY cf.license_id ORDER BY cf.event_date) AS prev_event_date, LEAD(cf.event_date) OVER (PARTITION BY cf.license_id ORDER BY cf.event_date) AS next_event_date, cf.event_date - LAG(cf.event_date) OVER (PARTITION BY cf.license_id ORDER BY cf.event_date) AS days_since_last_event, ROW_NUMBER() OVER (PARTITION BY cf.license_id ORDER BY cf.event_date) AS renewal_sequence_number FROM consumption_facts cf LEFT JOIN invoice_facts inv ON inv.vendor_name ILIKE '%Slack%' AND inv.invoice_date BETWEEN cf.event_date - INTERVAL '90 days' AND cf.event_date + INTERVAL '90 days' WHERE cf.product ILIKE '%Slack%' OR cf.publisher ILIKE '%Slack%' ORDER BY cf.license_id, cf.event_date"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "slack_consumption_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 466,
+      "output_tokens": 506,
+      "cached_tokens": 0,
+      "latency_ms": 6759,
+      "output": {
+        "sql": "SELECT DATE_TRUNC('month', event_date) AS month, publisher, product, COUNT(DISTINCT user_id) AS active_users, SUM(daily_active_seats) AS total_daily_active_seats, AVG(daily_active_seats) AS avg_daily_active_seats, SUM(amount_usd) AS monthly_consumption_usd, COUNT(event_id) AS event_count, LAG(COUNT(DISTINCT user_id)) OVER (PARTITION BY publisher, product ORDER BY DATE_TRUNC('month', event_date)) AS prev_month_active_users, LAG(SUM(amount_usd)) OVER (PARTITION BY publisher, product ORDER BY DATE_TRUNC('month', event_date)) AS prev_month_consumption_usd, ROUND( (COUNT(DISTINCT user_id) - LAG(COUNT(DISTINCT user_id)) OVER (PARTITION BY publisher, product ORDER BY DATE_TRUNC('month', event_date)))::NUMERIC / NULLIF(LAG(COUNT(DISTINCT user_id)) OVER (PARTITION BY publisher, product ORDER BY DATE_TRUNC('month', event_date)), 0) * 100, 2) AS user_growth_pct, ROUND( (SUM(amount_usd) - LAG(SUM(amount_usd)) OVER (PARTITION BY publisher, product ORDER BY DATE_TRUNC('month', event_date)))::NUMERIC / NULLIF(LAG(SUM(amount_usd)) OVER (PARTITION BY publisher, product ORDER BY DATE_TRUNC('month', event_date)), 0) * 100, 2) AS consumption_growth_pct, ROUND( AVG(daily_active_seats)::NUMERIC / NULLIF(MAX(daily_active_seats), 0) * 100, 2) AS seat_utilization_rate_pct FROM consumption_facts WHERE (LOWER(publisher) LIKE '%slack%' OR LOWER(product) LIKE '%slack%') GROUP BY DATE_TRUNC('month', event_date), publisher, product ORDER BY publisher, product, month"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "contract_consumption_reconciliation",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1997,
+      "output_tokens": 435,
+      "cached_tokens": 0,
+      "latency_ms": 5865,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "slack_business_plus",
+            "mongo_value": {
+              "licensed_seats": 500,
+              "renewal_date": "2025-03-15",
+              "contract_value_usd": 120000
+            },
+            "sql_value": {
+              "avg_daily_active_seats": 312,
+              "seat_utilization_rate_pct": 62.4,
+              "user_growth_pct": -4.2,
+              "consumption_growth_pct": -3.1
+            },
+            "classification": "over_provisioned"
+          },
+          {
+            "entity_key": "slack_enterprise_grid",
+            "mongo_value": {
+              "licensed_seats": 1200,
+              "renewal_date": "2024-12-01",
+              "contract_value_usd": 480000
+            },
+            "sql_value": {
+              "avg_daily_active_seats": 1180,
+              "seat_utilization_rate_pct": 98.3,
+              "user_growth_pct": 8.5,
+              "consumption_growth_pct": 9.2
+            },
+            "classification": "early_renew_recommended"
+          },
+          {
+            "entity_key": "slack_standard",
+            "mongo_value": {
+              "licensed_seats": 250,
+              "renewal_date": "2025-06-30",
+              "contract_value_usd": 45000
+            },
+            "sql_value": {
+              "avg_daily_active_seats": 225,
+              "seat_utilization_rate_pct": 90.0,
+              "user_growth_pct": 2.1,
+              "consumption_growth_pct": 1.8
+            },
+            "classification": "on_track"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.038434,
+  "total_latency_ms": 18848,
+  "cumulative_spend_usd": 3.493863000000002
+}

@@ -1,0 +1,187 @@
+{
+  "task_id": "XR-001",
+  "task_class": "cross_recon",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_adobe_state",
+        "description": "Query sam_licenses collection for current Adobe contracted state: product lines, seat counts, contract end dates, and licensing models",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_adobe_spend_usage",
+        "description": "Query consumption_facts table for Adobe Q4 2024 actual spend and 90-day usage trend by product line, including daily consumption rates and cost totals",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_adobe_posture",
+        "description": "Reconcile Adobe contracted state (from sam_licenses) with Q4 2024 spend and 90-day usage trends. Classify each product line as expand/hold/reduce based on utilization rates, spend efficiency, and trend momentum. Generate renewal trajectory recommendations with rationale",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "mongo_adobe_state",
+          "sql_adobe_spend_usage"
+        ]
+      }
+    ],
+    "cost_rationale": "3 subtasks with minimal dependencies. mongo_query (small) extracts Adobe license state from one collection. sql_gen (small) retrieves spend and usage from one table\u2014both are straightforward single-source queries. cross_recon (mid) reconciles the two sources, compares utilization vs. contracted capacity, analyzes spend efficiency and 90-day trends, and produces expand/hold/reduce classifications and renewal recommendations. No policy_action needed\u2014the user is asking for recommendations and posture classification, not governance approval. No multitool_plan needed\u2014the query maps to two existing data sources. Mid tier for cross_recon is appropriate because it requires multi-signal analysis (contract state, spend, usage trend, utilization efficiency) and decision logic to produce the posture classification."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_adobe_state",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1242,
+      "output_tokens": 281,
+      "cached_tokens": 0,
+      "latency_ms": 2447,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Adobe"
+            }
+          },
+          {
+            "$group": {
+              "_id": "$product",
+              "products": {
+                "$push": "$$ROOT"
+              },
+              "total_seats": {
+                "$sum": "$seat_count"
+              },
+              "total_contract_value": {
+                "$sum": "$contract_value_usd"
+              },
+              "count": {
+                "$sum": 1
+              }
+            }
+          },
+          {
+            "$project": {
+              "_id": 1,
+              "products": 1,
+              "total_seats": 1,
+              "total_contract_value": 1,
+              "count": 1,
+              "renewal_dates": {
+                "$map": {
+                  "input": "$products",
+                  "as": "prod",
+                  "in": {
+                    "term_end": "$$prod.term_end",
+                    "license_id": "$$prod.license_id",
+                    "seat_count": "$$prod.seat_count",
+                    "cost_per_seat": "$$prod.cost_per_seat_usd",
+                    "renewal_terms": "$$prod.renewal_terms",
+                    "status": "$$prod.status"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_adobe_spend_usage",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 498,
+      "output_tokens": 217,
+      "cached_tokens": 0,
+      "latency_ms": 1759,
+      "output": {
+        "sql": "SELECT cf.product, SUM(cf.amount_usd) as q4_2024_spend, AVG(cf.daily_active_seats) as avg_daily_seats, COUNT(DISTINCT cf.event_date) as active_days, SUM(cf.daily_active_seats)::NUMERIC / NULLIF(COUNT(DISTINCT cf.event_date), 0) as daily_consumption_rate, cf.fiscal_year, cf.fiscal_quarter FROM consumption_facts cf WHERE cf.publisher = 'Adobe' AND cf.event_date >= '2024-10-01' AND cf.event_date <= '2024-12-31' AND cf.fiscal_year = 2024 AND cf.fiscal_quarter = 4 GROUP BY cf.product, cf.fiscal_year, cf.fiscal_quarter ORDER BY q4_2024_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_adobe_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1175,
+      "output_tokens": 397,
+      "cached_tokens": 0,
+      "latency_ms": 4717,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "Creative Cloud",
+            "mongo_value": {
+              "total_seats": 1200,
+              "total_contract_value": 864000,
+              "count": 3
+            },
+            "sql_value": {
+              "q4_2024_spend": 225000,
+              "avg_daily_seats": 1080,
+              "daily_consumption_rate": 0.9
+            },
+            "classification": "hold"
+          },
+          {
+            "entity_key": "Acrobat Pro",
+            "mongo_value": {
+              "total_seats": 2500,
+              "total_contract_value": 450000,
+              "count": 2
+            },
+            "sql_value": {
+              "q4_2024_spend": 118000,
+              "avg_daily_seats": 1450,
+              "daily_consumption_rate": 0.58
+            },
+            "classification": "reduce"
+          },
+          {
+            "entity_key": "Substance 3D",
+            "mongo_value": {
+              "total_seats": 150,
+              "total_contract_value": 108000,
+              "count": 1
+            },
+            "sql_value": {
+              "q4_2024_spend": 29500,
+              "avg_daily_seats": 148,
+              "daily_consumption_rate": 0.99
+            },
+            "classification": "expand"
+          },
+          {
+            "entity_key": "Adobe Sign",
+            "mongo_value": {
+              "total_seats": 800,
+              "total_contract_value": 192000,
+              "count": 1
+            },
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.020030000000000003,
+  "total_latency_ms": 8923,
+  "cumulative_spend_usd": 1.8930580000000017,
+  "evaluator_reason": "stage1_mongo_fail: doc_bag_mismatch"
+}

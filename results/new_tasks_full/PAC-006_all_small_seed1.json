@@ -1,0 +1,52 @@
+{
+  "task_id": "PAC-006",
+  "task_class": "policy_action",
+  "router": "all_small",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "An infrastructure engineer proposes rolling out Docker image changes to all microservices in production without prior staging validation.",
+        "specialist": "policy_action",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task — Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 501,
+      "output_tokens": 235,
+      "cached_tokens": 0,
+      "latency_ms": 2202,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-601": "fail",
+          "POL-602": "fail",
+          "POL-603": "fail"
+        },
+        "reason": "Proposed action violates three critical policies: (1) POL-601 requires 48-hour staging validation which is bypassed, (2) POL-602 requires change board approval and monitoring setup not mentioned in proposal, (3) POL-603 requires rollback capability and traffic monitoring not described. Production rollout of untested container images without these safeguards poses significant operational risk.",
+        "applied_constraints": [
+          "Staging validation must complete for minimum 48 hours",
+          "Change board approval required before production deployment",
+          "Post-deployment monitoring infrastructure must be established",
+          "Automated rollback mechanism must be verified and ready",
+          "Traffic monitoring and alerting must be configured"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001676,
+  "total_latency_ms": 2202,
+  "cumulative_spend_usd": 8.558850000000005
+}

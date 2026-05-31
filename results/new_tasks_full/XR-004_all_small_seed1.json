@@ -1,0 +1,118 @@
+{
+  "task_id": "XR-004",
+  "task_class": "cross_recon",
+  "router": "all_small",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sam_licenses",
+        "description": "Retrieve licensed Microsoft users and licensing SKUs from Software Asset Management system. Extract user counts by product/license type.",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "consumption_spend",
+        "description": "Query consumption facts table for active Microsoft users and monthly/YTD spend by product SKU. Aggregate active user counts and consumption metrics.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_provision",
+        "description": "Reconcile SAM licensed users against consumption active users. Calculate provisioning variance (licensed minus active). Classify under-provisioning (active > licensed) and over-provisioning (licensed > active significantly). Generate recommendations for license rebalancing.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sam_licenses",
+          "consumption_spend"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) SAM queries are typically MongoDB-based (small tier, straightforward filtering), (2) consumption facts require SQL aggregation across spend tables (mid tier for multi-table join and aggregation), (3) reconciliation and posture classification inherently require comparing two sources and generating provisioning recommendations (cross_recon, mid tier). The cross_recon agent includes classification and recommendations as part of its reconciliation output, avoiding unnecessary extra steps. No policy_action needed—this is a data-driven posture analysis, not a governance approval request."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sam_licenses",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1221,
+      "output_tokens": 373,
+      "cached_tokens": 0,
+      "latency_ms": 2717,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Microsoft"
+            }
+          },
+          {
+            "$group": {
+              "_id": "$product",
+              "total_seats": {
+                "$sum": "$seat_count"
+              },
+              "total_contract_value": {
+                "$sum": "$contract_value_usd"
+              },
+              "cost_per_seat_avg": {
+                "$avg": "$cost_per_seat_usd"
+              },
+              "license_count": {
+                "$sum": 1
+              },
+              "statuses": {
+                "$addToSet": "$status"
+              }
+            }
+          },
+          {
+            "$sort": {
+              "total_seats": -1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "consumption_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 472,
+      "output_tokens": 216,
+      "cached_tokens": 0,
+      "latency_ms": 1852,
+      "output": {
+        "sql": "SELECT cf.product, cf.fiscal_year, DATE_TRUNC('month', cf.event_date)::DATE AS month, COUNT(DISTINCT cf.user_id) AS active_users, COUNT(DISTINCT cf.daily_active_seats) AS total_active_seats, SUM(cf.amount_usd) AS monthly_spend, SUM(SUM(cf.amount_usd)) OVER (PARTITION BY cf.product, cf.fiscal_year ORDER BY DATE_TRUNC('month', cf.event_date)::DATE) AS ytd_spend FROM consumption_facts cf WHERE cf.publisher = 'Microsoft' AND cf.event_date >= '2024-01-01' GROUP BY cf.product, cf.fiscal_year, DATE_TRUNC('month', cf.event_date)::DATE ORDER BY cf.fiscal_year DESC, month DESC, cf.product"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_provision",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 643,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 5676,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"Microsoft.Office365\",\n      \"mongo_value\": {\n        \"total_seats\": 0,\n        \"total_contract_value\": 0,\n        \"cost_per_seat_avg\": 0,\n        \"license_count\": 0,\n        \"statuses\": []\n      },\n      \"sql_value\": {\n        \"active_users\": 0,\n        \"total_active_seats\": 0,\n        \"monthly_spend\": 0,\n        \"ytd_spend\": 0,\n        \"fiscal_year\": null,\n        \"latest_month\": null\n      },\n      \"classification\": \"no_recent_activity\",\n      \"variance\": {\n        \"provisioning_variance\": 0,\n        \"variance_type\": \"neutral\",\n        \"variance_percent\": 0\n      },\n      \"recommendation\": \"No SAM licensing records found. Verify Microsoft licensing contracts are loaded in SAM system.\"\n    },\n    {\n      \"entity_key\": \"Microsoft.WindowsServer\",\n      \"mongo_value\": {\n        \"total_seats\": 0,\n        \"total_contract_value\": 0,\n        \"cost_per_seat_avg\": 0,\n        \"license_count\": 0,\n        \"statuses\": []\n      },\n      \"sql_value\": {\n        \"active_users\": 0,\n        \"total_active_seats\": 0,\n        \"monthly_spend\": 0,\n        \"ytd_spend\": 0,\n        \"fiscal_year\": null,\n        \"latest_month\": null\n      },\n      \"classification\": \"no_recent_activity\",\n      \"variance\": {\n        \"provisioning_variance\": 0,\n        \"variance_type\": \"neutral\",\n        \"variance_percent\": 0\n      },\n      \"recommendation\": \"No SAM licensing records found. Verify Microsoft licensing contracts are loaded in SAM system.\"\n    },\n    {\n      \"entity_key\": \"Microsoft.SQL\",\n      \"mongo_value\": {\n        \"total_seats\": 0,\n        \"total_contract_value\": 0,\n        \"cost_per_seat_avg\": 0,\n        \"license_count\": 0,\n        \"statuses\": []\n      },\n      \"sql_value\": {\n        \"active_users\": 0,\n        \"total_active_seats\": 0,\n        \"monthly_spend\": 0,\n        \"ytd_spend\": 0,\n        \"fiscal_year\": null,\n        \"latest_month\": null\n      },\n      \"classification\": \"no_recent_activity\",\n      \"variance\": {\n        \"provisioning_variance\": 0,\n        \"variance_type\": \"neutral\",\n        \"variance_percent\": 0\n      },\n      \"recommendation\": \"No SAM licensing records found. Verify Microsoft licensing contracts are loaded in SAM system.\"\n    }\n  ],\n  \"summary\": {\n    \"total_licensed_seats\": 0,\n    \"total_active_users\": 0,\n    \"total_contract_value_usd\": 0,\n    \"total_monthly_spend_usd\": 0,\n    \"under_provisioned_products\": [],\n    \"over_provisioned_products\": [],\n    \"balanced_products\": [],\n    \"data_quality"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009281000000000001,
+  "total_latency_ms": 10245,
+  "cumulative_spend_usd": 2.5589190000000004
+}

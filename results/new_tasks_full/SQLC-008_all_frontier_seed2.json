@@ -1,0 +1,70 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_budget_trends",
+        "description": "Query budget allocation by product category with cost trends over time (YoY or period-over-period). Include total spend, avg unit cost, volume variance, and growth rates by category.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_reallocation",
+        "description": "Reconcile budget trends across categories, identify underutilized vs. high-growth segments, classify spending efficiency (high-ROI, stable, declining), and generate reallocation recommendations with prioritized actions (shift %, target allocation).",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_budget_trends"
+        ]
+      }
+    ],
+    "cost_rationale": "2 subtasks required: (1) SQL query to extract multi-dimensional budget & cost trend data with aggregations and time-series analysis (mid-tier for multi-table joins and window functions needed for YoY comparison), (2) cross_recon at frontier tier to analyze spending efficiency across categories, classify posture (growth/decline/stable), and synthesize reallocation recommendations with context and trade-offs. The reallocation strategy synthesis is part of cross_recon (classification + recommendation), not a separate policy step, since this is business optimization, not governance compliance."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_budget_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 713,
+      "output_tokens": 653,
+      "cached_tokens": 0,
+      "latency_ms": 7183,
+      "output": {
+        "sql": "WITH yearly AS (SELECT product, fiscal_year, SUM(amount_usd) AS total_spend, AVG(amount_usd/NULLIF(daily_active_seats,0)) AS avg_unit_cost, SUM(daily_active_seats) AS total_volume, COUNT(*) AS event_count FROM consumption_facts WHERE event_date >= '2023-01-01' GROUP BY product, fiscal_year), with_prior AS (SELECT product, fiscal_year, total_spend, avg_unit_cost, total_volume, event_count, LAG(total_spend) OVER (PARTITION BY product ORDER BY fiscal_year) AS prior_spend, LAG(total_volume) OVER (PARTITION BY product ORDER BY fiscal_year) AS prior_volume, LAG(avg_unit_cost) OVER (PARTITION BY product ORDER BY fiscal_year) AS prior_unit_cost FROM yearly) SELECT product, fiscal_year, total_spend, avg_unit_cost, total_volume, event_count, prior_spend, CASE WHEN prior_spend > 0 THEN ROUND(((total_spend - prior_spend)/prior_spend)*100, 2) ELSE NULL END AS spend_yoy_growth_pct, CASE WHEN prior_volume > 0 THEN ROUND(((total_volume - prior_volume)::NUMERIC/prior_volume)*100, 2) ELSE NULL END AS volume_yoy_growth_pct, CASE WHEN prior_unit_cost > 0 THEN ROUND(((avg_unit_cost - prior_unit_cost)/prior_unit_cost)*100, 2) ELSE NULL END AS unit_cost_yoy_growth_pct FROM with_prior ORDER BY fiscal_year DESC, total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_reallocation",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1100,
+      "output_tokens": 85,
+      "cached_tokens": 0,
+      "latency_ms": 1533,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sql_budget_trends",
+            "mongo_value": null,
+            "sql_value": "yearly product budget trends with YoY spend, volume, and unit cost growth",
+            "classification": "no_mongo_source"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.027514999999999998,
+  "total_latency_ms": 8716,
+  "cumulative_spend_usd": 1.5455660000000007
+}

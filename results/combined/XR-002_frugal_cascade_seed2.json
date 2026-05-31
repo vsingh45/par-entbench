@@ -1,0 +1,105 @@
+{
+  "task_id": "XR-002",
+  "task_class": "cross_recon",
+  "router": "frugal_cascade",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "retrieve_active_contracts",
+        "description": "Query MongoDB contracts collection to retrieve all active billing contracts with contracted annual value and key contract metadata",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "retrieve_2024_invoices",
+        "description": "Query SQL invoicing warehouse to retrieve all invoices issued in 2024, grouped by contract ID with total amount invoiced per contract",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_flag_variance",
+        "description": "Reconcile active contracts (MongoDB) with 2024 actual invoices (SQL), calculate variance percentage for each contract, and flag contracts with material variance exceeding 10% threshold. Include reconciliation logic, variance calculation, and classification of flagged contracts",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "retrieve_active_contracts",
+          "retrieve_2024_invoices"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) Retrieve active contracts from MongoDB (mongo_query, small tier\u2014straightforward collection query with no complex aggregation), (2) Retrieve 2024 invoice totals from SQL warehouse (sql_gen, small tier\u2014single table aggregate with simple date filtering), (3) Reconcile the two sources, calculate variance, and flag material deviations (cross_recon, mid tier\u2014requires matching contracts across sources, computing percentage variance against a threshold, and classifying flagged records). The reconciliation is the only multi-source decision point and justifies mid-tier reasoning to handle variance logic reliably. Two upstream sources feed into the final reconciliation; mid tier ensures robust matching and variance classification without unnecessary frontier capability."
+  },
+  "node_results": [
+    {
+      "subtask_id": "retrieve_active_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1219,
+      "output_tokens": 132,
+      "cached_tokens": 0,
+      "latency_ms": 933,
+      "output": {
+        "collection": "billing_contracts",
+        "pipeline": [
+          {
+            "$match": {
+              "status": "active"
+            }
+          },
+          {
+            "$project": {
+              "contract_id": 1,
+              "vendor_name": 1,
+              "term_months": 1,
+              "annual_value_usd": 1,
+              "payment_terms_days": 1,
+              "early_payment_discount_pct": 1,
+              "status": 1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "retrieve_2024_invoices",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 474,
+      "output_tokens": 117,
+      "cached_tokens": 0,
+      "latency_ms": 1166,
+      "output": {
+        "sql": "SELECT invoice_facts.contract_id, SUM(invoice_facts.amount_usd) AS total_amount_invoiced, COUNT(invoice_facts.invoice_id) AS invoice_count FROM invoice_facts WHERE invoice_facts.invoice_date >= '2024-01-01' AND invoice_facts.invoice_date < '2025-01-01' GROUP BY invoice_facts.contract_id ORDER BY invoice_facts.contract_id"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_flag_variance",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 510,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 5106,
+      "output": {
+        "raw_output": "{\n  \"reconciliation_logic\": {\n    \"primary_source\": \"MongoDB (active_contracts)\",\n    \"secondary_source\": \"SQL (2024_invoices)\",\n    \"join_type\": \"LEFT JOIN\",\n    \"variance_threshold_pct\": 10,\n    \"variance_calculation\": \"((sql_total_invoiced - mongo_annual_value) / mongo_annual_value) * 100\",\n    \"classification_rules\": {\n      \"material_variance_high\": \"variance > 10%\",\n      \"material_variance_low\": \"variance < -10%\",\n      \"within_tolerance\": \"-10% <= variance <= 10%\",\n      \"no_invoices_found\": \"sql_value is null\"\n    }\n  },\n  \"reconciled\": [\n    {\n      \"entity_key\": \"contract_id\",\n      \"mongo_field\": \"annual_value_usd\",\n      \"sql_field\": \"total_amount_invoiced\",\n      \"join_condition\": \"mongo.contract_id = sql.contract_id\",\n      \"variance_formula\": \"((sql.total_amount_invoiced - mongo.annual_value_usd) / mongo.annual_value_usd) * 100\",\n      \"output_schema\": {\n        \"contract_id\": \"string\",\n        \"vendor_name\": \"string\",\n        \"term_months\": \"number\",\n        \"mongo_annual_value_usd\": \"number\",\n        \"sql_total_invoiced_2024\": \"number|null\",\n        \"sql_invoice_count\": \"number|null\",\n        \"variance_usd\": \"number\",\n        \"variance_pct\": \"number\",\n        \"material_variance_flag\": \"boolean\",\n        \"classification\": \"string\"\n      },\n      \"classification_mapping\": {\n        \"material_variance_flag_true_positive\": \"overinvoiced - flag for review\",\n        \"material_variance_flag_true_negative\": \"underinvoiced - flag for review\",\n        \"within_tolerance\": \"stable - no action required\",\n        \"no_recent_activity\": \"no invoices in 2024\",\n        \"at_risk\": \"contract active but no billing activity\",\n        \"expand\": \"invoiced > annual_value + 10%\",\n        \"reduce\": \"invoiced < annual_value - 10%\",\n        \"hold\": \"within tolerance range\"\n      }\n    }\n  ],\n  \"sample_output_records\": [\n    {\n      \"contract_id\": \"CNT-001\",\n      \"vendor_name\": \"Vendor A\",\n      \"term_months\": 12,\n      \"mongo_annual_value_usd\": 100000,\n      \"sql_total_invoiced_2024\": 115000,\n      \"sql_invoice_count\": 12,\n      \"variance_usd\": 15000,\n      \"variance_pct\": 15.0,\n      \"material_variance_flag\": true,\n      \"classification\": \"overinvoiced\"\n    },\n    {\n      \"contract_id\": \"CNT-002\",\n      \"vendor_name\": \"Vendor B\",\n      \"term_months\": 24,\n      \"mongo_annual_value_usd\": 250000,\n      \"sql_total_invoiced_2024\": 245000,\n      \"sql_invoice_count\":"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.007448,
+  "total_latency_ms": 7205,
+  "cumulative_spend_usd": 2.614779000000001,
+  "evaluator_reason": "ok"
+}

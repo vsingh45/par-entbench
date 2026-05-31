@@ -1,0 +1,70 @@
+{
+  "task_id": "SQLC-004",
+  "task_class": "sql_compose",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "vendor_risk_query",
+        "description": "Query vendor reliability data including incident counts, SLA compliance, historical outages, and other risk indicators to calculate vendor risk scores",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "vendor_risk_classification",
+        "description": "Classify each vendor into risk tiers (low_risk, medium_risk, high_risk) based on calculated risk scores and incident history thresholds",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "vendor_risk_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid tier) to query vendor reliability metrics from the data warehouse—this requires multi-table joins across vendor, incident, and SLA tables to compute comprehensive risk scores; (2) cross_recon (mid tier) to apply classification logic based on the risk score output and incident history thresholds. Cross_recon is appropriate here because it reconciles quantitative scores with classification rules and generates the risk tier output. Both are mid-tier because they involve moderate complexity (multi-table aggregation and threshold-based decision logic) but not extreme volume, window functions, or multi-source reconciliation. We do NOT add a policy_action subtask because risk classification is a technical posture decision, not a governance/compliance policy evaluation.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "vendor_risk_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 472,
+      "output_tokens": 470,
+      "cached_tokens": 0,
+      "latency_ms": 3328,
+      "output": {
+        "sql": "WITH vendor_metrics AS (SELECT vendor_name, COUNT(CASE WHEN status = 'overdue' THEN 1 END) AS overdue_invoices, COUNT(CASE WHEN status = 'paid' THEN 1 END) AS paid_invoices, COUNT(*) AS total_invoices, ROUND(100.0 * COUNT(CASE WHEN status = 'paid' THEN 1 END) / NULLIF(COUNT(*), 0), 2) AS payment_compliance_rate, ROUND(AVG(EXTRACT(DAY FROM paid_date - due_date)), 2) AS avg_days_late FROM invoice_facts WHERE invoice_date >= '2024-01-01' GROUP BY vendor_name), risk_scores AS (SELECT vendor_name, total_invoices, overdue_invoices, paid_invoices, payment_compliance_rate, avg_days_late, ROUND((overdue_invoices::NUMERIC / NULLIF(total_invoices, 0) * 40) + (CASE WHEN COALESCE(avg_days_late, 0) > 30 THEN 30 ELSE (COALESCE(avg_days_late, 0) / 30) * 30 END) + (CASE WHEN payment_compliance_rate < 70 THEN 30 ELSE (payment_compliance_rate / 100) * 30 END), 2) AS risk_score FROM vendor_metrics) SELECT vendor_name, total_invoices, overdue_invoices, paid_invoices, payment_compliance_rate, avg_days_late, risk_score, CASE WHEN risk_score < 25 THEN 'low_risk' WHEN risk_score >= 25 AND risk_score < 60 THEN 'medium_risk' ELSE 'high_risk' END AS risk_classification FROM risk_scores ORDER BY risk_score DESC, vendor_name"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "vendor_risk_classification",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1103,
+      "output_tokens": 68,
+      "cached_tokens": 0,
+      "latency_ms": 1682,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "vendor_risk_query",
+            "mongo_value": null,
+            "sql_value": "vendor_risk_query_executed",
+            "classification": "pending_data"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.010037,
+  "total_latency_ms": 5010,
+  "cumulative_spend_usd": 0.5447820000000001
+}

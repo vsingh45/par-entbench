@@ -1,0 +1,105 @@
+{
+  "task_id": "SQLC-001",
+  "task_class": "sql_compose",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top5_publishers",
+        "description": "Generate SQL query to fetch top 5 publishers by spend in Q4 2024 (Oct-Dec)",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "analyze_risk_posture",
+        "description": "Analyze the Q4 2024 top 5 publishers spend data to identify at-risk publishers based on spend patterns, concentration, and trends. Generate summary and risk classification for SAM team.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_top5_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (small) for a straightforward single-aggregate query filtering on Q4 2024 dates and ranking by spend\u2014simple, single-table aggregation. (2) cross_recon (mid) to analyze the resulting spend data against risk indicators (concentration, volatility, trends) and generate posture recommendations for the SAM team. Cross_recon is appropriate here because it synthesizes spend signals into a risk classification and business recommendation, which is the reconciliation of raw metrics against operational risk criteria. Mid tier handles multi-signal risk analysis; small would be insufficient for nuanced risk reasoning. We do not add policy_action because the query asks for risk assessment and recommendation, not compliance/governance policy evaluation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top5_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 477,
+      "output_tokens": 71,
+      "cached_tokens": 0,
+      "latency_ms": 1192,
+      "output": {
+        "sql": "SELECT publisher, SUM(amount_usd) AS total_spend FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date <= '2024-12-31' GROUP BY publisher ORDER BY total_spend DESC LIMIT 5"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "analyze_risk_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 363,
+      "output_tokens": 436,
+      "cached_tokens": 0,
+      "latency_ms": 3378,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "publisher_1",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "insufficient_data",
+            "note": "MongoDB operational state not provided in upstream_outputs"
+          },
+          {
+            "entity_key": "publisher_2",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "insufficient_data",
+            "note": "MongoDB operational state not provided in upstream_outputs"
+          },
+          {
+            "entity_key": "publisher_3",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "insufficient_data",
+            "note": "MongoDB operational state not provided in upstream_outputs"
+          },
+          {
+            "entity_key": "publisher_4",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "insufficient_data",
+            "note": "MongoDB operational state not provided in upstream_outputs"
+          },
+          {
+            "entity_key": "publisher_5",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "insufficient_data",
+            "note": "MongoDB operational state not provided in upstream_outputs"
+          }
+        ],
+        "error": "Cannot perform reconciliation: MongoDB query results not provided in upstream_outputs. Only SQL query template exists. Please provide actual MongoDB operational data and SQL historical results for comparison.",
+        "required_data": {
+          "mongo_results": "Operational state from MongoDB query (current publisher spend/status)",
+          "sql_results": "Historical data from SQL query (Q4 2024 top 5 publishers by total_spend_usd)"
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0033750000000000004,
+  "total_latency_ms": 4570,
+  "cumulative_spend_usd": 0.48163399999999995,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

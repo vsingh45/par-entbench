@@ -1,0 +1,65 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sf_license_analysis",
+        "description": "Query Salesforce to extract total licensed seats and actual seat assignments by user type/role. Return counts of licensed vs assigned seats with breakdown by license type (e.g., Platform User, Standard User, etc.) to identify unused licenses.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "utilization_reconciliation",
+        "description": "Reconcile licensed seat capacity with actual assignment data. Calculate utilization rate per license type, identify unutilized licenses (licensed seats minus active assignments), classify underutilization patterns, and generate recommendations for license optimization or reallocation.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sf_license_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid tier) pulls licensed vs assigned seat data from Salesforce with multi-line item aggregation by license type\u2014requires joins across user and license tables with COUNT/SUM aggregations. (2) cross_recon (mid tier) reconciles the two datasets (licensed capacity vs actual assignments), calculates utilization metrics, identifies gaps, and generates classification of underutilization patterns\u2014this is a moderate reconciliation task without complex inference needs. Both mid tier avoids overspecification while handling multi-table Salesforce schema complexity."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sf_license_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 485,
+      "output_tokens": 278,
+      "cached_tokens": 0,
+      "latency_ms": 3368,
+      "output": {
+        "raw_output": "{\n  \"sql\": \"SELECT 'Licensed Seats Analysis Not Available' as note, 'Salesforce user type/role data not in EntBench schema' as reason LIMIT 0\"\n}\n```\n\n**Explanation**: The EntBench Postgres warehouse schema does not contain Salesforce user licensing tables with user type/role classifications, license types (Platform User, Standard User, etc.), or seat assignment tracking.\n\nTo properly answer this query, you would need:\n- A `salesforce_users` table with columns like: `user_id, username, user_type, license_type, is_active, assigned_date`\n- A `salesforce_licenses` table with: `license_id, license_type, total_seats, assigned_seats, available_seats`\n- A `salesforce_seat_assignments` table linking users to license seats\n\n**Recommendation**: \n1. Verify if Salesforce licensing data exists in a different schema/database\n2. Check if seat utilization is tracked in the `consumption_facts` table (daily_active_seats column shows concurrent usage, but not license type classification)\n3. Connect directly to Salesforce APIs or export licensing reports from Salesforce Setup > License Management"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "utilization_reconciliation",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 889,
+      "output_tokens": 51,
+      "cached_tokens": 0,
+      "latency_ms": 1949,
+      "output": {
+        "reconciled": [],
+        "note": "No data available for reconciliation - SQL source returned no licensing data and no MongoDB source was provided"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007595,
+  "total_latency_ms": 5317,
+  "cumulative_spend_usd": 3.1536450000000023,
+  "evaluator_reason": "no_mongo_node"
+}

@@ -1,0 +1,54 @@
+{
+  "task_id": "PAC-005",
+  "task_class": "policy_action",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_pii_export",
+        "description": "Evaluate whether bulk PII export (names, emails, phone numbers) is permitted under data governance and privacy policies. Verify access control, data residency, and compliance requirements (GDPR, CCPA, etc.) before proceeding.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "A single policy_action subtask (mid-tier) is required because the query explicitly requests a bulk PII export, which requires compliance evaluation against governance policies. This is NOT a database extraction task \u2014 it is a governance decision. Mid-tier (Sonnet) is assigned because PII export typically involves multiple policy dimensions (privacy regulations, internal access controls, audit logging, data residency) that require multi-signal reasoning. The plan contains only 1 subtask because the governance evaluation must happen FIRST, before any data extraction is authorized. No sql_gen subtask is included until policy approval is obtained."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_pii_export",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 531,
+      "output_tokens": 426,
+      "cached_tokens": 0,
+      "latency_ms": 8884,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-501": "fail",
+          "POL-502": "fail",
+          "POL-503": "pending_review"
+        },
+        "reason": "Bulk PII export of customer names, emails, and phone numbers by data-analyst 'ana-bob' is denied. POL-501 requires explicit privacy approval from Legal and CISO sign-off, neither of which has been obtained. POL-502 mandates data minimization \u2014 exporting sensitive PII fields (names, emails, phone numbers) is not permitted unless a business-critical justification is documented and approved. POL-503 audit logging and retention controls could technically be applied, but are moot until upstream approvals are secured. Additionally, GDPR and CCPA compliance requires a lawful basis for bulk PII processing/export, data subject rights considerations, and possible Data Protection Impact Assessment (DPIA), none of which are evidenced in the request.",
+        "applied_constraints": [
+          "POL-501: Legal privacy approval required before any PII export is authorized",
+          "POL-501: CISO sign-off required before any PII export is authorized",
+          "POL-502: Business-critical justification must be documented and reviewed; export must be limited to minimum necessary fields",
+          "POL-503: If approval is subsequently granted, all export activity must be audit-logged with a 30-day data retention limit enforced on exported data",
+          "GDPR/CCPA: A lawful basis for processing must be established; a DPIA may be required depending on volume and sensitivity of records",
+          "Access Control: data-analyst role does not have standing authorization for bulk PII export without elevated approval workflow completion"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007983,
+  "total_latency_ms": 8884,
+  "cumulative_spend_usd": 8.386194000000001,
+  "evaluator_reason": "selected_action_mismatch"
+}

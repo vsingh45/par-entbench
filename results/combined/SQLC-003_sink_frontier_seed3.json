@@ -1,0 +1,73 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_publishers_trends",
+        "description": "Query SQL warehouse for publishers with declining quarterly revenue/spend trends in 2024. Calculate quarter-over-quarter change for each publisher in Q1, Q2, Q3, Q4 2024 to identify declining trend pattern.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal_rec",
+        "description": "For each publisher with declining quarterly trend, reconcile current spending state with historical trend data and generate renewal recommendation (hold, expand, or reduce) based on trend severity, spend velocity, and market position.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_publishers_trends"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid-tier) to construct a multi-quarter QoQ analysis across 2024 with aggregation and trend calculation\u2014requires joins across spend tables and quarter-based grouping; (2) cross_recon (mid-tier) to ingest the SQL result and map each publisher's trend pattern to a renewal posture decision. Cross_recon is the right specialist here because it synthesizes trend signals into a recommendation decision (hold/expand/reduce) without requiring separate policy evaluation. Mid-tier assigned to both because the SQL requires multi-quarter aggregation logic and cross_recon requires multi-signal decision-making. No additional subtasks: the recommendation generation is part of cross_recon's reconciliation scope, not a separate policy_action, since the query does not invoke a compliance or governance policy registry.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_publishers_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 488,
+      "output_tokens": 507,
+      "cached_tokens": 0,
+      "latency_ms": 3904,
+      "output": {
+        "sql": "WITH quarterly_revenue AS (SELECT publisher, fiscal_quarter, SUM(amount_usd) as quarterly_revenue FROM consumption_facts WHERE event_date >= '2024-01-01' AND event_date <= '2024-12-31' AND fiscal_year = 2024 GROUP BY publisher, fiscal_quarter), quarterly_with_lag AS (SELECT publisher, fiscal_quarter, quarterly_revenue, LAG(quarterly_revenue) OVER (PARTITION BY publisher ORDER BY fiscal_quarter) as prev_quarter_revenue, ROUND(((quarterly_revenue - LAG(quarterly_revenue) OVER (PARTITION BY publisher ORDER BY fiscal_quarter)) / LAG(quarterly_revenue) OVER (PARTITION BY publisher ORDER BY fiscal_quarter) * 100)::NUMERIC, 2) as qoq_change_pct FROM quarterly_revenue), declining_publishers AS (SELECT publisher, STRING_AGG(CONCAT('Q', fiscal_quarter, ': ', qoq_change_pct, '%'), ' | ' ORDER BY fiscal_quarter) as quarterly_changes, COUNT(CASE WHEN qoq_change_pct < 0 THEN 1 END) as declining_quarters, ROUND(AVG(CASE WHEN qoq_change_pct IS NOT NULL THEN qoq_change_pct ELSE 0 END)::NUMERIC, 2) as avg_qoq_change FROM quarterly_with_lag WHERE qoq_change_pct IS NOT NULL GROUP BY publisher HAVING COUNT(CASE WHEN qoq_change_pct < 0 THEN 1 END) >= 2) SELECT publisher, quarterly_changes, declining_quarters, avg_qoq_change, CASE WHEN declining_quarters >= 3 THEN 'REDUCE' WHEN declining_quarters = 2 AND avg_qoq_change < -10 THEN 'REDUCE' WHEN declining_quarters = 2 THEN 'HOLD' ELSE 'HOLD' END as renewal_recommendation FROM declining_publishers ORDER BY declining_quarters DESC, avg_qoq_change ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal_rec",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1282,
+      "output_tokens": 82,
+      "cached_tokens": 0,
+      "latency_ms": 1910,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "publisher_with_declining_trend",
+            "mongo_value": null,
+            "sql_value": {
+              "note": "SQL query results expected but not provided in upstream outputs"
+            },
+            "classification": "hold"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.011483,
+  "total_latency_ms": 5814,
+  "cumulative_spend_usd": 1.2179189999999995,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

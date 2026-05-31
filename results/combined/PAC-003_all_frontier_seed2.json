@@ -1,0 +1,53 @@
+{
+  "task_id": "PAC-003",
+  "task_class": "policy_action",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_emergency_access",
+        "description": "Evaluate emergency access request from user u_9981 (senior-engineer) to db-payments-primary against access control and incident policies. Determine if the request meets P1 incident criteria and if the user's role/on-call status grants authorization.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This is an explicit governance/access control decision. A policy_action subtask is required to evaluate the emergency access request against the organization's access policies, role-based permissions, incident severity thresholds, and on-call procedures. Mid-tier is appropriate because the evaluation requires reasoning across multiple policy signals (user role, incident severity, on-call status, and database criticality) rather than a single simple rule lookup.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_emergency_access",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 801,
+      "output_tokens": 246,
+      "cached_tokens": 0,
+      "latency_ms": 3996,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-501": "pass",
+          "POL-502": "pass_conditional",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "User has active P1 incident ticket INC-20241215-0042 satisfying POL-501. POL-502 dual-approval requirement is waived under declared P1 incident exception. Access permitted with mandatory logging and 24-hour post-incident review per POL-503.",
+        "applied_constraints": [
+          "Access tied to incident ticket INC-20241215-0042",
+          "All read_write operations must be logged",
+          "Access auto-revokes upon incident closure",
+          "Mandatory post-access review within 24 hours per POL-503",
+          "Session activity recorded for audit"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.010155,
+  "total_latency_ms": 3996,
+  "cumulative_spend_usd": 4.996073000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

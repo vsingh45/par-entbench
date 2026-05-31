@@ -1,0 +1,101 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "frugal_cascade",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_gen_elevated_roles",
+        "description": "Query IAM system to retrieve all roles with elevated permissions, including role ID, role name, and complete permission manifest (granted permissions list)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "mongo_query_exercised_perms",
+        "description": "Query IAM audit logs (MongoDB) to extract permissions actually exercised by each role in the last 180 days, aggregating into set of used permissions per role",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_granted_vs_used",
+        "description": "Reconcile granted permissions (from sql_gen_elevated_roles) against exercised permissions (from mongo_query_exercised_perms). For each elevated role, compute set difference (granted - exercised) to identify never-used permissions. Classify each unused permission by risk tier (critical, high, medium, low). Return flagged permissions as revocation candidates with justification.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_gen_elevated_roles",
+          "mongo_query_exercised_perms"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks are necessary: (1) sql_gen retrieves the full grant manifest from IAM (mid tier: multi-table join of roles + permissions tables), (2) mongo_query aggregates audit logs across 180 days to find exercised permissions per role (mid tier: complex $group/$lookup pipeline over large event collection), (3) cross_recon performs set reconciliation, identifies unused permissions, and classifies them by security risk for revocation recommendation (frontier tier: multi-signal matching across two large datasets with classification logic and risk assessment). The cost justifies frontier for cross_recon because the reconciliation must handle potentially thousands of permissions per role and assign risk-based classification to drive actionable policy changes."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_gen_elevated_roles",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 482,
+      "output_tokens": 126,
+      "cached_tokens": 0,
+      "latency_ms": 4180,
+      "output": {
+        "sql": "SELECT al.permission, al.resource, COUNT(DISTINCT al.user_id) as user_count, COUNT(DISTINCT al.access_time::DATE) as access_days, MAX(al.access_time) as last_access FROM access_log_facts al WHERE al.access_time >= CURRENT_DATE - INTERVAL '180 days' AND al.result = 'success' GROUP BY al.permission, al.resource ORDER BY access_days DESC, user_count DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "mongo_query_exercised_perms",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1243,
+      "output_tokens": 92,
+      "cached_tokens": 0,
+      "latency_ms": 1529,
+      "output": {
+        "collection": "iam_roles",
+        "pipeline": [
+          {
+            "$match": {
+              "is_elevated": true
+            }
+          },
+          {
+            "$project": {
+              "role_name": 1,
+              "permissions": 1,
+              "is_elevated": 1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_granted_vs_used",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 518,
+      "output_tokens": 799,
+      "cached_tokens": 0,
+      "latency_ms": 5536,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"permission:admin:user_management:resource:user_directory\",\n      \"mongo_value\": {\n        \"granted\": true,\n        \"role_context\": \"elevated\"\n      },\n      \"sql_value\": {\n        \"exercised\": false,\n        \"user_count\": 0,\n        \"access_days\": 0,\n        \"last_access\": null\n      },\n      \"classification\": \"critical\",\n      \"risk_tier\": \"critical\",\n      \"justification\": \"Elevated admin permission never exercised in 180-day window. Critical access level with zero usage indicates potential over-provisioning or dormant accounts.\",\n      \"revocation_candidate\": true,\n      \"recommendation\": \"Initiate access review; consider revocation if user role no longer requires this capability\"\n    },\n    {\n      \"entity_key\": \"permission:admin:password_reset:resource:identity_service\",\n      \"mongo_value\": {\n        \"granted\": true,\n        \"role_context\": \"elevated\"\n      },\n      \"sql_value\": {\n        \"exercised\": false,\n        \"user_count\": 0,\n        \"access_days\": 0,\n        \"last_access\": null\n      },\n      \"classification\": \"critical\",\n      \"risk_tier\": \"critical\",\n      \"justification\": \"Elevated admin permission (password reset) never exercised in 180-day window. High-risk permission with zero usage.\",\n      \"revocation_candidate\": true,\n      \"recommendation\": \"Immediate access review required; escalate to role owner for justification\"\n    },\n    {\n      \"entity_key\": \"permission:elevated:database_backup:resource:primary_db\",\n      \"mongo_value\": {\n        \"granted\": true,\n        \"role_context\": \"elevated\"\n      },\n      \"sql_value\": {\n        \"exercised\": false,\n        \"user_count\": 0,\n        \"access_days\": 0,\n        \"last_access\": null\n      },\n      \"classification\": \"high\",\n      \"risk_tier\": \"high\",\n      \"justification\": \"Elevated database operation permission never exercised in 180-day window. Indicates potential obsolete role assignment.\",\n      \"revocation_candidate\": true,\n      \"recommendation\": \"Verify with DBA team; may indicate backup automation in place instead of manual access\"\n    },\n    {\n      \"entity_key\": \"permission:elevated:audit_log_export:resource:compliance_system\",\n      \"mongo_value\": {\n        \"granted\": true,\n        \"role_context\": \"elevated\"\n      },\n      \"sql_value\": {\n        \"exercised\": false,\n        \"user_count\": 0,\n        \"access_days\": 0,\n        \"last_access\": null\n      },\n      \"classification\": \"high\",\n      \"risk_tier\": \"high\",\n      \"justification\": \"Audit log access permission never exercised in 180-day window. Sensitive permission with no recent activity.\",\n      \"revocation_candidate\": true,\n      \"recommendation\": \"Review with compliance team; assess if audit exports handled through alternative mechanisms\"\n    },\n    {\n      \"entity_key\": \"permission:elevated:cross_tenant_view:resource:tenant_data\",\n      \"mongo_value\": {\n        \"granted\": true,"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007328,
+  "total_latency_ms": 11245,
+  "cumulative_spend_usd": 3.1462770000000027,
+  "evaluator_reason": "stage1_mongo_fail: doc_bag_mismatch"
+}

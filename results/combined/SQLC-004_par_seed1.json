@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-004",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "vendor_risk_query",
+        "description": "Query vendor reliability data including incident history, uptime metrics, compliance status, and other risk indicators to calculate risk scores for each vendor",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "vendor_risk_classification",
+        "description": "Reconcile and classify vendor risk scores into risk tiers (low_risk, medium_risk, high_risk) based on incident history thresholds and scoring logic. Output includes risk classification and rationale for each vendor",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "vendor_risk_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks are required. First, sql_gen (mid tier) handles the multi-table join of vendor data with incident history and reliability metrics\u2014this is moderately complex and benefits from aggregation and joins across vendor and incident tables. Second, cross_recon (mid tier) reconciles the risk scores and applies classification logic to map numerical scores to risk categories; this is the natural place for decision logic and risk categorization. Both are mid tier because the tasks involve multi-signal aggregation (reliability metrics + incident counts) and multi-step logic (scoring then classifying), but neither requires frontier-level complexity (e.g., no advanced window functions or cross-collection lookups). The plan avoids unnecessary policy_action because the user is asking for classification based on data thresholds, not governance approval."
+  },
+  "node_results": [
+    {
+      "subtask_id": "vendor_risk_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 474,
+      "output_tokens": 478,
+      "cached_tokens": 0,
+      "latency_ms": 8616,
+      "output": {
+        "sql": "SELECT vendor_name, COUNT(invoice_id) AS total_invoices, SUM(amount_usd) AS total_billed, AVG(amount_usd) AS avg_invoice_amount, COUNT(CASE WHEN status = 'overdue' THEN 1 END) AS overdue_count, COUNT(CASE WHEN status = 'paid' THEN 1 END) AS paid_count, COUNT(CASE WHEN status = 'unpaid' THEN 1 END) AS unpaid_count, ROUND(COUNT(CASE WHEN status = 'overdue' THEN 1 END) * 100.0 / NULLIF(COUNT(invoice_id), 0), 2) AS overdue_rate_pct, AVG(CASE WHEN paid_date IS NOT NULL THEN (paid_date - due_date) END) AS avg_days_late, MAX(CASE WHEN paid_date IS NOT NULL THEN (paid_date - due_date) END) AS max_days_late, CASE WHEN ROUND(COUNT(CASE WHEN status = 'overdue' THEN 1 END) * 100.0 / NULLIF(COUNT(invoice_id), 0), 2) >= 30 OR AVG(CASE WHEN paid_date IS NOT NULL THEN (paid_date - due_date) END) > 30 THEN 'high_risk' WHEN ROUND(COUNT(CASE WHEN status = 'overdue' THEN 1 END) * 100.0 / NULLIF(COUNT(invoice_id), 0), 2) >= 10 OR AVG(CASE WHEN paid_date IS NOT NULL THEN (paid_date - due_date) END) BETWEEN 10 AND 30 THEN 'medium_risk' ELSE 'low_risk' END AS risk_classification FROM invoice_facts GROUP BY vendor_name ORDER BY overdue_rate_pct DESC, avg_days_late DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "vendor_risk_classification",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 773,
+      "output_tokens": 345,
+      "cached_tokens": 0,
+      "latency_ms": 8953,
+      "output": {
+        "raw_output": "I need to reconcile vendor risk data. Since only a SQL query definition is provided (no actual result rows) and no MongoDB operational data is provided, I'll apply LEFT JOIN semantics with MongoDB as primary \u2014 but since neither result set contains actual rows, I must reflect the structural intent and return an empty reconciled set with a schema-conformant response.\n\nHowever, interpreting the task as a reconciliation where the SQL query *is* the sole data source (MongoDB result is implicitly the vendor list derived from the same query output), I'll produce a reconciled output based on the SQL logic described, treating the SQL output as the historical source and MongoDB as having matched all vendors.\n\nSince no actual row data was provided in either source, I return a valid reconciled response indicating no resolvable entities:\n\n{\"reconciled\":[{\"entity_key\":\"__no_data__\",\"mongo_value\":null,\"sql_value\":null,\"classification\":\"no_recent_activity\",\"rationale\":\"No actual query result rows were provided in either the MongoDB operational output or the SQL historical output. The SQL query definition references invoice_facts grouped by vendor_name with risk classification logic: high_risk if overdue_rate_pct >= 30 or avg_days_late > 30; medium_risk if overdue_rate_pct >= 10 or avg_days_late between 10 and 30; low_risk otherwise. MongoDB vendor reliability data was not returned. Reconciliation cannot proceed without row-level data. All vendors from MongoDB must appear in output per LEFT JOIN semantics; none were supplied.\"}]}"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.016086,
+  "total_latency_ms": 17569,
+  "cumulative_spend_usd": 0.025448,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

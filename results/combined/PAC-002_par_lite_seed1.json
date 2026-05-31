@@ -1,0 +1,51 @@
+{
+  "task_id": "PAC-002",
+  "task_class": "policy_action",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_deploy",
+        "description": "Evaluate the hotfix deployment request (engineer 'u_7732', target 'prod-us-east-1', timestamp 2:15 AM UTC Tuesday) against deployment governance policies to determine if it violates approved maintenance windows or requires exemption approval.",
+        "specialist": "policy_action",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask at small tier. The query explicitly asks for policy evaluation of a deployment governance decision (maintenance window compliance). This is a straightforward single-policy check: does the current timestamp and deployment context violate the organization's maintenance window policy? Small tier is sufficient because the logic is deterministic\u2014compare the timestamp (2:15 AM UTC Tuesday) against the policy registry's approved maintenance windows and return a compliance decision (violation vs. compliant vs. requires exemption). No multi-source reconciliation, classification inference, or complex exception handling is needed at this stage."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_deploy",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 549,
+      "output_tokens": 236,
+      "cached_tokens": 0,
+      "latency_ms": 2911,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-401": "pass",
+          "POL-402": "fail",
+          "POL-403": "fail"
+        },
+        "reason": "Engineer u_7732 meets the role requirement for production deployments (POL-401). However, the deployment is scheduled for Tuesday 02:15 UTC, which falls outside the approved maintenance window of Saturday 10 PM - Sunday 6 AM UTC (POL-403). This triggers a requirement for CAB (Change Advisory Board) approval per POL-402. The hotfix deployment cannot proceed without obtaining the required exemption approval.",
+        "applied_constraints": [
+          "Deployment blocked until CAB approval is obtained",
+          "Current deployment timestamp (Tuesday 02:15 UTC) violates maintenance window policy",
+          "Required action: Submit CAB exemption request for out-of-window production deployment"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001729,
+  "total_latency_ms": 2911,
+  "cumulative_spend_usd": 4.949762000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

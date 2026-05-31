@@ -1,0 +1,101 @@
+{
+  "task_id": "XR-001",
+  "task_class": "cross_recon",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "adobe_spend_query",
+        "description": "Query Q4 2024 actual spend and 90-day usage trend by product line from consumption_facts table",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "adobe_license_state",
+        "description": "Query current contracted Adobe licenses by product line from sam_licenses table",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "adobe_renewal_posture",
+        "description": "Reconcile current contracted state (sam_licenses) with Q4 spend and usage trends (consumption_facts), calculate renewal trajectory per product line, and generate expand/hold/reduce recommendations with posture classification",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "adobe_spend_query",
+          "adobe_license_state"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks with minimal redundancy: (1) spend/usage aggregation is a mid-tier SQL with joins across consumption_facts and date filtering; (2) license query is small-tier as it's a straightforward single-table lookup; (3) cross_recon (frontier) reconciles contracted vs. actual consumption, calculates trajectory vectors, and generates multi-signal expansion/contraction posture recommendations across product lines\u2014this requires comparative analysis, trend inference, and business judgment that justifies frontier-tier reasoning."
+  },
+  "node_results": [
+    {
+      "subtask_id": "adobe_spend_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 740,
+      "output_tokens": 403,
+      "cached_tokens": 0,
+      "latency_ms": 4599,
+      "output": {
+        "sql": "WITH q4_spend AS (SELECT product, SUM(amount_usd) AS q4_2024_spend, SUM(daily_active_seats) AS q4_2024_seats FROM consumption_facts WHERE publisher = 'Adobe' AND event_date >= '2024-10-01' AND event_date < '2025-01-01' GROUP BY product), trend_90d AS (SELECT product, SUM(amount_usd) AS spend_90d, AVG(daily_active_seats) AS avg_daily_seats_90d, COUNT(DISTINCT event_date) AS active_days FROM consumption_facts WHERE publisher = 'Adobe' AND event_date >= CURRENT_DATE - INTERVAL '90 days' GROUP BY product) SELECT COALESCE(q.product, t.product) AS product, q.q4_2024_spend, q.q4_2024_seats, t.spend_90d, t.avg_daily_seats_90d, t.active_days FROM q4_spend q FULL OUTER JOIN trend_90d t ON q.product = t.product ORDER BY q.q4_2024_spend DESC NULLS LAST"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "adobe_license_state",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 731,
+      "output_tokens": 158,
+      "cached_tokens": 0,
+      "latency_ms": 2861,
+      "output": {
+        "sql": "SELECT product, SUM(amount_usd) AS q4_2024_spend, SUM(daily_active_seats) AS total_active_seats, COUNT(DISTINCT license_id) AS license_count FROM consumption_facts WHERE publisher = 'Adobe' AND event_date >= '2024-10-01' AND event_date <= '2024-12-31' GROUP BY product ORDER BY q4_2024_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "adobe_renewal_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1057,
+      "output_tokens": 188,
+      "cached_tokens": 0,
+      "latency_ms": 2764,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "Creative Cloud",
+            "mongo_value": null,
+            "sql_value": {
+              "q4_2024_spend": null,
+              "q4_2024_seats": null,
+              "spend_90d": null,
+              "avg_daily_seats_90d": null,
+              "active_days": null
+            },
+            "classification": "insufficient_data"
+          }
+        ],
+        "note": "No MongoDB sam_licenses output was provided in upstream_outputs; only SQL consumption_facts queries are present. Cannot perform LEFT JOIN reconciliation without primary MongoDB entity list."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.031365000000000004,
+  "total_latency_ms": 10224,
+  "cumulative_spend_usd": 1.8321340000000013,
+  "evaluator_reason": "no_mongo_node"
+}

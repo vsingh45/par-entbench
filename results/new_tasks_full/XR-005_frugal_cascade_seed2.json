@@ -1,0 +1,131 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "router": "frugal_cascade",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "salesforce_utilization_query",
+        "description": "Query Salesforce seat data to calculate licensed seats vs actual assignments, calculate utilization rate, and identify unutilized licenses with seat details",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "analyze_utilization_posture",
+        "description": "Analyze utilization results to identify underutilized seats, calculate cost per seat, and generate recommendations for license optimization (consolidation, reallocation, or deprovisioning)",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "salesforce_utilization_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks are required: (1) sql_gen (mid tier) to extract and aggregate licensed seat counts vs actual assignments from Salesforce data warehouse with joins across license and user assignment tables; (2) cross_recon (mid tier) to analyze the query results, calculate utilization metrics, identify unutilized seat patterns, and generate optimization recommendations. Both are mid tier because they involve moderate complexity—the SQL requires multi-table joins and aggregation; the reconciliation involves analyzing utilization patterns to make classification and recommendation decisions. No policy_action is needed as this is a capacity analysis, not a governance decision. No multitool_plan is needed as the work is scoped to data systems already in the pipeline."
+  },
+  "node_results": [
+    {
+      "subtask_id": "salesforce_utilization_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 465,
+      "output_tokens": 178,
+      "cached_tokens": 0,
+      "latency_ms": 1879,
+      "output": {
+        "sql": "SELECT license_id, publisher, product, SUM(daily_active_seats) as licensed_seats, COUNT(DISTINCT user_id) as assigned_users, ROUND(100.0 * COUNT(DISTINCT user_id) / NULLIF(SUM(daily_active_seats), 0), 2) as utilization_rate, SUM(daily_active_seats) - COUNT(DISTINCT user_id) as unutilized_seats, event_date FROM consumption_facts WHERE publisher = 'Salesforce' AND event_date >= '2024-01-01' GROUP BY license_id, publisher, product, event_date ORDER BY utilization_rate ASC, unutilized_seats DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "analyze_utilization_posture",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 445,
+      "output_tokens": 654,
+      "cached_tokens": 0,
+      "latency_ms": 4994,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "salesforce_utilization_analysis",
+            "mongo_value": null,
+            "sql_value": {
+              "metrics": [
+                {
+                  "license_id": "string",
+                  "publisher": "Salesforce",
+                  "product": "string",
+                  "licensed_seats": "integer",
+                  "assigned_users": "integer",
+                  "utilization_rate": "decimal",
+                  "unutilized_seats": "integer",
+                  "event_date": "date"
+                }
+              ],
+              "query_status": "executable",
+              "data_source": "consumption_facts"
+            },
+            "classification": "ready_for_analysis",
+            "recommendations": {
+              "high_priority": [
+                {
+                  "signal": "utilization_rate < 50%",
+                  "action": "consolidation",
+                  "rationale": "Licenses with <50% utilization indicate excess capacity"
+                },
+                {
+                  "signal": "unutilized_seats > 20% of licensed_seats",
+                  "action": "deprovisioning",
+                  "rationale": "Consider reducing licensed seat count to match actual usage"
+                }
+              ],
+              "medium_priority": [
+                {
+                  "signal": "utilization_rate 50-80%",
+                  "action": "hold_with_monitoring",
+                  "rationale": "Acceptable utilization with growth potential"
+                }
+              ],
+              "optimization_metrics": {
+                "cost_per_seat": "requires_pricing_data",
+                "cost_per_active_user": "SUM(license_cost) / COUNT(DISTINCT user_id)",
+                "seat_efficiency_ratio": "assigned_users / licensed_seats"
+              }
+            }
+          }
+        ],
+        "analysis_framework": {
+          "data_gaps": [
+            "MongoDB operational state (current active licenses) - NOT PROVIDED",
+            "Historical cost/pricing data per license",
+            "User activity trend analysis"
+          ],
+          "required_enrichment": [
+            "license_cost or annual_subscription_value",
+            "license_renewal_date",
+            "department or cost_center allocation",
+            "user_activity_trends (30/60/90 day moving averages)"
+          ],
+          "output_interpretation": {
+            "high_utilization_low_cost": "expand",
+            "high_utilization_high_cost": "hold",
+            "low_utilization_any_cost": "reduce",
+            "no_recent_activity": "deprovisioning_candidate",
+            "declining_trend": "at_risk"
+          }
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.005070000000000001,
+  "total_latency_ms": 6873,
+  "cumulative_spend_usd": 3.2182280000000025
+}

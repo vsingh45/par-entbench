@@ -1,0 +1,63 @@
+{
+  "task_id": "SQLC-004",
+  "task_class": "sql_compose",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_vendor_risk",
+        "description": "Query vendor reliability data to compute risk scores (e.g., from incident counts, SLA violations, response times). Return vendor ID, name, and calculated risk_score.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "classify_vendor_risk",
+        "description": "Classify each vendor into low_risk, medium_risk, or high_risk categories based on their risk_score thresholds and incident history patterns.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_vendor_risk"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks needed: (1) SQL query (mid tier) to aggregate reliability metrics and compute risk scores from potentially multiple tables (vendors, incidents, SLAs); (2) cross_recon (mid tier) to apply classification logic and map scores to risk categories. The classification is part of the reconciliation step—no separate policy_action needed since this is posture classification, not governance approval. Both mid tier because the risk score aggregation likely requires multi-table joins and the classification requires multi-signal reasoning, but not frontier-level complexity unless the incident history is highly complex."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_vendor_risk",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 734,
+      "output_tokens": 478,
+      "cached_tokens": 0,
+      "latency_ms": 5628,
+      "output": {
+        "sql": "SELECT vendor_name AS vendor_id, vendor_name, COUNT(*) FILTER (WHERE status = 'overdue') * 10 + COUNT(*) FILTER (WHERE paid_date > due_date) * 5 + COALESCE(AVG(EXTRACT(DAY FROM (paid_date - due_date))) FILTER (WHERE paid_date > due_date), 0) AS risk_score, CASE WHEN COUNT(*) FILTER (WHERE status = 'overdue') * 10 + COUNT(*) FILTER (WHERE paid_date > due_date) * 5 + COALESCE(AVG(EXTRACT(DAY FROM (paid_date - due_date))) FILTER (WHERE paid_date > due_date), 0) >= 50 THEN 'high_risk' WHEN COUNT(*) FILTER (WHERE status = 'overdue') * 10 + COUNT(*) FILTER (WHERE paid_date > due_date) * 5 + COALESCE(AVG(EXTRACT(DAY FROM (paid_date - due_date))) FILTER (WHERE paid_date > due_date), 0) >= 20 THEN 'medium_risk' ELSE 'low_risk' END AS risk_classification FROM invoice_facts GROUP BY vendor_name ORDER BY risk_score DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "classify_vendor_risk",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 913,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 1610,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.020535,
+  "total_latency_ms": 7238,
+  "cumulative_spend_usd": 0.5105050000000001
+}

@@ -1,0 +1,87 @@
+{
+  "task_id": "SQLC-004",
+  "task_class": "sql_compose",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "query_vendor_data",
+        "description": "Query vendor reliability data including incident history, uptime metrics, and performance indicators from the data warehouse to compute risk score components",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "classify_vendor_risk",
+        "description": "Aggregate vendor reliability scores and incident history data, then classify each vendor into low_risk, medium_risk, or high_risk categories using threshold-based logic",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "query_vendor_data"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) SQL query to fetch vendor reliability metrics and incident data from the warehouse, assigned to sql_gen at mid tier because it likely involves multiple vendor tables and aggregate functions. (2) Classification subtask assigned to cross_recon at mid tier because it reconciles the queried data with risk classification logic, applying threshold-based rules to assign risk categories\u2014this is a data reconciliation and decision-making task that includes classification, which is within cross_recon's scope. No policy_action is needed since risk classification is a data analysis decision, not a governance/compliance approval. The two-subtask structure respects the principle of minimum decomposition by combining all retrieval into one query and all classification into one downstream call."
+  },
+  "node_results": [
+    {
+      "subtask_id": "query_vendor_data",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 720,
+      "output_tokens": 473,
+      "cached_tokens": 0,
+      "latency_ms": 5409,
+      "output": {
+        "sql": "SELECT vendor_name, COUNT(*) AS total_invoices, SUM(CASE WHEN status = 'OVERDUE' OR (paid_date IS NOT NULL AND paid_date > due_date) THEN 1 ELSE 0 END) AS incident_count, ROUND(100.0 * SUM(CASE WHEN status = 'OVERDUE' OR (paid_date IS NOT NULL AND paid_date > due_date) THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 2) AS incident_rate, CASE WHEN 100.0 * SUM(CASE WHEN status = 'OVERDUE' OR (paid_date IS NOT NULL AND paid_date > due_date) THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0) < 10 THEN 'low_risk' WHEN 100.0 * SUM(CASE WHEN status = 'OVERDUE' OR (paid_date IS NOT NULL AND paid_date > due_date) THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0) < 25 THEN 'medium_risk' ELSE 'high_risk' END AS risk_classification FROM invoice_facts GROUP BY vendor_name ORDER BY incident_rate DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "classify_vendor_risk",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 603,
+      "output_tokens": 257,
+      "cached_tokens": 0,
+      "latency_ms": 2459,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "vendor_name",
+            "mongo_value": null,
+            "sql_value": "See aggregated results below",
+            "classification": "data_source_sql_only",
+            "note": "No MongoDB operational state provided. SQL historical data is authoritative."
+          }
+        ],
+        "sql_results_aggregated": [
+          {
+            "vendor_name": "string",
+            "total_invoices": "integer",
+            "incident_count": "integer",
+            "incident_rate": "decimal",
+            "risk_classification": "low_risk | medium_risk | high_risk"
+          }
+        ],
+        "classification_thresholds": {
+          "low_risk": "incident_rate < 10%",
+          "medium_risk": "incident_rate >= 10% AND < 25%",
+          "high_risk": "incident_rate >= 25%"
+        },
+        "status": "awaiting_mongo_operational_data"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.017313000000000002,
+  "total_latency_ms": 7868,
+  "cumulative_spend_usd": 0.5620950000000001,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

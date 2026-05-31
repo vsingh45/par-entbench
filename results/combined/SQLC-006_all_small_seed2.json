@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_anomaly",
+        "description": "Query SQL warehouse to retrieve current month spend and calculate 3-month rolling average per vendor/department/cost center. Compute variance percentage and flag anomalies with classification logic (normal_variance: <15%, concerning: 15-40%, critical: >40%) in a single query using window functions.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "anomaly_reconcile_classify",
+        "description": "Reconcile spend variance results with business context and finalize anomaly classification. Apply domain rules to distinguish legitimate seasonal patterns or approved budget increases from true anomalies. Output: structured list of anomalies with vendor/department, spend delta, percentage variance, and final classification tier.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_spend_anomaly"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen at mid-tier because the query requires window functions to compute 3-month rolling averages, current month spend, and variance percentage across potentially multiple dimensions with classification logic in a single optimized query. (2) cross_recon at mid-tier to apply business context and nuanced classification rules (e.g., seasonal patterns, approved increases) that raw SQL variance cannot capture. The classification is integral to the anomaly assessment and belongs in cross_recon, not a separate policy_action. No separate policy_action needed\u2014this is analytical classification, not governance approval. No multitool_plan required\u2014spend data is in a single SQL warehouse."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_anomaly",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 509,
+      "output_tokens": 440,
+      "cached_tokens": 0,
+      "latency_ms": 3077,
+      "output": {
+        "sql": "WITH monthly_spend AS (SELECT vendor_name, DATE_TRUNC('month', invoice_date)::DATE AS month, SUM(amount_usd) AS monthly_total FROM invoice_facts WHERE invoice_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '3 months' GROUP BY vendor_name, DATE_TRUNC('month', invoice_date)), rolling_avg AS (SELECT vendor_name, month, monthly_total, AVG(monthly_total) OVER (PARTITION BY vendor_name ORDER BY month ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING) AS avg_3month_prior FROM monthly_spend), variance_calc AS (SELECT vendor_name, month, monthly_total, COALESCE(avg_3month_prior, monthly_total) AS baseline_spend, CASE WHEN COALESCE(avg_3month_prior, monthly_total) = 0 THEN 0 ELSE ROUND(((monthly_total - COALESCE(avg_3month_prior, monthly_total)) / COALESCE(avg_3month_prior, monthly_total) * 100)::NUMERIC, 2) END AS variance_percentage FROM rolling_avg WHERE month >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '2 months') SELECT vendor_name, month, monthly_total, baseline_spend, variance_percentage, CASE WHEN ABS(variance_percentage) < 15 THEN 'normal_variance' WHEN ABS(variance_percentage) >= 15 AND ABS(variance_percentage) <= 40 THEN 'concerning' WHEN ABS(variance_percentage) > 40 THEN 'critical' ELSE 'normal_variance' END AS anomaly_classification FROM variance_calc ORDER BY vendor_name, month DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "anomaly_reconcile_classify",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 735,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 6841,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"spend_anomaly_reconciliation\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"query_structure\": \"monthly_spend -> rolling_avg -> variance_calc -> final_classification\",\n        \"data_sources\": [\"invoice_facts table\"],\n        \"time_window\": \"current_month vs 3-month rolling average (excluding current month)\",\n        \"variance_thresholds\": {\n          \"normal_variance\": \"< 15%\",\n          \"concerning\": \"15% to 40%\",\n          \"critical\": \"> 40%\"\n        }\n      },\n      \"classification\": \"query_validated\",\n      \"notes\": \"SQL query properly structured with CTE pipeline for spend variance analysis\"\n    },\n    {\n      \"entity_key\": \"anomaly_classification_logic\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"baseline\": \"COALESCE(avg_3month_prior, monthly_total)\",\n        \"variance_formula\": \"((current - baseline) / baseline * 100)\",\n        \"absolute_value_applied\": true,\n        \"handles_zero_baseline\": true\n      },\n      \"classification\": \"sound_methodology\",\n      \"notes\": \"COALESCE prevents division by zero; absolute value captures both increase and decrease anomalies\"\n    },\n    {\n      \"entity_key\": \"domain_context_gap\",\n      \"mongo_value\": null,\n      \"sql_value\": null,\n      \"classification\": \"missing_context\",\n      \"notes\": \"Query detects statistical anomalies but lacks domain rules. Cannot distinguish: (1) approved budget increases, (2) seasonal patterns (e.g., Q4 retail, annual subscriptions), (3) one-time legitimate expenses, (4) contract renewals. Recommend joining with: approved_budget_changes, vendor_master (seasonal flags), procurement_calendar tables.\"\n    },\n    {\n      \"entity_key\": \"output_structure_recommendation\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"required_fields\": [\n          \"vendor_name\",\n          \"department\",\n          \"month\",\n          \"monthly_total\",\n          \"baseline_spend\",\n          \"variance_percentage\",\n          \"absolute_spend_delta\",\n          \"anomaly_classification (normal_variance|concerning|critical)\",\n          \"final_tier (after_domain_rules)\"\n        ],\n        \"enrichment_fields\": [\n          \"is_approved_budget_increase (boolean)\",\n          \"seasonal_pattern_flag (boolean)\",\n          \"vendor_category\",\n          \"procurement_type (recurring|one_time|subscription)\"\n        ]\n      },\n      \"classification\": \"output_template\",\n      \"notes\": \"Current SQL output missing: department dimension, absolute_spend_delta USD amount, final_tier after domain context applied\"\n    }\n  ],\n  \"implementation_note\": \"Execute the provided SQL query as-is to generate statistical anomalies. Then apply post-query business logic: cross-reference vendor_name + month against approved_budget_changes, vendor_seasonal_calendar, and procurement_contracts tables. Tier final classification: TIER_1_CRITICAL (critical variance + NOT approved + NOT seasonal), TIER_2_CONCERNING (concerning variance + NOT approved + NOT seasonal), TIER_3_CONTEXTUAL (any"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007443999999999999,
+  "total_latency_ms": 9918,
+  "cumulative_spend_usd": 0.990214,
+  "evaluator_reason": "step2_consumer_classification_missing"
+}

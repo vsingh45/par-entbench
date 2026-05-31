@@ -1,0 +1,100 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_budget_analysis",
+        "description": "Query budget allocation by product category and extract cost trends (monthly/quarterly spend patterns, variance from budget, growth rates). Use window functions to calculate trend indicators and YoY comparisons.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_reallocation",
+        "description": "Reconcile budget allocation data with actual spend patterns, identify underutilized and over-allocated categories, apply heuristic scoring (utilization rate, growth momentum, cost efficiency), and generate a data-driven reallocation strategy with specific category-level recommendations and rationale.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_budget_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid-tier) to construct a moderately complex query with window functions and multi-period aggregations across product categories and cost dimensions—mid-tier justifies the multiple aggregate functions and trend calculations needed. (2) cross_recon (mid-tier) to reconcile actual spend against budgets, classify categories by utilization and growth patterns, and generate reallocation recommendations—this is inherently a reconciliation + decision task, not a separate policy_action, since the query asks for strategy, not compliance approval. Mid-tier is sufficient because the logic is structured heuristic-based (utilization scoring, growth momentum analysis) without requiring complex multi-signal inference."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_budget_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 725,
+      "output_tokens": 667,
+      "cached_tokens": 0,
+      "latency_ms": 7047,
+      "output": {
+        "sql": "WITH monthly_spend AS (SELECT product, DATE_TRUNC('month', event_date) AS month, fiscal_year, fiscal_quarter, SUM(amount_usd) AS monthly_amount FROM consumption_facts WHERE event_date >= '2023-01-01' GROUP BY product, DATE_TRUNC('month', event_date), fiscal_year, fiscal_quarter), trend_analysis AS (SELECT product, month, fiscal_year, fiscal_quarter, monthly_amount, LAG(monthly_amount, 1) OVER (PARTITION BY product ORDER BY month) AS prev_month_amount, LAG(monthly_amount, 12) OVER (PARTITION BY product ORDER BY month) AS prev_year_amount, AVG(monthly_amount) OVER (PARTITION BY product ORDER BY month ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS rolling_3mo_avg, SUM(monthly_amount) OVER (PARTITION BY product, fiscal_year ORDER BY month) AS ytd_spend FROM monthly_spend) SELECT product, month, fiscal_year, fiscal_quarter, monthly_amount, prev_month_amount, ROUND(CASE WHEN prev_month_amount > 0 THEN ((monthly_amount - prev_month_amount) / prev_month_amount * 100) ELSE NULL END, 2) AS mom_growth_pct, prev_year_amount, ROUND(CASE WHEN prev_year_amount > 0 THEN ((monthly_amount - prev_year_amount) / prev_year_amount * 100) ELSE NULL END, 2) AS yoy_growth_pct, ROUND(rolling_3mo_avg, 2) AS rolling_3mo_avg, ytd_spend FROM trend_analysis ORDER BY product, month"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_reallocation",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 707,
+      "output_tokens": 502,
+      "cached_tokens": 0,
+      "latency_ms": 5036,
+      "output": {
+        "error": "INCOMPLETE_DATA_PIPELINE",
+        "message": "Cannot execute reconciliation: MongoDB operational state data is missing",
+        "expected_inputs": {
+          "mongodb_query": "Current budget allocations and category limits (required)",
+          "sql_query": "Historical spend patterns (provided)",
+          "missing": [
+            "mongo_budget_allocations",
+            "mongo_category_limits",
+            "mongo_utilization_flags"
+          ]
+        },
+        "recommendation": "Provide MongoDB query results containing current budget state with fields: {category, allocated_budget, category_limit, current_utilization, last_updated}",
+        "remediation_steps": [
+          "Execute MongoDB query to retrieve current budget_allocations collection",
+          "Include fields: product_category, budget_allocated_usd, budget_limit_usd, ytd_spend_usd, allocation_status",
+          "Resubmit with both upstream_outputs (mongo_state + sql_history)",
+          "System will then perform LEFT JOIN reconciliation with heuristic scoring"
+        ],
+        "heuristic_scoring_framework": {
+          "utilization_rate": "ytd_spend / allocated_budget",
+          "growth_momentum": "(current_3mo_avg - prev_3mo_avg) / prev_3mo_avg",
+          "cost_efficiency": "yoy_growth_pct / mom_growth_pct ratio",
+          "risk_score": "allocation_depletion_velocity"
+        },
+        "expected_output_structure": {
+          "reconciled": [
+            {
+              "entity_key": "product_category",
+              "mongo_allocated": "number",
+              "sql_ytd_spend": "number",
+              "utilization_rate": "percent",
+              "growth_momentum": "percent",
+              "classification": "expand|hold|reduce|no_recent_activity|at_risk|stable|growing",
+              "recommendation": "reallocation_action",
+              "rationale": "supporting_metrics"
+            }
+          ]
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.023517000000000003,
+  "total_latency_ms": 12083,
+  "cumulative_spend_usd": 1.652916000000001
+}

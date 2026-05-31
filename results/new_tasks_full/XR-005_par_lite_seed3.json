@@ -1,0 +1,86 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "router": "par_lite",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sf_query_licenses",
+        "description": "Query Salesforce license inventory: total licensed seat count by license type (User, Platform User, etc.) and current org capacity",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sf_query_assignments",
+        "description": "Query Salesforce user records: count of active seat assignments by license type, profile assignments, and last login date to identify unused accounts",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_utilization",
+        "description": "Reconcile licensed seat counts against actual assignments; calculate unutilized licenses by type; identify inactive or dormant accounts; classify utilization posture (healthy, underutilized, or wasteful); recommend deactivation or license optimization actions",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sf_query_licenses",
+          "sf_query_assignments"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: (1) License inventory query (small tier—single-table snapshot query of org settings), (2) User assignment query (mid tier—requires joining user table with profile data and filtering by activity status), (3) Cross-reconciliation (mid tier—compares two data sources, calculates gaps, and generates classification/recommendations). This avoids splitting two independent queries into three by keeping license and assignment queries separate (they have different substrates), then consolidating all analysis and posture classification into one cross_recon step. Cost is minimized by avoiding unnecessary extract or policy_action subtasks (utilization analysis is analytical, not policy compliance)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sf_query_licenses",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 463,
+      "output_tokens": 167,
+      "cached_tokens": 0,
+      "latency_ms": 1822,
+      "output": {
+        "sql": "SELECT license_id, product AS license_type, SUM(daily_active_seats) AS total_licensed_seats, COUNT(DISTINCT user_id) AS assigned_seats, SUM(daily_active_seats) - COUNT(DISTINCT user_id) AS unutilized_seats, ROUND(100.0 * COUNT(DISTINCT user_id) / NULLIF(SUM(daily_active_seats), 0), 2) AS utilization_percentage FROM consumption_facts WHERE event_date >= CURRENT_DATE - INTERVAL '90 days' GROUP BY license_id, product ORDER BY total_licensed_seats DESC, utilization_percentage ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sf_query_assignments",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 465,
+      "output_tokens": 307,
+      "cached_tokens": 0,
+      "latency_ms": 5302,
+      "output": {
+        "sql": "SELECT publisher, product, license_id, COUNT(DISTINCT user_id) AS assigned_users, MAX(daily_active_seats) AS max_daily_active_seats, SUM(daily_active_seats) AS total_daily_active_seats, MAX(event_date) AS last_activity_date, MIN(event_date) AS first_activity_date, COUNT(DISTINCT event_date) AS active_days, SUM(amount_usd) AS total_spend, ROUND(AVG(daily_active_seats), 2) AS avg_daily_active_seats, MAX(event_date) AS last_login_date, CASE WHEN MAX(event_date) < CURRENT_DATE - INTERVAL '30 days' THEN 'Inactive - 30+ days' WHEN MAX(event_date) < CURRENT_DATE - INTERVAL '14 days' THEN 'Inactive - 14-30 days' WHEN MAX(event_date) < CURRENT_DATE - INTERVAL '7 days' THEN 'Inactive - 7-14 days' ELSE 'Active' END AS activity_status FROM consumption_facts WHERE publisher ILIKE '%salesforce%' GROUP BY publisher, product, license_id ORDER BY last_activity_date ASC, total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_utilization",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 758,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10976,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"sf_licenses_vs_assignments\",\n      \"mongo_value\": {\n        \"source\": \"sf_query_licenses\",\n        \"description\": \"Licensed seat counts vs actual assignments over 90-day window\",\n        \"metrics\": {\n          \"total_licensed_seats\": null,\n          \"assigned_seats\": null,\n          \"unutilized_seats\": null,\n          \"utilization_percentage\": null\n        },\n        \"status\": \"query_definition_present_no_runtime_data\"\n      },\n      \"sql_value\": {\n        \"source\": \"sf_query_assignments\",\n        \"description\": \"Salesforce publisher-scoped assignment activity and spend\",\n        \"metrics\": {\n          \"assigned_users\": null,\n          \"max_daily_active_seats\": null,\n          \"total_daily_active_seats\": null,\n          \"last_activity_date\": null,\n          \"first_activity_date\": null,\n          \"active_days\": null,\n          \"total_spend\": null,\n          \"avg_daily_active_seats\": null,\n          \"activity_status\": null\n        },\n        \"status\": \"query_definition_present_no_runtime_data\"\n      },\n      \"classification\": \"no_recent_activity\",\n      \"reconciliation_notes\": \"Both upstream outputs contain SQL query definitions only — no runtime result rows were returned. Cannot compute actual utilization metrics. All derived fields default to null or 0 per LEFT JOIN null-fill semantics.\",\n      \"unutilized_licenses\": 0,\n      \"utilization_posture\": \"indeterminate\",\n      \"recommended_actions\": []\n    },\n    {\n      \"entity_key\": \"license_type__salesforce_aggregate\",\n      \"mongo_value\": {\n        \"license_id\": null,\n        \"license_type\": null,\n        \"total_licensed_seats\": 0,\n        \"assigned_seats\": 0,\n        \"unutilized_seats\": 0,\n        \"utilization_percentage\": 0.0\n      },\n      \"sql_value\": {\n        \"publisher\": \"Salesforce\",\n        \"product\": null,\n        \"license_id\": null,\n        \"assigned_users\": 0,\n        \"max_daily_active_seats\": 0,\n        \"total_daily_active_seats\": 0,\n        \"last_activity_date\": null,\n        \"first_activity_date\": null,\n        \"active_days\": 0,\n        \"total_spend\": 0.0,\n        \"avg_daily_active_seats\": 0.0,\n        \"last_login_date\": null,\n        \"activity_status\": \"Inactive - 30+ days\"\n      },\n      \"classification\": \"no_recent_activity\",\n      \"unutilized_licenses\": 0,\n      \"utilization_posture\": \"indeterminate\",\n      \"recommended_actions\": [\n        {\n          \"action\": \"rerun_queries\",\n          \"priority\": \"high\",\n          \"detail\": \"Execute both sf_query_licenses and sf_query_assignments against the consumption_facts table to retrieve actual row-level data before reconciliation can produce meaningful signals.\"\n        },\n        {\n          \"action\": \"verify_publisher_filter\",\n          \"priority\": \"medium\",\n          \"detail\": \""
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.021572,
+  "total_latency_ms": 18100,
+  "cumulative_spend_usd": 3.2853760000000016
+}

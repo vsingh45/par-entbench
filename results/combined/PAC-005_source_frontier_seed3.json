@@ -1,0 +1,52 @@
+{
+  "task_id": "PAC-005",
+  "task_class": "policy_action",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_pii_export",
+        "description": "Evaluate whether bulk PII export (names, emails, phone numbers) is permitted under data governance and privacy policies. Assess compliance with data classification, retention rules, and access controls.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This query explicitly asks for a bulk export of sensitive PII (names, emails, phone numbers). This is a governance and compliance decision, not a data extraction task. A policy_action subtask is required to evaluate the request against the policy registry before any SQL extraction is executed. Policy_action at mid tier is appropriate because PII export typically involves multiple applicable rules (data classification, retention policies, access control, privacy regulations) that require multi-signal reasoning. The request does NOT proceed to sql_gen until policy approval is obtained; the policy evaluation gates the entire operation. No sql_gen subtask is included in this plan because the query is asking for approval to export, not requesting the export itself post-approval.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_pii_export",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 763,
+      "output_tokens": 246,
+      "cached_tokens": 0,
+      "latency_ms": 4849,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-501": "fail",
+          "POL-502": "fail",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "Bulk PII export by a data analyst lacks required Legal/CISO approvals (POL-501) and violates data minimization since no business-critical justification is provided (POL-502). Audit logging and retention controls (POL-503) can be satisfied conditionally if approvals are obtained.",
+        "applied_constraints": [
+          "Obtain explicit Legal privacy approval",
+          "Obtain CISO sign-off",
+          "Provide business-critical justification or reduce scope to non-sensitive attributes",
+          "Enable audit logging with 30-day retention limit on exported data"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009965,
+  "total_latency_ms": 4849,
+  "cumulative_spend_usd": 8.488152000000005,
+  "evaluator_reason": "selected_action_mismatch"
+}

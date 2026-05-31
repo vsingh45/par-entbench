@@ -1,0 +1,70 @@
+{
+  "task_id": "SQLC-005",
+  "task_class": "sql_compose",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_fetch_expiring",
+        "description": "Query Postgres to retrieve all licenses with expiration dates within the next 6 months. Include license ID, name, vendor, expiration date, and cost/terms information needed for renewal assessment.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "gen_renewal_recs",
+        "description": "Analyze the retrieved licenses and generate renewal recommendations for each based on expiration urgency, cost, usage patterns, and vendor relationship. Output structured recommendations (e.g., action priority, suggested renewal terms, risk assessment).",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_fetch_expiring"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (small tier) for straightforward Postgres query filtering licenses by expiration date within 6 months—simple date comparison on a single table. (2) cross_recon (mid tier) to generate renewal recommendations from the SQL results, which requires moderate reasoning across multiple factors (urgency, cost, terms) and structured output generation. No policy_action needed—renewal recommendations are advisory analysis, not governance decisions. No multitool_plan needed—no explicit tool orchestration requested."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_fetch_expiring",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 729,
+      "output_tokens": 219,
+      "cached_tokens": 0,
+      "latency_ms": 2643,
+      "output": {
+        "sql": "SELECT DISTINCT cf.license_id, cf.product AS license_name, cf.publisher AS vendor, MAX(cf.event_date) AS last_event_date, SUM(cf.amount_usd) AS total_cost_usd, AVG(cf.daily_active_seats) AS avg_daily_active_seats FROM consumption_facts cf WHERE cf.event_date >= CURRENT_DATE AND cf.event_date <= CURRENT_DATE + INTERVAL '6 months' GROUP BY cf.license_id, cf.product, cf.publisher ORDER BY cf.license_id"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "gen_renewal_recs",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 679,
+      "output_tokens": 269,
+      "cached_tokens": 0,
+      "latency_ms": 2827,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sql_fetch_expiring",
+            "mongo_value": null,
+            "sql_value": "SELECT DISTINCT cf.license_id, cf.product AS license_name, cf.publisher AS vendor, MAX(cf.event_date) AS last_event_date, SUM(cf.amount_usd) AS total_cost_usd, AVG(cf.daily_active_seats) AS avg_daily_active_seats FROM consumption_facts cf WHERE cf.event_date >= CURRENT_DATE AND cf.event_date <= CURRENT_DATE + INTERVAL '6 months' GROUP BY cf.license_id, cf.product, cf.publisher ORDER BY cf.license_id",
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01924,
+  "total_latency_ms": 5470,
+  "cumulative_spend_usd": 0.7307650000000002
+}

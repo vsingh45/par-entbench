@@ -1,0 +1,327 @@
+{
+  "task_id": "MTP-008",
+  "task_class": "multitool_plan",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "step1_jira_reqs",
+        "description": "Retrieve project requirements from Jira (query issues, epics, user stories, acceptance criteria)",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "step2_calendar_availability",
+        "description": "Check team availability from calendar API (query team members' calendar slots for the next 7 days, identify meeting windows)",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "step3_standup_schedule",
+        "description": "Schedule standup meeting using calendar API and team availability data from step2; coordinate with Jira requirements from step1 to define meeting purpose",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "step2_calendar_availability",
+          "step1_jira_reqs"
+        ]
+      },
+      {
+        "id": "step4_slack_agenda",
+        "description": "Share meeting agenda and requirements summary via Slack channel; include meeting details from step3 and agenda items derived from step1 requirements",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "step3_standup_schedule",
+          "step1_jira_reqs"
+        ]
+      }
+    ],
+    "cost_rationale": "This query explicitly requests multi-tool orchestration across four distinct enterprise tools (Jira, Calendar API, Meeting Scheduler, Slack). The plan uses multitool_plan specialist for all subtasks, which is the appropriate agent for tool-call coordination. The decomposition is minimal (4 subtasks) because each represents a distinct tool interaction with its own input/output contract. Steps 1\u20132 run in parallel (no dependencies); steps 3\u20134 depend on prior steps. Tier assignment: steps 1\u20133 are mid-tier (they require multi-parameter orchestration, conditional logic, and integration across multiple API calls); step 4 is small-tier (message formatting and posting to Slack is straightforward once agenda content is ready). This avoids unnecessary subdivision while preserving the dependency graph needed for sequential execution."
+  },
+  "node_results": [
+    {
+      "subtask_id": "step1_jira_reqs",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 635,
+      "output_tokens": 444,
+      "cached_tokens": 0,
+      "latency_ms": 5840,
+      "output": {
+        "plan": [
+          {
+            "tool": "jira.list_issues",
+            "arguments": {
+              "jql": "project = CURRENT AND issuetype in (Epic, Story) AND status != Done",
+              "fields": [
+                "summary",
+                "description",
+                "acceptance_criteria",
+                "issuetype",
+                "status",
+                "assignee"
+              ]
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "time_min": "now",
+              "time_max": "now+7d",
+              "attendees": "team"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.create_event",
+            "arguments": {
+              "title": "Team Standup - Project Sync",
+              "description": "Agenda based on Jira items: $1.results",
+              "attendees": "team",
+              "duration_minutes": 30,
+              "availability_context": "$2.results"
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#team-standup",
+              "message": "\ud83d\udcc5 Standup scheduled: $3.event_link\n\n*Agenda:*\nReview of active epics and user stories:\n$1.results\n\nPlease review acceptance criteria before the meeting."
+            },
+            "depends_on": [
+              1,
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "standup_scheduled",
+              "resource": "$3.event_id",
+              "details": "Cross-team standup scheduled with Jira agenda items"
+            },
+            "depends_on": [
+              3,
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "step2_calendar_availability",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 638,
+      "output_tokens": 126,
+      "cached_tokens": 0,
+      "latency_ms": 2485,
+      "output": {
+        "plan": [
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "range": "next_7_days",
+              "scope": "team"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "calendar.availability_check",
+              "details": "Queried team calendar slots for next 7 days",
+              "results": "$1.results"
+            },
+            "depends_on": [
+              1
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "step3_standup_schedule",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 938,
+      "output_tokens": 541,
+      "cached_tokens": 0,
+      "latency_ms": 2604,
+      "output": {
+        "plan": [
+          {
+            "tool": "jira.list_issues",
+            "arguments": {
+              "jql": "project = CURRENT AND issuetype in (Epic, Story) AND status != Done",
+              "fields": [
+                "summary",
+                "description",
+                "acceptance_criteria",
+                "issuetype",
+                "status",
+                "assignee"
+              ]
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "range": "next_7_days",
+              "scope": "team"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.create_event",
+            "arguments": {
+              "title": "Team Standup - Project Sync",
+              "description": "Agenda based on Jira items: $1.results",
+              "attendees": "team",
+              "duration_minutes": 30,
+              "availability_context": "$2.results"
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "calendar.availability_check",
+              "details": "Queried team calendar slots for next 7 days",
+              "results": "$2.results"
+            },
+            "depends_on": [
+              2
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#team-standup",
+              "message": "\ud83d\udcc5 Standup scheduled: $3.event_link\n\n*Agenda:*\nReview of active epics and user stories:\n$1.results\n\nPlease review acceptance criteria before the meeting."
+            },
+            "depends_on": [
+              1,
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "standup_scheduled",
+              "resource": "$3.event_id",
+              "details": "Cross-team standup scheduled with Jira agenda items"
+            },
+            "depends_on": [
+              3,
+              5
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "step4_slack_agenda",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1250,
+      "output_tokens": 579,
+      "cached_tokens": 0,
+      "latency_ms": 4100,
+      "output": {
+        "plan": [
+          {
+            "tool": "jira.list_issues",
+            "arguments": {
+              "jql": "project = CURRENT AND issuetype in (Epic, Story) AND status != Done",
+              "fields": [
+                "summary",
+                "description",
+                "acceptance_criteria",
+                "issuetype",
+                "status",
+                "assignee"
+              ]
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "range": "next_7_days",
+              "scope": "team"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.create_event",
+            "arguments": {
+              "title": "Team Standup - Project Sync",
+              "description": "Meeting agenda based on active requirements and project items",
+              "attendees": "team",
+              "duration_minutes": 30,
+              "availability_context": "$2.results"
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#team-standup",
+              "message": "\ud83d\udccb **Team Meeting Agenda & Requirements Summary**\n\n\ud83d\udcc5 **Meeting Details:**\nEvent: $3.event_link\nDuration: 30 minutes\nAttendees: Team\n\n**\ud83d\udccc Agenda Items (from Project Requirements):**\n\nActive Epics & Stories:\n$1.results\n\n**\ud83d\udcca Requirements Summary:**\n\u2022 Review acceptance criteria for all active items\n\u2022 Discuss blockers and dependencies\n\u2022 Align on priorities and next steps\n\n**\u23f0 Calendar Context:**\nTeam availability: $2.results\n\nPlease review the requirements and acceptance criteria before the meeting. Looking forward to a productive sync!"
+            },
+            "depends_on": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "slack.agenda_shared",
+              "resource": "#team-standup",
+              "details": "Meeting agenda and requirements summary shared with team; includes calendar event details and Jira items"
+            },
+            "depends_on": [
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.028403,
+  "total_latency_ms": 15029,
+  "cumulative_spend_usd": 8.150257000000002,
+  "evaluator_reason": "missing_tools: {'slack.messages.post', 'calendar.events.create', 'calendar.availability.check', 'jira.issue.get'}"
+}

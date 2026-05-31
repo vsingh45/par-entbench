@@ -1,0 +1,71 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_budget_analysis",
+        "description": "Query cost warehouse to aggregate budget allocation by product category, calculate trend metrics (YoY, QoQ growth rates), and identify cost drivers. Return category-level budgets, actual spend, variance, and temporal trends.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_reallocation",
+        "description": "Reconcile budget data with spend patterns and cost drivers. Perform multi-signal analysis including budget efficiency (actuals vs. allocated), variance trends, and category performance. Generate reallocation recommendations with rationale (shift underutilized allocations, increase high-ROI categories, flag outliers).",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_budget_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) SQL query to gather budget and cost data by category with trend analysis \u2014 mid tier handles multi-table joins and aggregation across time periods. (2) Cross-recon to synthesize findings and generate strategic recommendations \u2014 frontier tier because reallocation strategy requires multi-signal interpretation (comparing allocation vs. actual, trend velocity, category performance), inference about optimal distribution, and prioritized recommendation logic. Single sql_gen is sufficient; a multi-CTE query with window functions (LAG, YoY calculations) can deliver all metrics in one call. Policy evaluation is not needed unless governance rules are imposed on reallocation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_budget_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 478,
+      "output_tokens": 613,
+      "cached_tokens": 0,
+      "latency_ms": 7692,
+      "output": {
+        "sql": "SELECT product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS total_spend, SUM(daily_active_seats) AS total_active_seats, COUNT(DISTINCT license_id) AS license_count, COUNT(DISTINCT user_id) AS unique_users, SUM(amount_usd) / NULLIF(SUM(daily_active_seats), 0) AS cost_per_seat, LAG(SUM(amount_usd)) OVER (PARTITION BY product, fiscal_quarter ORDER BY fiscal_year) AS prior_year_same_quarter_spend, SUM(amount_usd) - LAG(SUM(amount_usd)) OVER (PARTITION BY product, fiscal_quarter ORDER BY fiscal_year) AS yoy_variance, ROUND(100.0 * (SUM(amount_usd) - LAG(SUM(amount_usd)) OVER (PARTITION BY product, fiscal_quarter ORDER BY fiscal_year)) / NULLIF(LAG(SUM(amount_usd)) OVER (PARTITION BY product, fiscal_quarter ORDER BY fiscal_year), 0), 2) AS yoy_growth_pct, LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter) AS prior_quarter_spend, SUM(amount_usd) - LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter) AS qoq_variance, ROUND(100.0 * (SUM(amount_usd) - LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter)) / NULLIF(LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY fiscal_year, fiscal_quarter), 0), 2) AS qoq_growth_pct, SUM(SUM(amount_usd)) OVER (PARTITION BY fiscal_year, fiscal_quarter) AS total_portfolio_spend, ROUND(100.0 * SUM(amount_usd) / NULLIF(SUM(SUM(amount_usd)) OVER (PARTITION BY fiscal_year, fiscal_quarter), 0), 2) AS pct_of_total_spend, RANK() OVER (PARTITION BY fiscal_year, fiscal_quarter ORDER BY SUM(amount_usd) DESC) AS spend_rank FROM consumption_facts GROUP BY product, fiscal_year, fiscal_quarter ORDER BY fiscal_year DESC, fiscal_quarter DESC, total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_reallocation",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1450,
+      "output_tokens": 71,
+      "cached_tokens": 0,
+      "latency_ms": 2255,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sql_budget_analysis",
+            "mongo_value": null,
+            "sql_value": "query_definition_only_no_results",
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.019653999999999998,
+  "total_latency_ms": 9947,
+  "cumulative_spend_usd": 1.742755000000001,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

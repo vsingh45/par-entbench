@@ -1,0 +1,93 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "frugal_cascade",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_declining_publishers",
+        "description": "Query SQL to identify publishers with declining quarterly revenue/spend trends across Q1-Q4 2024. Return publisher ID, name, and quarterly metrics (Q1, Q2, Q3, Q4 spend/revenue) to enable trend analysis.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal_rec",
+        "description": "Reconcile the declining publisher data with current contract state (from MongoDB) and historical performance. Classify each publisher's renewal posture (hold/expand/reduce) based on trend severity, contract value, and performance metrics. Generate renewal recommendation for each publisher.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_declining_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid tier) to fetch quarterly 2024 trends from SQL warehouse\u2014moderate complexity due to quarterly aggregation and trend calculation across four periods; (2) cross_recon (mid tier) to reconcile SQL trends with MongoDB contract state and generate renewal recommendations\u2014this combines data from two sources (SQL history + MongoDB contracts) and includes classification/posture logic which is part of cross_recon's scope, not a separate policy_action. No multitool_plan needed; no policy_action needed (renewal recommendations are business logic, not governance compliance)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_declining_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 492,
+      "output_tokens": 590,
+      "cached_tokens": 0,
+      "latency_ms": 3312,
+      "output": {
+        "sql": "WITH quarterly_spend AS (SELECT publisher, CASE WHEN event_date >= '2024-01-01' AND event_date < '2024-04-01' THEN 1 WHEN event_date >= '2024-04-01' AND event_date < '2024-07-01' THEN 2 WHEN event_date >= '2024-07-01' AND event_date < '2024-10-01' THEN 3 WHEN event_date >= '2024-10-01' AND event_date < '2025-01-01' THEN 4 END AS quarter, SUM(amount_usd) AS quarterly_revenue FROM consumption_facts WHERE event_date >= '2024-01-01' AND event_date < '2025-01-01' GROUP BY publisher, quarter) SELECT publisher, MAX(CASE WHEN quarter = 1 THEN quarterly_revenue END) AS q1_spend, MAX(CASE WHEN quarter = 2 THEN quarterly_revenue END) AS q2_spend, MAX(CASE WHEN quarter = 3 THEN quarterly_revenue END) AS q3_spend, MAX(CASE WHEN quarter = 4 THEN quarterly_revenue END) AS q4_spend, CASE WHEN MAX(CASE WHEN quarter = 1 THEN quarterly_revenue END) > MAX(CASE WHEN quarter = 2 THEN quarterly_revenue END) AND MAX(CASE WHEN quarter = 2 THEN quarterly_revenue END) > MAX(CASE WHEN quarter = 3 THEN quarterly_revenue END) AND MAX(CASE WHEN quarter = 3 THEN quarterly_revenue END) > MAX(CASE WHEN quarter = 4 THEN quarterly_revenue END) THEN 'REDUCE' WHEN MAX(CASE WHEN quarter = 1 THEN quarterly_revenue END) > MAX(CASE WHEN quarter = 4 THEN quarterly_revenue END) THEN 'REDUCE' WHEN MAX(CASE WHEN quarter = 4 THEN quarterly_revenue END) > MAX(CASE WHEN quarter = 1 THEN quarterly_revenue END) THEN 'EXPAND' ELSE 'HOLD' END AS renewal_recommendation FROM quarterly_spend WHERE quarter IS NOT NULL GROUP BY publisher HAVING MAX(CASE WHEN quarter = 1 THEN quarterly_revenue END) > MAX(CASE WHEN quarter = 4 THEN quarterly_revenue END) ORDER BY publisher"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal_rec",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 873,
+      "output_tokens": 388,
+      "cached_tokens": 0,
+      "latency_ms": 4028,
+      "output": {
+        "reconciled": [],
+        "metadata": {
+          "status": "insufficient_data",
+          "reason": "MongoDB operational state not provided in upstream_outputs",
+          "details": "Reconciliation requires both MongoDB current contracts and SQL historical trends. Only SQL declining_publishers query result structure is present, but actual query execution results are missing. Cannot perform LEFT JOIN reconciliation without: (1) MongoDB contract documents with entity_key, current_value, contract_terms, (2) SQL query execution results with publisher names and quarterly spend values"
+        },
+        "reconciliation_requirements": {
+          "mongodb_required_fields": [
+            "entity_key (publisher identifier)",
+            "contract_value_usd",
+            "contract_end_date",
+            "renewal_status",
+            "performance_score"
+          ],
+          "sql_provided_fields": [
+            "publisher",
+            "q1_spend",
+            "q2_spend",
+            "q3_spend",
+            "q4_spend",
+            "renewal_recommendation (from CASE logic)"
+          ],
+          "classification_logic": {
+            "reduce": "q1_spend > q2_spend > q3_spend > q4_spend (consistent decline) OR q1_spend >> q4_spend",
+            "expand": "q4_spend > q1_spend (growth trajectory)",
+            "hold": "no consistent trend OR stable spend across quarters",
+            "at_risk": "REDUCE trend + contract value > threshold + performance_score low",
+            "stable": "HOLD trend + contract active + performance_score adequate"
+          }
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.006255,
+  "total_latency_ms": 7340,
+  "cumulative_spend_usd": 1.2766109999999997,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

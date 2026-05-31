@@ -1,0 +1,49 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_eval_1",
+        "description": "Evaluate contractor's temporary access request against data access policies, backup export permissions, and contractor governance rules. Determine if local analysis of full customer database by temporary contractors violates data residency, PII handling, or access control policies.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This is explicitly a policy evaluation scenario. The query asks whether an action (full database backup download by a contractor) is permitted under enterprise governance. The policy_action specialist is the only appropriate agent. Tier: mid because the evaluation requires reasoning across multiple policy domains (access control, data residency, PII handling, contractor governance) and reconciling multiple rules rather than checking a single, simple policy condition."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_eval_1",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 759,
+      "output_tokens": 178,
+      "cached_tokens": 0,
+      "latency_ms": 3349,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "Contractor role violates POL-701 (DBA/FTE only), POL-702 (no raw data exports for contractors), and POL-703 (no PM approval or 7-day notice on file). Full backup download is denied.",
+        "applied_constraints": [
+          "Redirect contractor to de-identified query interface",
+          "Require PM approval with 7-day notice for any future data access"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.008245,
+  "total_latency_ms": 3349,
+  "cumulative_spend_usd": 8.773765000000006
+}

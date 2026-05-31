@@ -1,0 +1,121 @@
+{
+  "task_id": "XR-006",
+  "task_class": "cross_recon",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_slack_contracts",
+        "description": "Query SAM MongoDB for active Slack contracts: extract contract ID, renewal date, license count, contract term, and vendor details. Filter for Slack vendor and active/upcoming renewals.",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_slack_consumption",
+        "description": "Query consumption database for Slack usage trends: extract monthly active users, seats utilized, peak usage, and consumption rate over the past 12-24 months. Group by month and include growth/decline metrics.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_slack_renewal",
+        "description": "Reconcile SAM contract renewals with consumption trends: align renewal dates with usage patterns, calculate license utilization rate, identify over/under-provisioning, assess renewal timing against trajectory (growth vs. stagnation), and classify renewal posture as optimize-down, maintain, or expand.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "mongo_slack_contracts",
+          "sql_slack_consumption"
+        ]
+      }
+    ],
+    "cost_rationale": "This is a two-source reconciliation task requiring minimal decomposition: (1) mongo_query retrieves Slack contracts from SAM in one call (small tier\u2014straightforward vendor filter and date range), (2) sql_gen retrieves consumption trends from the data warehouse in one call (small tier\u2014standard time-series aggregation), (3) cross_recon (mid tier) fuses the two datasets, calculates utilization metrics, and generates renewal posture classification and trajectory assessment. Mid tier is appropriate for cross_recon because it must reason across two independent data streams, compute derived metrics (utilization %), and apply business logic to classify renewal stance. No policy_action is needed because this is a data-driven assessment, not a governance decision. Total: 3 subtasks (minimal necessary to answer the query completely)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_slack_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1227,
+      "output_tokens": 138,
+      "cached_tokens": 0,
+      "latency_ms": 1291,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Slack",
+              "status": "active"
+            }
+          },
+          {
+            "$addFields": {
+              "renewal_date": "$term_end"
+            }
+          },
+          {
+            "$sort": {
+              "term_end": 1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_slack_consumption",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 477,
+      "output_tokens": 411,
+      "cached_tokens": 0,
+      "latency_ms": 3011,
+      "output": {
+        "sql": "SELECT DATE_TRUNC('month', consumption_facts.event_date)::DATE AS month, COUNT(DISTINCT consumption_facts.user_id) AS monthly_active_users, SUM(consumption_facts.daily_active_seats) AS total_seats_utilized, MAX(consumption_facts.daily_active_seats) AS peak_usage, AVG(consumption_facts.amount_usd) AS avg_consumption_rate, SUM(consumption_facts.amount_usd) AS monthly_consumption_usd, ROUND(((SUM(consumption_facts.amount_usd) - LAG(SUM(consumption_facts.amount_usd)) OVER (ORDER BY DATE_TRUNC('month', consumption_facts.event_date))) / LAG(SUM(consumption_facts.amount_usd)) OVER (ORDER BY DATE_TRUNC('month', consumption_facts.event_date)) * 100)::NUMERIC, 2) AS consumption_growth_pct, ROUND(((COUNT(DISTINCT consumption_facts.user_id) - LAG(COUNT(DISTINCT consumption_facts.user_id)) OVER (ORDER BY DATE_TRUNC('month', consumption_facts.event_date))) / LAG(COUNT(DISTINCT consumption_facts.user_id)) OVER (ORDER BY DATE_TRUNC('month', consumption_facts.event_date)) * 100)::NUMERIC, 2) AS user_growth_pct FROM consumption_facts WHERE consumption_facts.product = 'Slack' AND consumption_facts.event_date >= CURRENT_DATE - INTERVAL '24 months' GROUP BY DATE_TRUNC('month', consumption_facts.event_date) ORDER BY month DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_slack_renewal",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1214,
+      "output_tokens": 130,
+      "cached_tokens": 0,
+      "latency_ms": 2426,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "Slack",
+            "mongo_value": {
+              "publisher": "Slack",
+              "status": "active",
+              "contracts": "active_renewals_pending"
+            },
+            "sql_value": {
+              "monthly_consumption_trend": "unavailable",
+              "user_growth_pct": null,
+              "consumption_growth_pct": null,
+              "peak_usage": null
+            },
+            "classification": "maintain"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.013769000000000002,
+  "total_latency_ms": 6728,
+  "cumulative_spend_usd": 3.7424470000000016,
+  "evaluator_reason": "stage2_sql_fail: result_bag_mismatch"
+}

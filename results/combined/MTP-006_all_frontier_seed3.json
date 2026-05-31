@@ -1,0 +1,108 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_sam",
+        "description": "Extract contract renewal dates, license SKUs, and critical thresholds from SAM system database",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_consumption",
+        "description": "Query consumption trends (usage volume, seat utilization, trend direction) from SQL data warehouse for licenses identified in SAM extraction",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "risk_assessment",
+        "description": "Cross-reconcile SAM renewal dates with consumption trends; classify renewal risk (critical/high/medium/low); generate renewal recommendations and prioritized alert payload for procurement",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "notify_procurement",
+        "description": "Generate notification plan and execute alerts to procurement team via email/ticketing system based on risk classification and renewal timeline",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "4 subtasks minimize redundant work while capturing the full workflow: (1) SAM extraction is simple field retrieval (small tier); (2) consumption query is multi-table join over time-series data (mid tier); (3) cross_recon reconciles SAM dates + consumption trends, performs risk classification and generates prioritized alerts\u2014all integrated into one reconciliation step rather than separate policy or classification tasks (mid tier); (4) multitool_plan is necessary here because the user explicitly requests \"notify procurement team\" which requires orchestrating notifications across the enterprise tool registry (email, ticketing, etc.)\u2014this is the only task that explicitly requires multi-tool coordination. This plan avoids splitting work unnecessarily (no separate policy_action since risk classification is part of reconciliation, not compliance-driven)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_sam",
+      "specialist": "extract",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 346,
+      "output_tokens": 37,
+      "cached_tokens": 0,
+      "latency_ms": 1993,
+      "output": {
+        "contract_renewal_dates": null,
+        "license_skus": null,
+        "critical_thresholds": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_consumption",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 721,
+      "output_tokens": 202,
+      "cached_tokens": 0,
+      "latency_ms": 2880,
+      "output": {
+        "sql": "SELECT license_id, publisher, product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS usage_volume, AVG(daily_active_seats) AS avg_seats, MAX(daily_active_seats) AS peak_seats, COUNT(DISTINCT event_date) AS active_days FROM consumption_facts WHERE event_date >= '2024-01-01' GROUP BY license_id, publisher, product, fiscal_year, fiscal_quarter ORDER BY license_id, fiscal_year, fiscal_quarter"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "risk_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 442,
+      "output_tokens": 13,
+      "cached_tokens": 0,
+      "latency_ms": 830,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "notify_procurement",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 630,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10785,
+      "output": {
+        "raw_output": "{\"plan\":[{\"tool\":\"mongo.find\",\"arguments\":{\"collection\":\"sam_contracts\",\"filter\":{\"status\":\"active\",\"renewal_date\":{\"$lte\":\"2025-04-30\"}},\"projection\":{\"contract_id\":1,\"vendor\":1,\"product\":1,\"renewal_date\":1,\"annual_cost\":1,\"owner\":1}},\"depends_on\":[]},{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT contract_id, product, AVG(daily_active_users) AS avg_dau, MAX(licenses_provisioned) AS provisioned, MAX(licenses_purchased) AS purchased, (MAX(licenses_provisioned)*1.0/NULLIF(MAX(licenses_purchased),0)) AS utilization_ratio FROM sam.consumption_trends WHERE contract_id IN ($1.results[*].contract_id) AND event_date >= DATEADD(day,-180,CURRENT_DATE) GROUP BY contract_id, product\"},\"depends_on\":[1]},{\"tool\":\"datadog.query_metric\",\"arguments\":{\"metric\":\"sam.license.usage.spike\",\"from\":\"now-30d\",\"to\":\"now\",\"filter\":{\"contract_id\":\"$1.results[*].contract_id\"}},\"depends_on\":[1]},{\"tool\":\"mongo.aggregate\",\"arguments\":{\"collection\":\"sam_risk_classification\",\"pipeline\":[{\"$match\":{\"contract_id\":{\"$in\":\"$1.results[*].contract_id\"}}},{\"$lookup\":{\"from\":\"sam_contracts\",\"localField\":\"contract_id\",\"foreignField\":\"contract_id\",\"as\":\"contract\"}},{\"$addFields\":{\"risk_score\":{\"$add\":[{\"$multiply\":[\"$utilization_weight\",0.4]},{\"$multiply\":[\"$cost_weight\",0.3]},{\"$multiply\":[\"$renewal_urgency_weight\",0.3]}]}}},{\"$addFields\":{\"risk_tier\":{\"$switch\":{\"branches\":[{\"case\":{\"$gte\":[\"$risk_score\",0.75]},\"then\":\"HIGH\"},{\"case\":{\"$gte\":[\"$risk_score\",0.4]},\"then\":\"MEDIUM\"}],\"default\":\"LOW\"}}}}]},\"depends_on\":[1,2,3]},{\"tool\":\"iam.check_permission\",\"arguments\":{\"principal\":\"sam-automation"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.036995,
+  "total_latency_ms": 16488,
+  "cumulative_spend_usd": 7.136208000000007,
+  "evaluator_reason": "no_plan_in_output"
+}

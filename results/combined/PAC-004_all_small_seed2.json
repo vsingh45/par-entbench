@@ -1,0 +1,52 @@
+{
+  "task_id": "PAC-004",
+  "task_class": "policy_action",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_1",
+        "description": "Evaluate developer's production database access request against security and compliance policies. Determine if live debugging access to production is permitted, assess authorization level, risk classification, and whether approval workflows are required.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This is a single policy evaluation task: a developer requesting production database access for live debugging. This explicitly requires policy_action to assess governance compliance, access control rules, and authorization requirements. Mid tier is assigned because the evaluation likely involves multiple policy dimensions (security, compliance, role-based access control, audit requirements) and must produce a nuanced decision on whether to grant, deny, or conditionally approve the access request. No other subtasks are needed\u2014the query does not involve reconciling multiple data sources or complex technical queries; it is purely a governance decision."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_1",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 470,
+      "output_tokens": 175,
+      "cached_tokens": 0,
+      "latency_ms": 1752,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-401": "fail",
+          "POL-402": "fail"
+        },
+        "reason": "Developer access to production database denied. POL-401 requires Manager approval and on-call role assignment - developer lacks both prerequisites. POL-402 restricts debug operations to staging environment only. Live production debugging is not permitted.",
+        "applied_constraints": [
+          "Production database access blocked",
+          "Live debugging prohibited in production",
+          "Redirect to staging environment required",
+          "Manager approval required if production access necessary",
+          "On-call role assignment required for emergency production access"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.001345,
+  "total_latency_ms": 1752,
+  "cumulative_spend_usd": 8.298764,
+  "evaluator_reason": "ok"
+}

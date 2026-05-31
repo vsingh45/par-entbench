@@ -1,0 +1,142 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_sam_contracts",
+        "description": "Extract renewal dates and contract identifiers from SAM system documents",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_consumption_trends",
+        "description": "Query consumption metrics and usage trends from SQL warehouse to assess current license utilization and forecast future demand",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_assess_risk",
+        "description": "Reconcile SAM contract data with consumption trends, classify renewal risk (critical/high/medium/low), assess budget impact, and generate procurement alert with recommendations",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "extract_sam_contracts",
+          "query_consumption_trends"
+        ]
+      },
+      {
+        "id": "notify_procurement",
+        "description": "Generate and format renewal alert notification for procurement team with risk classification, recommended actions, and contract timeline",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "reconcile_and_assess_risk"
+        ]
+      }
+    ],
+    "cost_rationale": "Four subtasks (minimum necessary): (1) extract_sam_contracts (small) — straightforward document field extraction of dates and IDs; (2) query_consumption_trends (mid) — multi-table SQL joins across usage history with aggregations and window functions to compute trends; (3) reconcile_and_assess_risk (frontier) — high complexity due to multi-signal reconciliation (contract + consumption + budget data), risk classification logic, and recommendation inference; (4) notify_procurement (mid) — multi-tool orchestration to route the alert via email/Slack/ticketing system from the enterprise tool registry. The frontier tier for cross_recon is justified because it must synthesize three data streams, apply conditional risk logic, and generate actionable recommendations. The multitool notification is mid-tier because it invokes tools sequentially with straightforward payloads once reconciliation is complete."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_sam_contracts",
+      "specialist": "extract",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 338,
+      "output_tokens": 39,
+      "cached_tokens": 0,
+      "latency_ms": 2043,
+      "output": {
+        "effective_date": null,
+        "expiration_date": null,
+        "contract_id": null,
+        "renewal_date": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_consumption_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 711,
+      "output_tokens": 202,
+      "cached_tokens": 0,
+      "latency_ms": 3016,
+      "output": {
+        "sql": "SELECT publisher, product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS total_spend, AVG(daily_active_seats) AS avg_daily_active_seats, COUNT(DISTINCT user_id) AS unique_users, COUNT(DISTINCT license_id) AS license_count FROM consumption_facts WHERE event_date >= '2024-01-01' GROUP BY publisher, product, fiscal_year, fiscal_quarter ORDER BY publisher, product, fiscal_year, fiscal_quarter"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_assess_risk",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 431,
+      "output_tokens": 487,
+      "cached_tokens": 0,
+      "latency_ms": 4155,
+      "output": {
+        "reconciled": [],
+        "error": "INSUFFICIENT_DATA_FOR_RECONCILIATION",
+        "details": {
+          "mongo_source_status": "EMPTY",
+          "mongo_fields": {
+            "effective_date": null,
+            "expiration_date": null,
+            "contract_id": null,
+            "renewal_date": null
+          },
+          "sql_source_status": "QUERY_DEFINED_NOT_EXECUTED",
+          "sql_query": "SELECT publisher, product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS total_spend, AVG(daily_active_seats) AS avg_daily_active_seats, COUNT(DISTINCT user_id) AS unique_users, COUNT(DISTINCT license_id) AS license_count FROM consumption_facts WHERE event_date >= '2024-01-01' GROUP BY publisher, product, fiscal_year, fiscal_quarter ORDER BY publisher, product, fiscal_year, fiscal_quarter",
+          "reconciliation_blockers": [
+            "MongoDB extract_sam_contracts returned null values for all contract identifiers",
+            "No actual consumption_trends SQL result data provided",
+            "Cannot perform LEFT JOIN without executable result sets from both sources"
+          ],
+          "required_to_proceed": [
+            "Execute SAM contract extraction query and provide actual contract records with contract_id, renewal_date, expiration_date, effective_date",
+            "Execute consumption trends SQL query and provide result rows with publisher, product, fiscal_year, fiscal_quarter, spend metrics",
+            "Provide actual MongoDB document count and SQL result row count"
+          ],
+          "recommended_workflow": {
+            "step_1": "Validate SAM data source connectivity and contract extraction logic",
+            "step_2": "Execute both queries with actual data",
+            "step_3": "Map contract_id and (publisher, product) as join keys",
+            "step_4": "Apply renewal risk classification logic",
+            "step_5": "Generate procurement alerts"
+          }
+        }
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "notify_procurement",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 856,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 4297,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"resource\": \"procurement_alerts\",\n        \"action\": \"create_and_send\",\n        \"user_group\": \"procurement_team\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"sam_contracts\",\n        \"filter\": {\n          \"renewal_date\": {\n            \"$exists\": true,\n            \"$lte\": {\n              \"$date\": \"2025-03-31\"\n            }\n          },\n          \"status\": {\n            \"$in\": [\"active\", \"pending_renewal\"]\n          }\n        },\n        \"projection\": {\n          \"contract_id\": 1,\n          \"publisher\": 1,\n          \"product\": 1,\n          \"effective_date\": 1,\n          \"expiration_date\": 1,\n          \"renewal_date\": 1,\n          \"contract_value_usd\": 1,\n          \"license_count\": 1\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT publisher, product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS total_spend, AVG(daily_active_seats) AS avg_daily_active_seats, COUNT(DISTINCT user_id) AS unique_users, COUNT(DISTINCT license_id) AS license_count FROM consumption_facts WHERE event_date >= '2024-01-01' AND publisher IS NOT NULL AND product IS NOT NULL GROUP BY publisher, product, fiscal_year, fiscal_quarter ORDER BY publisher, product, fiscal_year DESC, fiscal_quarter DESC\"\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"mongo.aggregate\",\n      \"arguments\": {\n        \"collection\": \"sam_contracts\",\n        \"pipeline\": [\n          {\n            \"$match\": {\n              \"renewal_date\": {\n                \"$exists\": true,\n                \"$lte\": {\n                  \"$date\": \"2025-03-31\"\n                }\n              }\n            }\n          },\n          {\n            \"$lookup\": {\n              \"from\": \"consumption_trends\",\n              \"let\": {\n                \"publisher\": \"$publisher\",\n                \"product\": \"$product\"\n              },\n              \"pipeline\": [\n                {\n                  \"$match\": {\n                    \"$expr\": {\n                      \"$and\": [\n                        {\n                          \"$eq\": [\n                            \"$publisher\",\n                            \"$$publisher\"\n                          ]\n                        },\n                        {\n                          \"$eq\": [\n                            \"$product\",\n                            \"$$product\"\n                          ]\n                        }\n                      ]\n                    }\n                  }\n                }\n              ],\n              \"as\": \"consumption_data\"\n            }\n          },\n          {\n            \"$addFields\": {\n              \"days_to_renewal\": {\n                \"$divide\": [\n                  {\n                    \"$subtract\": [\n                      \"$renewal_date\",\n                      {\n                        \"$toDate\": \"2024-10-01\"\n                      }\n                    ]\n                  },\n                  86400"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.018992000000000002,
+  "total_latency_ms": 13511,
+  "cumulative_spend_usd": 7.3572420000000065
+}

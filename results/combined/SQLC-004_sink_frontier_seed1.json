@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-004",
+  "task_class": "sql_compose",
+  "router": "sink_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_vendor_risk",
+        "description": "Query vendor reliability data including vendor ID, name, incident count, average response time, uptime percentage, and other risk indicators",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "classify_vendor_risk",
+        "description": "Classify each vendor into low_risk, medium_risk, or high_risk based on incident history and reliability metrics. Apply classification logic using thresholds on incident count, uptime, response time, and other risk signals to assign risk tiers",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_vendor_risk"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid-tier) retrieves vendor reliability data from the warehouse with multi-table joins across vendor, incident, and SLA tables\u2014requires mid-tier for reliable aggregation. (2) cross_recon (mid-tier) takes the SQL results and applies classification logic with multiple risk signals (incident history, uptime, response time) to assign risk tiers\u2014mid-tier because the classification requires multi-signal reasoning and threshold application. No separate policy_action needed; the classification is part of the reconciliation output. This is the minimum decomposition: a single data fetch followed by a single classification step."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_vendor_risk",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 472,
+      "output_tokens": 273,
+      "cached_tokens": 0,
+      "latency_ms": 8557,
+      "output": {
+        "sql": "SELECT vendor_name AS vendor_id, vendor_name, COUNT(CASE WHEN status NOT IN ('paid', 'cleared') THEN 1 END) AS incident_count, ROUND(AVG(EXTRACT(EPOCH FROM (paid_date - invoice_date)))::NUMERIC / 86400, 2) AS average_response_time_days, ROUND(100.0 * COUNT(CASE WHEN status = 'paid' THEN 1 END) / NULLIF(COUNT(*), 0), 2) AS uptime_percentage, CASE WHEN COUNT(CASE WHEN status NOT IN ('paid', 'cleared') THEN 1 END) > 5 THEN 'high_risk' WHEN COUNT(CASE WHEN status NOT IN ('paid', 'cleared') THEN 1 END) > 2 THEN 'medium_risk' ELSE 'low_risk' END AS risk_classification FROM invoice_facts WHERE invoice_date >= '2024-01-01' GROUP BY vendor_name ORDER BY incident_count DESC, average_response_time_days DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "classify_vendor_risk",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 869,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 761,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0065320000000000005,
+  "total_latency_ms": 9318,
+  "cumulative_spend_usd": 0.5281920000000001,
+  "evaluator_reason": "step1_sql_fail: generated_sql_execution_error"
+}

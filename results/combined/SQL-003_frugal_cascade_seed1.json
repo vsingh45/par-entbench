@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-003",
+  "task_class": "sql_gen",
+  "router": "frugal_cascade",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_1",
+        "description": "Query SQL warehouse for Adobe and Microsoft 2024 spend by product and quarter. Compute quarter-over-quarter spend deltas and rank products by Q4 spend within each publisher.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single subtask required: the entire query can be satisfied with one multi-CTE SQL statement joining spend tables on publisher and product, filtering 2024 data, calculating QoQ deltas using LAG window functions, and ranking products by Q4 spend using RANK() or ROW_NUMBER(). Assigned mid tier because the query involves multi-table joins, window functions (LAG, RANK), aggregation across quarters, and conditional filtering\u2014standard complexity for a warehouse query but not requiring frontier-level inference or cross-source reconciliation. No cross_recon needed (single SQL source), no extract (structured warehouse data), no policy_action (no governance evaluation requested)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 487,
+      "output_tokens": 323,
+      "cached_tokens": 0,
+      "latency_ms": 2663,
+      "output": {
+        "sql": "WITH quarterly_spend AS (SELECT publisher, product, fiscal_quarter, SUM(amount_usd) as quarterly_spend FROM consumption_facts WHERE publisher IN ('Adobe', 'Microsoft') AND event_date >= '2024-01-01' AND event_date < '2025-01-01' AND fiscal_quarter IN (1, 2, 3, 4) GROUP BY publisher, product, fiscal_quarter), spend_with_lag AS (SELECT publisher, product, fiscal_quarter, quarterly_spend, LAG(quarterly_spend) OVER (PARTITION BY publisher, product ORDER BY fiscal_quarter) as prev_quarter_spend, quarterly_spend - LAG(quarterly_spend) OVER (PARTITION BY publisher, product ORDER BY fiscal_quarter) as qoq_delta FROM quarterly_spend), q4_ranked AS (SELECT publisher, product, fiscal_quarter, quarterly_spend, prev_quarter_spend, qoq_delta, RANK() OVER (PARTITION BY publisher ORDER BY CASE WHEN fiscal_quarter = 4 THEN quarterly_spend ELSE 0 END DESC) as q4_rank FROM spend_with_lag) SELECT publisher, product, fiscal_quarter, quarterly_spend, prev_quarter_spend, qoq_delta, q4_rank FROM q4_ranked ORDER BY publisher, q4_rank, fiscal_quarter"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.002102,
+  "total_latency_ms": 2663,
+  "cumulative_spend_usd": 0.32482799999999995,
+  "evaluator_reason": "result_bag_mismatch"
+}

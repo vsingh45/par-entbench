@@ -1,0 +1,53 @@
+{
+  "task_id": "PAC-005",
+  "task_class": "policy_action",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_pii_export",
+        "description": "Evaluate PII bulk export request against data governance and privacy policies. Verify whether the analyst has authorized access to customer PII, whether bulk export is permitted for the stated analysis purpose, and confirm compliance with data residency and retention requirements.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This request explicitly asks for a governance decision on PII (personally identifiable information) export. Before any data extraction or SQL generation occurs, a policy_action subtask must evaluate the request against the organization's privacy, data protection, and access control policies. This is a compliance-gating scenario, not a straightforward data retrieval. Assigned mid tier because the evaluation requires multi-signal reasoning: (1) analyst role/permissions, (2) stated analysis purpose, (3) compliance requirements (GDPR, CCPA, data residency), and (4) bulk export risk assessment. The plan contains 1 subtask because the query does not request the actual export—it requests authorization evaluation. If the policy check approves the export, a separate sql_gen subtask would follow in a subsequent request.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_pii_export",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 529,
+      "output_tokens": 410,
+      "cached_tokens": 0,
+      "latency_ms": 8565,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-501": "fail",
+          "POL-502": "fail",
+          "POL-503": "pending_review"
+        },
+        "reason": "The bulk export request by analyst 'ana-bob' for customer PII (names, emails, phone numbers) is denied. POL-501 requires explicit privacy approval from Legal and CISO sign-off, neither of which has been obtained or evidenced in this request. POL-502 mandates data minimization, requiring export of only non-sensitive attributes unless a business-critical justification is documented and approved — no such justification has been provided for exporting full PII fields. POL-503 could be satisfied conditionally (audit logging and 30-day retention limit) if approvals were in place, but cannot be confirmed as compliant without the prerequisite authorizations from POL-501 being fulfilled first. The 'data-analyst' role does not carry inherent authorization for bulk PII export without the required governance approvals.",
+        "applied_constraints": [
+          "Legal department privacy approval must be obtained before any PII export can be authorized",
+          "CISO sign-off is mandatory for bulk PII exports regardless of role or stated purpose",
+          "Requester must document a specific, business-critical justification for accessing full PII fields rather than anonymized or pseudonymized data",
+          "If approvals are subsequently granted, audit logging must be enabled for all exported records",
+          "Any approved export must be subject to a 30-day data retention limit with documented destruction confirmation",
+          "Re-submission should include scope limitation to minimum necessary PII fields consistent with the stated analysis purpose"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007737,
+  "total_latency_ms": 8565,
+  "cumulative_spend_usd": 8.370654000000002
+}

@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-005",
+  "task_class": "sql_gen",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_1",
+        "description": "Query Q4 2024 seat licensing data (active seats, product, cost) and calculate average cost per active seat by product, sorted descending",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single SQL query to aggregate licensing metrics by product. No multi-source reconciliation needed. Standard grouping, aggregation, and sorting operations make this suitable for the small tier\u2014the logic is straightforward even if the underlying table schema is complex, as sql_gen will handle the JOIN/WHERE clauses needed to isolate Q4 2024 data and active seats.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 703,
+      "output_tokens": 128,
+      "cached_tokens": 0,
+      "latency_ms": 1923,
+      "output": {
+        "sql": "SELECT product, SUM(amount_usd) / NULLIF(SUM(daily_active_seats), 0) AS avg_cost_per_seat FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date < '2025-01-01' GROUP BY product ORDER BY avg_cost_per_seat DESC"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0067150000000000005,
+  "total_latency_ms": 1923,
+  "cumulative_spend_usd": 0.11942499999999999,
+  "evaluator_reason": "result_bag_mismatch"
+}

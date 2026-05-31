@@ -1,0 +1,78 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_contractor_access",
+        "description": "Evaluate the contractor's access request against data governance and access control policies. Verify: (1) whether temporary contractor role permits database backup downloads, (2) whether the request aligns with data residency and compliance requirements, (3) whether local storage/analysis violates data protection policies, (4) required approvals or conditions.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "multitool_access_control_plan",
+        "description": "Generate a tool-invocation plan to: (1) log and audit the access attempt, (2) check contractor identity and role permissions in IAM system, (3) validate database backup request against DLP/data classification rules, (4) enforce conditional approval workflow if needed.",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "policy_check_contractor_access"
+        ]
+      }
+    ],
+    "cost_rationale": "This is a security/governance incident requiring two layers: (1) Policy evaluation (policy_action, mid-tier) to assess whether the request violates data governance, compliance, or access control policies—this requires reasoning across multiple policy dimensions (role-based access, data residency, compliance regulations). (2) Multi-tool orchestration (multitool_plan, mid-tier) to generate an action plan involving identity verification, audit logging, DLP checks, and conditional approval workflows from the enterprise tool registry. Both are assigned mid-tier because they require reasoning across multiple policy/tool domains but do not involve complex cross-source reconciliation or inference. No cross_recon is needed (single access event, not data reconciliation). Plan has 2 subtasks (minimum) because policy evaluation and tool orchestration are distinct concerns requiring different specialist expertise."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_contractor_access",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 540,
+      "output_tokens": 436,
+      "cached_tokens": 0,
+      "latency_ms": 10166,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "Contractor 'contractor-dave' is explicitly prohibited from accessing production database backups under all three applicable policies. POL-701 restricts backup access to full-time employees with DBA role only — contractors are categorically excluded. POL-702 limits contractors to de-identified query results, making any raw data export (including full backup downloads) a direct policy violation. POL-703 further requires explicit project manager approval plus 7-day advance notice for any contractor data access, neither of which has been documented for this request. The action of downloading 'production_backup.tar.gz' for local analysis also raises data residency, data protection, and confidentiality concerns not addressed by any contractor authorization on record. All three policies independently deny this request; no conditional path to approval exists without satisfying POL-703 prerequisites first.",
+        "applied_constraints": [
+          "Access denied: contractor role does not qualify for database backup access (POL-701)",
+          "Raw data exports prohibited for contractors; only de-identified query results permitted (POL-702)",
+          "No project manager approval on record; 7-day notice period not satisfied (POL-703)",
+          "Local storage of production customer data by contractors violates data residency and protection policies",
+          "Incident should be logged for security audit review given unauthorized access attempt to production backup",
+          "Contractor may request re-evaluation by submitting formal access request with project manager sponsorship and 7-day advance notice per POL-703",
+          "If analytical needs are legitimate, contractor should be redirected to submit scoped, de-identified queries through the approved data access portal"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "multitool_access_control_plan",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1004,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 14324,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"audit.log_action\",\n      \"arguments\": {\n        \"actor\": \"contractor-dave\",\n        \"role\": \"contractor\",\n        \"action\": \"download_attempted\",\n        \"resource\": \"production_backup.tar.gz\",\n        \"resource_type\": \"database_backup\",\n        \"environment\": \"production\",\n        \"timestamp\": \"{{now}}\",\n        \"severity\": \"HIGH\",\n        \"event_type\": \"UNAUTHORIZED_ACCESS_ATTEMPT\",\n        \"details\": \"Contractor attempted to download full customer database backup for local analysis. Request intercepted prior to execution. Policy evaluation result: DENY. Policies violated: POL-701, POL-702, POL-703.\",\n        \"policy_violations\": [\"POL-701\", \"POL-702\", \"POL-703\"]\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"user\": \"contractor-dave\",\n        \"role\": \"contractor\",\n        \"resource\": \"production_backup.tar.gz\",\n        \"action\": \"download\",\n        \"scope\": \"production_database_backups\",\n        \"check_policies\": [\"POL-701\", \"POL-702\", \"POL-703\"]\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"data_classification\",\n        \"filter\": {\n          \"resource\": \"production_backup.tar.gz\",\n          \"resource_type\": \"database_backup\"\n        },\n        \"projection\": {\n          \"classification_level\": 1,\n          \"dlp_tags\": 1,\n          \"data_residency_constraints\": 1,\n          \"allowed_roles\": 1,\n          \"export_restrictions\": 1\n        }\n      },\n      \"depends_on\": [2]\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"contractor_approvals\",\n        \"filter\": {\n          \"contractor_id\": \"contractor-dave\",\n          \"status\": \"approved\",\n          \"resource_scope\": \"production_database_backups\"\n        },\n        \"projection\": {\n          \"approval_id\": 1,\n          \"project_manager\": 1,\n          \"approval_date\": 1,\n          \"notice_submitted_date\": 1,\n          \"expiry_date\": 1\n        }\n      },\n      \"depends_on\": [2]\n    },\n    {\n      \"tool\": \"jira.create_ticket\",\n      \"arguments\": {\n        \"project\": \"SEC\",\n        \"issue_type\": \"Security Incident\",\n        \"priority\": \"High\",\n        \"summary\": \"Unauthorized Production Backup Download Attempt by Contractor [contractor-dave]\",\n        \"description\": \"Contractor 'contractor-dave' attempted to download 'production_backup.tar.gz' for local analysis. This access was DENIED based on policy evaluation.\\n\\n**Policy Violations:**\\n- POL-701: Backup access restricted to full-time employees with DBA role. Contractors are categorically excluded.\\n- POL-702: Contractors are limited to de-identified query results only. Raw data exports"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.023172,
+  "total_latency_ms": 24490,
+  "cumulative_spend_usd": 8.651973000000007
+}

@@ -1,0 +1,94 @@
+{
+  "task_id": "XR-004",
+  "task_class": "cross_recon",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "query_sam_licensed",
+        "description": "Query SAM (Software Asset Management) system for Microsoft licensed users by product, license type, and deployment scope. Extract user counts and license entitlements.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "query_consumption_active",
+        "description": "Query consumption facts warehouse for active users by Microsoft product from billing/usage logs. Aggregate active user counts, usage frequency, and deployment patterns.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_provision",
+        "description": "Reconcile licensed users (from SAM) against active users (from consumption facts). Calculate under-provisioning (active > licensed), over-provisioning (licensed > active with usage threshold), and identify licensing gaps by product and location. Classify each product as: under-provisioned, over-provisioned, or optimally provisioned.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "query_sam_licensed",
+          "query_consumption_active"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) SAM query (mid tier: multi-table join across product, license, and user entitlement tables), (2) consumption facts query (mid tier: aggregation across billing tables with user deduplication), and (3) cross_recon (frontier tier: complex reconciliation involving two data sources, gap analysis, usage-aware classification logic, and provisioning posture determination). The cross_recon is frontier because it must synthesize licensing rules with consumption patterns, handle edge cases (inactive licensed users, unlicensed active users), and produce a nuanced classification—not a simple comparison."
+  },
+  "node_results": [
+    {
+      "subtask_id": "query_sam_licensed",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 476,
+      "output_tokens": 349,
+      "cached_tokens": 0,
+      "latency_ms": 5232,
+      "output": {
+        "sql": "SELECT cf.product, cf.publisher, COUNT(DISTINCT cf.user_id) AS active_users, SUM(cf.daily_active_seats) AS total_active_seat_days, AVG(cf.daily_active_seats) AS avg_daily_active_seats, SUM(cf.amount_usd) AS total_spend_usd, COUNT(DISTINCT cf.license_id) AS license_count, SUM(cf.amount_usd) / NULLIF(COUNT(DISTINCT cf.user_id), 0) AS spend_per_active_user, MAX(cf.daily_active_seats) AS peak_active_seats, MIN(cf.daily_active_seats) AS min_active_seats, CASE WHEN AVG(cf.daily_active_seats) > COUNT(DISTINCT cf.license_id) THEN 'UNDER-PROVISIONED' WHEN AVG(cf.daily_active_seats) < COUNT(DISTINCT cf.license_id) * 0.7 THEN 'OVER-PROVISIONED' ELSE 'APPROPRIATELY-PROVISIONED' END AS provisioning_status, COUNT(DISTINCT cf.license_id) - COUNT(DISTINCT cf.user_id) AS license_user_gap FROM consumption_facts cf WHERE cf.publisher ILIKE '%Microsoft%' AND cf.event_date >= '2024-01-01' GROUP BY cf.product, cf.publisher ORDER BY total_spend_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_consumption_active",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 473,
+      "output_tokens": 290,
+      "cached_tokens": 0,
+      "latency_ms": 4444,
+      "output": {
+        "sql": "SELECT product, COUNT(DISTINCT user_id) AS active_users, SUM(daily_active_seats) AS total_daily_active_seats, AVG(daily_active_seats) AS avg_daily_active_seats, COUNT(event_id) AS total_events, SUM(amount_usd) AS total_spend_usd, MIN(event_date) AS first_seen, MAX(event_date) AS last_seen, COUNT(DISTINCT CASE WHEN event_type = 'usage' THEN user_id END) AS usage_event_users, COUNT(DISTINCT CASE WHEN event_type = 'billing' THEN user_id END) AS billing_event_users, ROUND(COUNT(event_id)::NUMERIC / NULLIF(COUNT(DISTINCT user_id), 0), 2) AS events_per_user, MAX(daily_active_seats) AS peak_daily_active_seats, MIN(daily_active_seats) AS min_daily_active_seats, STDDEV(daily_active_seats) AS stddev_daily_active_seats FROM consumption_facts WHERE publisher ILIKE '%microsoft%' GROUP BY product ORDER BY active_users DESC, total_spend_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_provision",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1475,
+      "output_tokens": 113,
+      "cached_tokens": 0,
+      "latency_ms": 2424,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "unknown_product",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_data_available"
+          }
+        ],
+        "note": "Upstream outputs contain only SQL query strings, not executed results. Cannot reconcile without actual row data from query_sam_licensed and query_consumption_active."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.022632,
+  "total_latency_ms": 12100,
+  "cumulative_spend_usd": 2.431692
+}

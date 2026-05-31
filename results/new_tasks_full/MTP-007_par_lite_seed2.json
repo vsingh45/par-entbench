@@ -1,0 +1,121 @@
+{
+  "task_id": "MTP-007",
+  "task_class": "multitool_plan",
+  "router": "par_lite",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "task_1_iam_scan",
+        "description": "Scan IAM policies from AWS account to extract current policy definitions, principal bindings, and permission grants across all roles and users",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "task_2_cloudtrail_audit",
+        "description": "Query CloudTrail logs to identify API calls, access patterns, resource modifications, and any unusual or privileged activities over the audit period",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "task_3_policy_violation_check",
+        "description": "Evaluate scanned IAM policies and CloudTrail activities against enterprise security policies, compliance standards (SOC2, CIS benchmarks), and access control rules to identify violations, overpermissioning, and risky patterns",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "task_4_compliance_reconciliation",
+        "description": "Reconcile IAM policy findings with CloudTrail audit results and policy violation assessments to generate unified compliance report with risk scores, violation summaries, remediation recommendations, and audit trail",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "task_1_iam_scan",
+          "task_2_cloudtrail_audit",
+          "task_3_policy_violation_check"
+        ]
+      }
+    ],
+    "cost_rationale": "4 subtasks minimum to execute full security audit workflow: (1) IAM policy extraction requires mid-tier to handle complex nested policies across multiple principals; (2) CloudTrail query is a single sql_gen call with filtering/aggregation on logs table (mid-tier sufficient); (3) Policy violation check requires policy_action tier (mid) to evaluate against compliance rule registry; (4) Final compliance report generation is frontier-tier cross_recon because it reconciles THREE upstream data sources (IAM scan results + CloudTrail findings + policy violations), synthesizes risk scoring, generates prioritized remediation recommendations, and requires multi-signal inference. Task 4 depends on all prior tasks. Total: 1 extract (mid) + 1 sql_gen (mid) + 1 policy_action (mid) + 1 cross_recon (frontier) = cost-optimized to frontier-only for synthesis, avoiding unnecessary duplication."
+  },
+  "node_results": [
+    {
+      "subtask_id": "task_1_iam_scan",
+      "specialist": "extract",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 248,
+      "output_tokens": 134,
+      "cached_tokens": 0,
+      "latency_ms": 2760,
+      "output": {
+        "effective_date": null,
+        "expiration_date": null,
+        "total_contract_value_usd": null,
+        "policy_definitions": null,
+        "principal_bindings": null,
+        "permission_grants": null,
+        "roles": null,
+        "users": null,
+        "cloudtrail_logs": null,
+        "policy_violations": null,
+        "compliance_report": null,
+        "aws_account_id": null,
+        "audit_timestamp": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_2_cloudtrail_audit",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 469,
+      "output_tokens": 479,
+      "cached_tokens": 0,
+      "latency_ms": 7224,
+      "output": {
+        "sql": "SELECT log_id, user_id, permission, resource, access_time, action, result, DATE_TRUNC('day', access_time) AS access_date, COUNT(*) OVER (PARTITION BY user_id, DATE_TRUNC('day', access_time)) AS daily_action_count, COUNT(*) OVER (PARTITION BY user_id, action) AS action_frequency, CASE WHEN permission IN ('admin', 'root', 'superuser', 'sudo', 'elevated', 'privileged') THEN 'PRIVILEGED' WHEN action IN ('DELETE', 'DROP', 'TRUNCATE', 'MODIFY', 'UPDATE', 'PUT', 'WRITE') THEN 'MODIFICATION' WHEN result IN ('DENIED', 'FORBIDDEN', 'UNAUTHORIZED', 'FAILED') THEN 'POLICY_VIOLATION' WHEN COUNT(*) OVER (PARTITION BY user_id, DATE_TRUNC('hour', access_time)) > 100 THEN 'UNUSUAL_HIGH_FREQUENCY' ELSE 'NORMAL' END AS activity_classification, CASE WHEN result IN ('DENIED', 'FORBIDDEN', 'UNAUTHORIZED', 'FAILED') THEN 1 ELSE 0 END AS is_violation, CASE WHEN permission IN ('admin', 'root', 'superuser', 'sudo', 'elevated', 'privileged') THEN 1 ELSE 0 END AS is_privileged FROM access_log_facts ORDER BY CASE WHEN permission IN ('admin', 'root', 'superuser', 'sudo', 'elevated', 'privileged') THEN 1 WHEN result IN ('DENIED', 'FORBIDDEN', 'UNAUTHORIZED', 'FAILED') THEN 2 WHEN action IN ('DELETE', 'DROP', 'TRUNCATE', 'MODIFY', 'UPDATE', 'PUT', 'WRITE') THEN 3 ELSE 4 END, access_time DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_3_policy_violation_check",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 396,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 15900,
+      "output": {
+        "raw_output": "{\n  \"selected_action\": \"allow_with_constraints\",\n  \"policy_compliance\": {\n    \"POL-001-DATA-ACCESS\": \"pass_conditional\",\n    \"POL-002-IAM-GOVERNANCE\": \"pass\",\n    \"POL-003-AUDIT-LOGGING\": \"pass\",\n    \"POL-004-LEAST-PRIVILEGE\": \"pass_conditional\",\n    \"POL-005-COMPLIANCE-SOC2\": \"pass\",\n    \"POL-006-CIS-BENCHMARKS\": \"pass\",\n    \"POL-007-CLOUDTRAIL-AUDIT\": \"pass\",\n    \"POL-008-SENSITIVE-DATA-HANDLING\": \"pass_conditional\",\n    \"POL-009-REPORT-DISTRIBUTION\": \"pass_conditional\",\n    \"POL-010-CHANGE-MANAGEMENT\": \"not_applicable\",\n    \"POL-011-INCIDENT-RESPONSE\": \"not_applicable\",\n    \"POL-012-NETWORK-ACCESS\": \"not_applicable\",\n    \"POL-013-ENCRYPTION-AT-REST\": \"not_applicable\",\n    \"POL-014-MFA-ENFORCEMENT\": \"not_applicable\",\n    \"POL-015-THIRD-PARTY-ACCESS\": \"not_applicable\"\n  },\n  \"reason\": \"Security audit workflow is permitted as a read-only compliance evaluation activity aligned with SOC2 and CIS benchmark requirements. The action involves scanning IAM policies and CloudTrail logs for violations — a legitimate security operations function. Conditional passes apply to data access scope, least-privilege verification of the auditing principal, sensitive findings handling, and report distribution controls. No write/modify operations are included; this is a read-and-report workflow only.\",\n  \"applied_constraints\": [\n    \"CONSTRAINT-001: IAM policy scanning must be scoped to the requesting principal's authorized organizational units or accounts only — cross-account access requires explicit cross-account role assumption with logged justification.\",\n    \"CONSTRAINT-002: CloudTrail log access must be read-only (s3:GetObject, cloudtrail:LookupEvents) — no log deletion, modification, or disabling of trails is permitted during this workflow.\",\n    \"CONSTRAINT-003: The auditing principal/role must itself satisfy least-privilege requirements (POL-004); audit findings about overpermissioning apply recursively to the auditor role.\",\n    \"CONSTRAINT-004: All audit actions must be logged to a separate immutable audit trail (e.g., dedicated CloudTrail trail or SIEM) to preserve chain of custody for compliance evidence.\",\n    \"CONSTRAINT-005: Compliance reports containing IAM policy details, user ARNs, or access key metadata must be classified as CONFIDENTIAL and distributed only to authorized security/compliance personnel.\",\n    \"CONSTRAINT-006: Findings indicating critical violations (e.g., root account active keys, publicly exposed IAM roles, missing MFA on privileged accounts) must trigger an automated alert to the Security Operations team within the same workflow execution.\",\n    \"CONSTRAINT-007: Raw IAM policy documents and CloudTrail event data must not be exported to external systems, logged to unapproved destinations, or retained beyond the defined audit retention window.\",\n    \"CONSTRAINT-008: CIS Benchmark checks must reference the currently approved CIS AWS Foundations Benchmark version as registered in the enterprise compliance baseline — version drift requires change management approval.\",\n    \"CONSTRAINT-009: Any automated remediation actions identified during the audit"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_4_compliance_reconciliation",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 2760,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 7978,
+      "output": {
+        "raw_output": "{\"reconciled\":[{\"entity_key\":\"iam_scan\",\"mongo_value\":null,\"sql_value\":null,\"classification\":\"no_recent_activity\"},{\"entity_key\":\"cloudtrail_audit\",\"mongo_value\":null,\"sql_value\":\"query_defined_no_results\",\"classification\":\"at_risk\"},{\"entity_key\":\"POL-001-DATA-ACCESS\",\"mongo_value\":\"pass_conditional\",\"sql_value\":null,\"classification\":\"hold\"},{\"entity_key\":\"POL-002-IAM-GOVERNANCE\",\"mongo_value\":\"pass\",\"sql_value\":null,\"classification\":\"stable\"},{\"entity_key\":\"POL-003-AUDIT-LOGGING\",\"mongo_value\":\"pass\",\"sql_value\":null,\"classification\":\"stable\"},{\"entity_key\":\"POL-004-LEAST-PRIVILEGE\",\"mongo_value\":\"pass_conditional\",\"sql_value\":null,\"classification\":\"hold\"},{\"entity_key\":\"POL-005-COMPLIANCE-SOC2\",\"mongo_value\":\"pass\",\"sql_value\":null,\"classification\":\"stable\"},{\"entity_key\":\"POL-006-CIS-BENCHMARKS\",\"mongo_value\":\"pass\",\"sql_value\":null,\"classification\":\"stable\"},{\"entity_key\":\"POL-007-CLOUDTRAIL-AUDIT\",\"mongo_value\":\"pass\",\"sql_value\":null,\"classification\":\"stable\"},{\"entity_key\":\"POL-008-SENSITIVE-DATA-HANDLING\",\"mongo_value\":\"pass_conditional\",\"sql_value\":null,\"classification\":\"hold\"},{\"entity_key\":\"POL-009-REPORT-DISTRIBUTION\",\"mongo_value\":\"pass_conditional\",\"sql_value\":null,\"classification\":\"hold\"},{\"entity_key\":\"POL-010-CHANGE-MANAGEMENT\",\"mongo_value\":\"not_applicable\",\"sql_value\":null,\"classification\":\"no_recent_activity\"},{\"entity_key\":\"POL-011-INCIDENT-RESPONSE\",\"mongo_value\":\"not_applicable\",\"sql_value\":null,\"classification\":\"no_recent_activity\"},{\"entity_key\":\"POL-012-NETWORK-ACCESS\",\"mongo_value\":\"not_applicable\",\"sql_value\":null,\"classification\":\"no_recent_activity\"},{\"entity_key\":\"POL-013-ENCRYPTION"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.058334000000000004,
+  "total_latency_ms": 33862,
+  "cumulative_spend_usd": 7.929990000000004
+}

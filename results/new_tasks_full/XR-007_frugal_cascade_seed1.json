@@ -1,0 +1,144 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "router": "frugal_cascade",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "aws_spend_query",
+        "description": "Query AWS cost/spend database to retrieve actual spend by service and time period, aggregated at the commitment level",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "aws_contract_query",
+        "description": "Query contract management system to retrieve AWS commitment levels, terms, and reserved instance/savings plan details",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_utilization",
+        "description": "Reconcile actual spend against committed levels; calculate variance (overcommit/underutilization), utilization rate, and efficiency posture. Classify each commitment as overcommitted, optimally utilized, or underutilized with recommendations",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "aws_spend_query",
+          "aws_contract_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: (1) and (2) are parallel SQL queries to separate systems—actual spend from cost/billing DB and commitments from contract DB—both mid-tier due to multi-table joins and aggregation; (3) is cross_recon to reconcile the two sources, calculate variances, classify utilization posture, and generate recommendations (mid-tier). No policy_action is needed—classification and posture assessment are part of the reconciliation logic, not policy compliance. This is the minimal decomposition: neither query can be combined (different systems), and reconciliation inherently requires both upstream results."
+  },
+  "node_results": [
+    {
+      "subtask_id": "aws_spend_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 456,
+      "output_tokens": 148,
+      "cached_tokens": 0,
+      "latency_ms": 1372,
+      "output": {
+        "sql": "SELECT cf.fiscal_year, cf.fiscal_quarter, cf.publisher, cf.product, SUM(cf.amount_usd) as actual_spend, SUM(cf.daily_active_seats) as total_seats, COUNT(DISTINCT cf.license_id) as commitment_count FROM consumption_facts cf WHERE cf.event_date >= '2024-01-01' GROUP BY cf.fiscal_year, cf.fiscal_quarter, cf.publisher, cf.product ORDER BY cf.fiscal_year DESC, cf.fiscal_quarter DESC, cf.publisher, cf.product"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "aws_contract_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 453,
+      "output_tokens": 66,
+      "cached_tokens": 0,
+      "latency_ms": 1189,
+      "output": {
+        "sql": "SELECT vendor_name, contract_id, invoice_date, due_date, paid_date, amount_usd, status FROM invoice_facts WHERE vendor_name ILIKE '%AWS%' ORDER BY invoice_date DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_utilization",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 484,
+      "output_tokens": 640,
+      "cached_tokens": 0,
+      "latency_ms": 5280,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "AWS_FY2024_Q1_compute",
+            "mongo_value": null,
+            "sql_value": {
+              "fiscal_year": 2024,
+              "fiscal_quarter": 1,
+              "publisher": "AWS",
+              "product": "compute",
+              "actual_spend": null,
+              "total_seats": null,
+              "commitment_count": null
+            },
+            "classification": "insufficient_data",
+            "variance": null,
+            "utilization_rate": null,
+            "recommendation": "Unable to reconcile - no MongoDB operational state provided; SQL consumption_facts table accessible but commitment levels not present in invoice_facts; requires contract commitment amounts for variance calculation"
+          },
+          {
+            "entity_key": "AWS_contract_reconciliation",
+            "mongo_value": null,
+            "sql_value": {
+              "source": "invoice_facts",
+              "vendor": "AWS",
+              "available_fields": [
+                "contract_id",
+                "invoice_date",
+                "due_date",
+                "paid_date",
+                "amount_usd",
+                "status"
+              ],
+              "limitation": "invoice_facts contains payment data, not committed capacity or reserved instance allocations"
+            },
+            "classification": "data_structure_mismatch",
+            "variance": null,
+            "utilization_rate": null,
+            "recommendation": "SQL schema lacks committed capacity field; consumption_facts has actual_spend but no baseline commitment amount; requires joining to commitment/reservation table with reserved_amount_usd or commitment_usd field to calculate variance"
+          }
+        ],
+        "reconciliation_summary": {
+          "status": "incomplete",
+          "root_cause": "Missing commitment baseline data",
+          "required_fields_for_analysis": [
+            "commitment_usd (from contract terms)",
+            "reserved_instance_hours (from AWS pricing model)",
+            "on_demand_equivalent (calculated field)",
+            "actual_consumption_usd (available in consumption_facts)",
+            "variance_usd (commitment_usd - actual_spend)",
+            "variance_percent (variance_usd / commitment_usd * 100)",
+            "utilization_rate (actual_spend / commitment_usd * 100)"
+          ],
+          "classification_rules_pending": {
+            "overcommitted": "utilization_rate < 50%",
+            "optimally_utilized": "utilization_rate between 75-95%",
+            "underutilized": "utilization_rate < 75%",
+            "over_utilized": "utilization_rate > 100%"
+          }
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.005663,
+  "total_latency_ms": 7841,
+  "cumulative_spend_usd": 4.4261110000000015
+}

@@ -1,0 +1,39 @@
+{
+  "task_id": "SQL-005",
+  "task_class": "sql_gen",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_calc_avg_cost_per_seat",
+        "description": "Calculate average cost per active seat by product for Q4 2024. Query should sum quarterly costs by product and divide by average active seats per product, returning results sorted by average cost per seat in descending order.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single SQL query with aggregation across multiple rows and join logic to match costs with active seat counts. Mid tier assigned because the query will require joining/correlating cost and seat data, grouping by product, and calculating derived metrics (average cost per seat). No cross-source reconciliation needed—this is a straightforward warehouse calculation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_calc_avg_cost_per_seat",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 479,
+      "output_tokens": 109,
+      "cached_tokens": 0,
+      "latency_ms": 1501,
+      "output": {
+        "sql": "SELECT product, ROUND(SUM(amount_usd)::NUMERIC / NULLIF(AVG(daily_active_seats), 0), 2) AS avg_cost_per_seat FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date <= '2024-12-31' AND fiscal_quarter = 4 GROUP BY product ORDER BY avg_cost_per_seat DESC"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001024,
+  "total_latency_ms": 1501,
+  "cumulative_spend_usd": 0.143254
+}

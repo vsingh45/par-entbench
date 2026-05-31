@@ -1,0 +1,63 @@
+{
+  "task_id": "XR-005",
+  "task_class": "cross_recon",
+  "router": "sink_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sf_seat_analysis",
+        "description": "Query Salesforce system to retrieve total licensed seats, active seat assignments, and user activity metrics. Generate SQL that joins license registry with user assignments and activity logs to identify unutilized seats (licensed but not actively used).",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "utilization_reconciliation",
+        "description": "Reconcile licensed seat counts against actual assignments, calculate utilization rates, identify gap patterns (e.g., unused seats by department/role), and classify licenses as active, dormant, or unutilized. Generate actionable recommendations for license optimization.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sf_seat_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid tier) to pull license and assignment data with multi-table joins across license registry, user assignments, and activity logs—requires moderate complexity to properly aggregate and compare seat states. (2) cross_recon (mid tier) to reconcile the two datasets (licensed vs assigned), calculate utilization deltas, segment by category, and generate classification and prioritization for optimization—mid tier sufficient because the reconciliation logic is moderately complex but not involving high-dimensional inference or multiple external signals. Avoided split-out policy_action because no governance/compliance approval is requested, only analysis and recommendations."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sf_seat_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 482,
+      "output_tokens": 285,
+      "cached_tokens": 0,
+      "latency_ms": 2021,
+      "output": {
+        "sql": "SELECT cf.license_id, cf.publisher, cf.product, SUM(cf.daily_active_seats) as total_licensed_seats, COUNT(DISTINCT cf.user_id) as assigned_users, COUNT(DISTINCT CASE WHEN alf.log_id IS NOT NULL THEN cf.user_id END) as active_users, SUM(cf.daily_active_seats) - COUNT(DISTINCT CASE WHEN alf.log_id IS NOT NULL THEN cf.user_id END) as unutilized_seats, ROUND(100.0 * COUNT(DISTINCT CASE WHEN alf.log_id IS NOT NULL THEN cf.user_id END) / NULLIF(COUNT(DISTINCT cf.user_id), 0), 2) as utilization_percentage FROM consumption_facts cf LEFT JOIN access_log_facts alf ON cf.user_id = alf.user_id AND alf.access_time >= cf.event_date AND alf.result = 'success' WHERE cf.event_date >= '2024-01-01' GROUP BY cf.license_id, cf.publisher, cf.product ORDER BY unutilized_seats DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "utilization_reconciliation",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 889,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 944,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.006702,
+  "total_latency_ms": 2965,
+  "cumulative_spend_usd": 3.146050000000002
+}

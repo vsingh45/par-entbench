@@ -1,0 +1,148 @@
+{
+  "task_id": "SQLC-002",
+  "task_class": "sql_compose",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_gen_top_customers",
+        "description": "Query TPC-H schema to identify top 10 customers by lifetime value (sum of order totals) filtered to market segment 'BUILDING'. Return customer ID, name, account balance, and lifetime value.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_gen_order_patterns",
+        "description": "Query TPC-H schema to extract order patterns for the identified top 10 customers: order frequency, average order value, order date range, product categories ordered, and payment patterns. Include customer ID for join.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_retention_narratives",
+        "description": "Reconcile customer lifetime value data with order pattern data for each of the top 10 customers. Generate a personalized retention narrative for each customer that references their specific order history, purchasing behavior, average order value, product preferences, and tenure. Include recommendations for engagement.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_gen_top_customers",
+          "sql_gen_order_patterns"
+        ]
+      }
+    ],
+    "cost_rationale": "The task requires three subtasks: (1) sql_gen to identify top 10 BUILDING-segment customers by lifetime value (mid tier\u2014multi-table join of customer and orders with aggregation), (2) sql_gen to extract detailed order patterns for those 10 customers including frequency, averages, and date ranges (mid tier\u2014similar complexity), and (3) cross_recon to reconcile both datasets and generate personalized retention narratives with engagement recommendations (frontier tier\u2014requires synthesizing multi-signal customer data, inferring behavioral insights, and generating contextual prose for each customer). The two SQL queries can run in parallel since neither depends on the other's output, but cross_recon must wait for both. This is a minimal plan: no unnecessary extract, policy_action, or multitool_plan calls are needed."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_gen_top_customers",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 754,
+      "output_tokens": 162,
+      "cached_tokens": 0,
+      "latency_ms": 2354,
+      "output": {
+        "sql": "SELECT c.c_custkey, c.c_name, c.c_acctbal, SUM(o.o_totalprice) AS lifetime_value FROM customer c JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name, c.c_acctbal ORDER BY lifetime_value DESC LIMIT 10"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_gen_order_patterns",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 749,
+      "output_tokens": 564,
+      "cached_tokens": 0,
+      "latency_ms": 6003,
+      "output": {
+        "sql": "WITH top_customers AS (SELECT c.c_custkey, c.c_name, c.c_acctbal, SUM(o.o_totalprice) AS lifetime_value FROM customer c JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name, c.c_acctbal ORDER BY lifetime_value DESC LIMIT 10) SELECT tc.c_custkey, tc.c_name, tc.lifetime_value, COUNT(o.o_orderkey) AS order_frequency, AVG(o.o_totalprice) AS avg_order_value, MIN(o.o_orderdate) AS first_order_date, MAX(o.o_orderdate) AS last_order_date, SUM(l.l_quantity) AS total_quantity, AVG(l.l_extendedprice) AS avg_line_price, AVG(l.l_discount) AS avg_discount, COUNT(DISTINCT o.o_orderpriority) AS distinct_priorities, STRING_AGG(DISTINCT o.o_orderpriority, ', ') AS order_priorities, STRING_AGG(DISTINCT o.o_orderstatus, ', ') AS order_statuses FROM top_customers tc JOIN orders o ON tc.c_custkey = o.o_custkey JOIN lineitem l ON o.o_orderkey = l.l_orderkey GROUP BY tc.c_custkey, tc.c_name, tc.lifetime_value ORDER BY tc.lifetime_value DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_retention_narratives",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 812,
+      "output_tokens": 659,
+      "cached_tokens": 0,
+      "latency_ms": 5512,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "customer_reconciliation_task",
+            "classification": "data_integration_required",
+            "status": "unable_to_execute",
+            "reason": "no_actual_data_provided",
+            "details": {
+              "sql_outputs_received": 0,
+              "mongo_outputs_received": 0,
+              "expected_reconciliation": "LEFT JOIN on customer_key with MongoDB as primary source"
+            },
+            "required_inputs": {
+              "mongodb_source": "Operational customer lifetime value collection with fields: c_custkey, c_name, c_acctbal, current_status",
+              "sql_source": "Historical order pattern data from executed sql_gen_order_patterns query",
+              "expected_fields": [
+                "c_custkey",
+                "c_name",
+                "lifetime_value",
+                "order_frequency",
+                "avg_order_value",
+                "first_order_date",
+                "last_order_date",
+                "total_quantity",
+                "avg_line_price",
+                "avg_discount",
+                "order_priorities",
+                "order_statuses"
+              ]
+            },
+            "output_template_when_data_available": {
+              "reconciled": [
+                {
+                  "entity_key": "c_custkey_integer",
+                  "customer_name": "string",
+                  "mongo_value": {
+                    "c_acctbal": "number",
+                    "operational_status": "string"
+                  },
+                  "sql_value": {
+                    "lifetime_value": "number",
+                    "order_frequency": "integer",
+                    "avg_order_value": "number",
+                    "tenure_months": "number",
+                    "total_quantity": "number",
+                    "avg_discount": "number",
+                    "order_priorities": "string",
+                    "order_statuses": "string"
+                  },
+                  "classification": "expand|hold|reduce|at_risk|stable|growing",
+                  "retention_narrative": "personalized_text_referencing_specific_metrics_and_patterns",
+                  "engagement_recommendations": [
+                    "recommendation_1",
+                    "recommendation_2",
+                    "recommendation_3"
+                  ]
+                }
+              ]
+            },
+            "reconciliation_logic_when_executed": "For each customer in MongoDB (primary), LEFT JOIN with SQL order patterns. If customer exists in both: merge metrics and classify. If customer only in MongoDB: use null for SQL metrics, classify as 'no_recent_activity'. All 10 customers from MongoDB will appear in output."
+          }
+        ],
+        "note": "Please provide actual MongoDB query results and SQL query execution results to proceed with reconciliation and narrative generation."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.029772000000000003,
+  "total_latency_ms": 13869,
+  "cumulative_spend_usd": 0.8776679999999998,
+  "evaluator_reason": "step2_consumer_narrative_check_failed"
+}

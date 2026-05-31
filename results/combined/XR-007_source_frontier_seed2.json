@@ -1,0 +1,124 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_committed_spend",
+        "description": "Query AWS commitment records to extract contracted commit levels (RIs, Savings Plans) by service, region, and commitment period with effective dates and total commitment value",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_actual_spend",
+        "description": "Query AWS billing/cost data to calculate actual month-over-month spend by service and region for the commitment period, including utilization rates and coverage percentages",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_commitment_analysis",
+        "description": "Reconcile committed levels against actual spend to identify overcommitted commitments (unused capacity >threshold), underutilized commitments (low coverage rates), and recommendations for commitment optimization (increase, decrease, or reallocate)",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_committed_spend",
+          "sql_actual_spend"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks with minimal decomposition: Two independent SQL queries (mid tier) to pull committed levels and actual spend from separate data sources, followed by a frontier-tier cross_recon to reconcile both sources, calculate variance metrics, identify commitment gaps, classify utilization posture (over/under), and generate optimization recommendations. The frontier tier is justified because cross_recon must handle multi-signal analysis (commitment vs. actual vs. coverage rates), temporal alignment, and produce actionable classification. The two sql_gen tasks cannot be combined because they query different fact tables (commitments vs. billings) and require distinct filtering and aggregation logic."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_committed_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 714,
+      "output_tokens": 219,
+      "cached_tokens": 0,
+      "latency_ms": 2968,
+      "output": {
+        "sql": "SELECT publisher, product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS total_commit_value, MIN(event_date) AS effective_start, MAX(event_date) AS effective_end, COUNT(DISTINCT license_id) AS commitment_count FROM consumption_facts WHERE publisher = 'AWS' AND event_type IN ('reserved_instance', 'savings_plan', 'commitment') AND event_date >= '2024-01-01' GROUP BY publisher, product, fiscal_year, fiscal_quarter ORDER BY total_commit_value DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_actual_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 710,
+      "output_tokens": 353,
+      "cached_tokens": 0,
+      "latency_ms": 4203,
+      "output": {
+        "sql": "SELECT product AS service, DATE_TRUNC('month', event_date) AS month, SUM(amount_usd) AS actual_spend, SUM(daily_active_seats) AS total_seats, LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY DATE_TRUNC('month', event_date)) AS prev_month_spend, ROUND(100.0 * (SUM(amount_usd) - LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY DATE_TRUNC('month', event_date))) / NULLIF(LAG(SUM(amount_usd)) OVER (PARTITION BY product ORDER BY DATE_TRUNC('month', event_date)), 0), 2) AS mom_change_pct FROM consumption_facts WHERE publisher = 'AWS' AND event_date >= '2024-01-01' GROUP BY product, DATE_TRUNC('month', event_date) ORDER BY product, month"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_commitment_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 660,
+      "output_tokens": 464,
+      "cached_tokens": 0,
+      "latency_ms": 4028,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "AWS_EC2_2024_Q1",
+            "mongo_value": null,
+            "sql_committed_value": null,
+            "sql_actual_spend": null,
+            "classification": "insufficient_data",
+            "note": "No MongoDB operational state provided for reconciliation"
+          },
+          {
+            "entity_key": "AWS_commitment_analysis",
+            "mongo_value": null,
+            "sql_value": "requires_execution",
+            "classification": "pending_reconciliation",
+            "issue": "MongoDB query output not supplied; SQL queries defined but not executed",
+            "recommendation": "Execute both SQL queries to obtain committed_spend and actual_spend datasets, then perform LEFT JOIN on (product, fiscal_year, fiscal_quarter) to identify coverage gaps"
+          }
+        ],
+        "reconciliation_strategy": {
+          "join_key": [
+            "product",
+            "fiscal_year",
+            "fiscal_quarter"
+          ],
+          "expected_metrics": {
+            "commitment_coverage_pct": "actual_spend / total_commit_value * 100",
+            "unused_capacity_usd": "total_commit_value - actual_spend",
+            "overcommitment_threshold": ">20% unused capacity",
+            "underutilization_threshold": "<70% coverage rate"
+          },
+          "classification_rules": {
+            "overcommitted": "unused_capacity_usd > threshold AND coverage_pct < 70",
+            "underutilized": "coverage_pct < 70 AND commitment_count > 1",
+            "well_optimized": "coverage_pct >= 85 AND coverage_pct <= 100",
+            "over_provisioned": "coverage_pct > 100 (excess demand)",
+            "no_recent_activity": "actual_spend = 0 OR NULL"
+          }
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0244,
+  "total_latency_ms": 11199,
+  "cumulative_spend_usd": 4.395748000000001,
+  "evaluator_reason": "no_mongo_node"
+}

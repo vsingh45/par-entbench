@@ -1,0 +1,321 @@
+{
+  "task_id": "XR-004",
+  "task_class": "cross_recon",
+  "router": "par_no_rationale",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_sam_licenses",
+        "description": "Extract Microsoft licensed users and SKU details from SAM (Software Asset Management) system",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_consumption_facts",
+        "description": "Query consumption facts database to retrieve active users and actual usage metrics",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_user_data",
+        "description": "Reconcile licensed users from SAM against active users from consumption facts to identify gaps and overlaps",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "extract_sam_licenses",
+          "query_consumption_facts"
+        ]
+      },
+      {
+        "id": "analyze_provisioning",
+        "description": "Analyze reconciliation results to identify under-provisioned (licensed but not active) and over-provisioned (active but unlicensed) users, generate provisioning variance report",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "reconcile_user_data"
+        ]
+      },
+      {
+        "id": "cost_impact_plan",
+        "description": "Develop action plan to optimize licensing costs based on provisioning findings and recommend remediation actions",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": [
+          "analyze_provisioning"
+        ]
+      }
+    ],
+    "cost_rationale": "Multi-stage reconciliation requires initial data extraction (small tier), followed by moderate complexity analysis and cross-reference tasks (mid tier). Policy action tier sufficient for remediation planning based on analytical findings."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_sam_licenses",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 241,
+      "output_tokens": 94,
+      "cached_tokens": 0,
+      "latency_ms": 1451,
+      "output": {
+        "licensed_users": null,
+        "active_users": null,
+        "sku_details": null,
+        "under_provisioning_count": null,
+        "over_provisioning_count": null,
+        "reconciliation_status": null,
+        "sam_system_data": null,
+        "consumption_facts_data": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_consumption_facts",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1210,
+      "output_tokens": 576,
+      "cached_tokens": 0,
+      "latency_ms": 3554,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Microsoft",
+              "status": "active"
+            }
+          },
+          {
+            "$lookup": {
+              "from": "sam_seat_assignments",
+              "localField": "license_id",
+              "foreignField": "license_id",
+              "as": "seat_assignments"
+            }
+          },
+          {
+            "$addFields": {
+              "licensed_seat_count": "$seat_count",
+              "assigned_seat_count": {
+                "$size": "$seat_assignments"
+              },
+              "active_assignments": {
+                "$size": {
+                  "$filter": {
+                    "input": "$seat_assignments",
+                    "as": "assignment",
+                    "cond": {
+                      "$or": [
+                        {
+                          "$ne": [
+                            "$$assignment.last_active_date",
+                            null
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            {
+                              "$ifNull": [
+                                "$$assignment.last_active_date",
+                                null
+                              ]
+                            },
+                            null
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "$group": {
+              "_id": "$product",
+              "total_licensed_seats": {
+                "$sum": "$licensed_seat_count"
+              },
+              "total_assigned_seats": {
+                "$sum": "$assigned_seat_count"
+              },
+              "total_active_assignments": {
+                "$sum": "$active_assignments"
+              },
+              "total_contract_value": {
+                "$sum": "$contract_value_usd"
+              },
+              "cost_per_seat_avg": {
+                "$avg": "$cost_per_seat_usd"
+              },
+              "license_count": {
+                "$sum": 1
+              }
+            }
+          },
+          {
+            "$addFields": {
+              "under_provisioned": {
+                "$cond": [
+                  {
+                    "$gt": [
+                      "$total_active_assignments",
+                      "$total_licensed_seats"
+                    ]
+                  },
+                  {
+                    "$subtract": [
+                      "$total_active_assignments",
+                      "$total_licensed_seats"
+                    ]
+                  },
+                  0
+                ]
+              },
+              "over_provisioned": {
+                "$cond": [
+                  {
+                    "$gt": [
+                      "$total_licensed_seats",
+                      "$total_active_assignments"
+                    ]
+                  },
+                  {
+                    "$subtract": [
+                      "$total_licensed_seats",
+                      "$total_active_assignments"
+                    ]
+                  },
+                  0
+                ]
+              },
+              "utilization_pct": {
+                "$multiply": [
+                  {
+                    "$divide": [
+                      "$total_active_assignments",
+                      "$total_licensed_seats"
+                    ]
+                  },
+                  100
+                ]
+              },
+              "estimated_overspend": {
+                "$multiply": [
+                  {
+                    "$cond": [
+                      {
+                        "$gt": [
+                          "$total_licensed_seats",
+                          "$total_active_assignments"
+                        ]
+                      },
+                      {
+                        "$subtract": [
+                          "$total_licensed_seats",
+                          "$total_active_assignments"
+                        ]
+                      },
+                      0
+                    ]
+                  },
+                  "$cost_per_seat_avg"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_user_data",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 880,
+      "output_tokens": 46,
+      "cached_tokens": 0,
+      "latency_ms": 1544,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "NO_DATA_AVAILABLE",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "analyze_provisioning",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 330,
+      "output_tokens": 51,
+      "cached_tokens": 0,
+      "latency_ms": 1436,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "NO_DATA_AVAILABLE",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cost_impact_plan",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 418,
+      "output_tokens": 443,
+      "cached_tokens": 0,
+      "latency_ms": 9535,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-DATA-001": "fail",
+          "POL-DATA-002": "fail",
+          "POL-AUDIT-001": "pass_conditional",
+          "POL-COST-001": "fail",
+          "POL-REMEDIATION-001": "fail",
+          "POL-PRIVACY-001": "not_applicable",
+          "POL-CHANGE-001": "pending_review",
+          "POL-REPORT-001": "fail"
+        },
+        "reason": "The upstream provisioning analysis returned NO_DATA_AVAILABLE with null values for both MongoDB and SQL sources, and a classification of 'no_recent_activity'. Without reconciled licensing and consumption data, any action plan, cost optimization recommendation, or remediation strategy would be based on empty inputs, violating data integrity and accuracy policies. Generating licensing cost recommendations from absent data risks material financial decisions being made on fabricated or incomplete baselines. The action cannot proceed until valid, reconciled data is available from both SAM (licensed users) and consumption facts (active users).",
+        "applied_constraints": [
+          "Upstream data source returned NO_DATA_AVAILABLE — action plan generation blocked until data is populated",
+          "Both mongo_value and sql_value are null; reconciliation requires non-null inputs from both sources",
+          "Classification 'no_recent_activity' indicates stale or missing consumption facts — data freshness validation required before cost analysis",
+          "Remediation actions cannot be scoped without a valid under/over-provisioning differential",
+          "Any retry must confirm SAM data pipeline health and consumption facts ingestion window before resubmission",
+          "Human review required (POL-CHANGE-001) before any licensing change recommendations are enacted, even when valid data becomes available"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.017785,
+  "total_latency_ms": 17520,
+  "cumulative_spend_usd": 0.14557199999999998
+}

@@ -1,0 +1,71 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "budget_sql",
+        "description": "Generate SQL query to analyze budget allocation by product category, extract total spend, unit costs, and trend metrics (YoY growth, variance from budget) to support reallocation recommendations",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reallocation_analysis",
+        "description": "Analyze budget allocation results, identify cost trends and spending patterns by category, classify categories by efficiency and growth metrics, and generate reallocation strategy recommendations with rationale",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "budget_sql"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) SQL query generation (mid-tier) to extract multi-category budget and cost trend data with aggregations and variance calculations from likely multiple tables; (2) Cross-recon at frontier tier to take the SQL results, perform multi-signal analysis (spend efficiency, growth rates, budget variance), classify categories by strategic importance, and synthesize reallocation recommendations. Frontier tier needed for cross_recon because it must integrate multiple cost signals, apply business logic to classify categories, and generate nuanced strategic recommendations\u2014not a simple reconciliation. The small/mid-tier cannot reliably handle the synthesis of cost trends into actionable reallocation strategy without higher inference capability."
+  },
+  "node_results": [
+    {
+      "subtask_id": "budget_sql",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 470,
+      "output_tokens": 641,
+      "cached_tokens": 0,
+      "latency_ms": 7950,
+      "output": {
+        "sql": "SELECT\n  cf.product,\n  cf.fiscal_year,\n  SUM(cf.amount_usd) AS total_spend,\n  COUNT(DISTINCT cf.license_id) AS license_count,\n  COUNT(DISTINCT cf.user_id) AS unique_users,\n  AVG(cf.daily_active_seats) AS avg_daily_active_seats,\n  SUM(cf.amount_usd) / NULLIF(COUNT(DISTINCT cf.user_id), 0) AS cost_per_user,\n  SUM(cf.amount_usd) / NULLIF(AVG(cf.daily_active_seats), 0) AS cost_per_active_seat,\n  SUM(cf.amount_usd) / NULLIF(COUNT(DISTINCT cf.license_id), 0) AS avg_license_cost,\n  LAG(SUM(cf.amount_usd)) OVER (PARTITION BY cf.product ORDER BY cf.fiscal_year) AS prior_year_spend,\n  SUM(cf.amount_usd) - LAG(SUM(cf.amount_usd)) OVER (PARTITION BY cf.product ORDER BY cf.fiscal_year) AS yoy_spend_variance,\n  ROUND(\n    100.0 * (SUM(cf.amount_usd) - LAG(SUM(cf.amount_usd)) OVER (PARTITION BY cf.product ORDER BY cf.fiscal_year))\n    / NULLIF(LAG(SUM(cf.amount_usd)) OVER (PARTITION BY cf.product ORDER BY cf.fiscal_year), 0),\n    2\n  ) AS yoy_growth_pct,\n  SUM(SUM(cf.amount_usd)) OVER (PARTITION BY cf.fiscal_year) AS total_portfolio_spend_year,\n  ROUND(\n    100.0 * SUM(cf.amount_usd) / NULLIF(SUM(SUM(cf.amount_usd)) OVER (PARTITION BY cf.fiscal_year), 0),\n    2\n  ) AS pct_of_total_spend,\n  AVG(cf.daily_active_seats) / NULLIF(MAX(cf.daily_active_seats) OVER (PARTITION BY cf.fiscal_year), 0) AS utilization_ratio\nFROM\n  consumption_facts cf\nGROUP BY\n  cf.product,\n  cf.fiscal_year\nORDER BY\n  cf.fiscal_year DESC,\n  total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reallocation_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1340,
+      "output_tokens": 70,
+      "cached_tokens": 0,
+      "latency_ms": 2130,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "budget_sql_query",
+            "mongo_value": null,
+            "sql_value": "query_defined_no_results_provided",
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.019475,
+  "total_latency_ms": 10080,
+  "cumulative_spend_usd": 0.09434,
+  "evaluator_reason": "step1_sql_fail: generated_sql_execution_error"
+}

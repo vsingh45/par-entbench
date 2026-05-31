@@ -1,0 +1,51 @@
+{
+  "task_id": "PAC-004",
+  "task_class": "policy_action",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_prod_access",
+        "description": "Evaluate whether the developer's production database access request complies with security policy, including least-privilege principles, approval requirements, and audit logging obligations.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask at mid tier because this requires evaluating a live access decision against a multi-faceted governance policy registry. The developer's request involves security controls (least privilege, approval workflows, audit trails) that typically have multiple applicable policies and exception rules. A mid-tier model is appropriate to weigh competing policy concerns and provide a compliance determination with reasoning, without needing the full reasoning power of frontier for a straightforward rule application."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_prod_access",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 461,
+      "output_tokens": 171,
+      "cached_tokens": 0,
+      "latency_ms": 1957,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-401": "fail",
+          "POL-402": "fail"
+        },
+        "reason": "Developer 'dev-alice' lacks required Manager approval for production database access and does not hold on-call role. Additionally, debug access must be directed to staging environment per least-privilege policy. Both mandatory policies are violated.",
+        "applied_constraints": [
+          "Production database query_execute action denied",
+          "Redirect to staging environment for debugging",
+          "Requires Manager approval before any production database access can be granted",
+          "On-call role requirement must be satisfied"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.0013160000000000001,
+  "total_latency_ms": 1957,
+  "cumulative_spend_usd": 8.30008,
+  "evaluator_reason": "ok"
+}

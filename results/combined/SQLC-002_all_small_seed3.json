@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-002",
+  "task_class": "sql_compose",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_gen_top_customers",
+        "description": "Generate SQL query to identify top 10 TPC-H customers by lifetime value in BUILDING market segment, including aggregated order metrics (order count, avg order value, total spent, date range) to support narrative generation.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_narrative",
+        "description": "Reconcile customer lifetime value data with their order patterns (frequency, timing, value distribution) and generate personalized retention narratives for each of the top 10 customers, referencing their specific order behavior and engagement trajectory.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_gen_top_customers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks are the minimum needed: (1) sql_gen to pull the top 10 BUILDING segment customers with their lifetime value and order metrics in a single efficient query using window functions or CTEs \u2014 this is mid-tier because it requires joins across customer, order, and lineitem tables plus aggregation; (2) cross_recon to fuse the SQL output with order pattern analysis and generate personalized narratives for each customer \u2014 this is mid-tier because it requires pattern recognition and contextual narrative synthesis but does not require frontier-level inference across unstructured documents. The narrative generation is a reconciliation task because it synthesizes multiple signals (LTV, order frequency, timing, value trends) into cohesive messaging, not a separate policy or multitool task."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_gen_top_customers",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 498,
+      "output_tokens": 206,
+      "cached_tokens": 0,
+      "latency_ms": 1456,
+      "output": {
+        "sql": "SELECT c.c_custkey, c.c_name, c.c_mktsegment, c.c_acctbal, COUNT(o.o_orderkey) AS order_count, AVG(o.o_totalprice) AS avg_order_value, SUM(o.o_totalprice) AS total_spent, MIN(o.o_orderdate) AS first_order_date, MAX(o.o_orderdate) AS last_order_date FROM customer c INNER JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name, c.c_mktsegment, c.c_acctbal ORDER BY total_spent DESC LIMIT 10"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_narrative",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 496,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 5631,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"BUILDING_segment_top_10\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"query_type\": \"customer_lifetime_value\",\n        \"segment\": \"BUILDING\",\n        \"record_count\": 10,\n        \"metrics\": [\n          {\n            \"c_custkey\": \"rank_1\",\n            \"c_name\": \"customer_name_1\",\n            \"c_mktsegment\": \"BUILDING\",\n            \"c_acctbal\": \"numeric\",\n            \"order_count\": \"numeric\",\n            \"avg_order_value\": \"numeric\",\n            \"total_spent\": \"numeric\",\n            \"first_order_date\": \"date\",\n            \"last_order_date\": \"date\"\n          }\n        ]\n      },\n      \"classification\": \"data_source_mismatch\",\n      \"note\": \"MongoDB operational state not provided; SQL historical data available for reconciliation\"\n    },\n    {\n      \"entity_key\": \"retention_narrative_framework\",\n      \"mongo_value\": null,\n      \"sql_value\": \"enabled\",\n      \"classification\": \"requires_computation\",\n      \"details\": {\n        \"narrative_generation\": \"For each of top 10 customers, construct personalized retention message using:\",\n        \"dimensions\": [\n          \"lifetime_value_rank\",\n          \"order_frequency_trend\",\n          \"average_order_size\",\n          \"order_timing_patterns\",\n          \"engagement_trajectory\",\n          \"recency_indicator\"\n        ],\n        \"sample_narrative_template\": \"Customer [name] is a [tenure_length] [BUILDING] segment member with [order_count] orders totaling [total_spent]. Recent engagement: [last_order_date]. Order pattern: [frequency_pattern]. Average order value: [avg_order_value]. Trajectory: [growth|stable|declining]. Recommended action: [expand|hold|reduce]\"\n      }\n    },\n    {\n      \"entity_key\": \"customer_1\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"rank\": 1,\n        \"segment\": \"BUILDING\",\n        \"metric_source\": \"SQL aggregation\"\n      },\n      \"classification\": \"high_value_stable\",\n      \"narrative_requirement\": \"Generate using order_count, avg_order_value, total_spent, first_order_date, last_order_date\"\n    },\n    {\n      \"entity_key\": \"customer_2\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"rank\": 2,\n        \"segment\": \"BUILDING\",\n        \"metric_source\": \"SQL aggregation\"\n      },\n      \"classification\": \"high_value_stable\",\n      \"narrative_requirement\": \"Generate using order_count, avg_order_value, total_spent, first_order_date, last_order_date\"\n    },\n    {\n      \"entity_key\": \"customer_3\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"rank\": 3,\n        \"segment\": \"BUILDING\",\n        \"metric_source\": \"SQL aggregation\"\n      },\n      \"classification\": \"high_value_stable\",\n      \"narrative_requirement\": \"Generate using order_count, avg"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.006024,
+  "total_latency_ms": 7087,
+  "cumulative_spend_usd": 0.8228169999999997,
+  "evaluator_reason": "step2_consumer_narrative_check_failed"
+}

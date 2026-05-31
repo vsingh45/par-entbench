@@ -1,0 +1,135 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sam_renewal_check",
+        "description": "Query SAM system (via SQL/database) to retrieve contract renewal dates, current status, and contract metadata for all active licenses",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "consumption_trends_query",
+        "description": "Query consumption/usage database to calculate trend metrics (30/60/90-day usage trends, growth rate, peak usage) for licenses identified in renewal check",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": [
+          "sam_renewal_check"
+        ]
+      },
+      {
+        "id": "risk_and_notify_plan",
+        "description": "Reconcile renewal dates with consumption trends to assess renewal risk (urgency tier, budget impact, compliance risk), generate alert payloads, and create notification action plan for procurement team",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sam_renewal_check",
+          "consumption_trends_query"
+        ]
+      }
+    ],
+    "cost_rationale": "3 subtasks required: (1) SAM renewal date extraction is a straightforward single-source query (sql_gen, small tier). (2) Consumption trends require multi-table aggregation and time-windowing logic (sql_gen, mid tier) with dependency on renewal data. (3) Risk assessment and notification orchestration involves cross-signal reconciliation (renewal urgency + usage patterns + compliance context) and notification payload generation\u2014this is cross_recon work (mid tier). We do NOT add a separate multitool_plan or policy_action: the notification routing is part of cross_recon output, and no explicit governance policy evaluation is requested\u2014only risk-driven alerting."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sam_renewal_check",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 717,
+      "output_tokens": 169,
+      "cached_tokens": 0,
+      "latency_ms": 2723,
+      "output": {
+        "sql": "SELECT contract_id, vendor_name, MIN(invoice_date) AS contract_start, MAX(due_date) AS renewal_date, MAX(status) AS current_status, COUNT(invoice_id) AS invoice_count, SUM(amount_usd) AS total_contract_value FROM invoice_facts WHERE status IN ('active', 'pending', 'paid') GROUP BY contract_id, vendor_name ORDER BY renewal_date ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "consumption_trends_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 902,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 7824,
+      "output": {
+        "raw_output": "{\"sql\": \"SELECT cf.license_id, cf.vendor_name, cf.publisher, cf.product, SUM(CASE WHEN cf.event_date >= CURRENT_DATE - INTERVAL '30 days' THEN cf.amount_usd ELSE 0 END) AS usage_30d, SUM(CASE WHEN cf.event_date >= CURRENT_DATE - INTERVAL '60 days' THEN cf.amount_usd ELSE 0 END) AS usage_60d, SUM(CASE WHEN cf.event_date >= CURRENT_DATE - INTERVAL '90 days' THEN cf.amount_usd ELSE 0 END) AS usage_90d, MAX(cf.daily_active_seats) AS peak_seats, AVG(cf.daily_active_seats) AS avg_seats, CASE WHEN SUM(CASE WHEN cf.event_date >= CURRENT_DATE - INTERVAL '60 days' AND cf.event_date < CURRENT_DATE - INTERVAL '30 days' THEN cf.amount_usd ELSE 0 END) > 0 THEN (SUM(CASE WHEN cf.event_date >= CURRENT_DATE - INTERVAL '30 days' THEN cf.amount_usd ELSE 0 END) - SUM(CASE WHEN cf.event_date >= CURRENT_DATE - INTERVAL '60 days' AND cf.event_date < CURRENT_DATE - INTERVAL '30 days' THEN cf.amount_usd ELSE 0 END)) / SUM(CASE WHEN cf.event_date >= CURRENT_DATE - INTERVAL '60 days' AND cf.event_date < CURRENT_DATE - INTERVAL '30 days' THEN cf.amount_usd ELSE 0 END) * 100 ELSE 0 END AS growth_rate_pct FROM consumption_facts cf JOIN (SELECT DISTINCT vendor_name FROM invoice_facts WHERE status IN ('active','pending','paid')) v ON cf.publisher = v.vendor_name WHERE cf.event_date >= CURRENT_DATE - INTERVAL '90 days' GROUP BY cf.license_id, cf.vendor_name, cf.publisher, cf.product"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "risk_and_notify_plan",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1439,
+      "output_tokens": 294,
+      "cached_tokens": 0,
+      "latency_ms": 3827,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sam_renewal_check",
+            "mongo_value": {
+              "source": "SAM",
+              "query_type": "contract_renewals",
+              "fields": [
+                "contract_id",
+                "vendor_name",
+                "contract_start",
+                "renewal_date",
+                "current_status",
+                "invoice_count",
+                "total_contract_value"
+              ]
+            },
+            "sql_value": {
+              "usage_30d": null,
+              "usage_60d": null,
+              "usage_90d": null,
+              "peak_seats": null,
+              "avg_seats": null,
+              "growth_rate_pct": null
+            },
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "consumption_trends_query",
+            "mongo_value": null,
+            "sql_value": {
+              "source": "consumption_facts",
+              "fields": [
+                "license_id",
+                "vendor_name",
+                "publisher",
+                "product",
+                "usage_30d",
+                "usage_60d",
+                "usage_90d",
+                "peak_seats",
+                "avg_seats",
+                "growth_rate_pct"
+              ]
+            },
+            "classification": "hold"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.046865000000000004,
+  "total_latency_ms": 14374,
+  "cumulative_spend_usd": 7.099213000000007,
+  "evaluator_reason": "no_plan_in_output"
+}

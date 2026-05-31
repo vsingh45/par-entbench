@@ -1,0 +1,193 @@
+{
+  "task_id": "MTP-007",
+  "task_class": "multitool_plan",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "iam_scan",
+        "description": "Scan and extract IAM policies from AWS environment, analyzing policy documents, permission structures, and policy attachments across all users, roles, and groups",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cloudtrail_audit",
+        "description": "Query CloudTrail logs to audit API calls, authentication events, and configuration changes; extract actionable security events with timestamps, principals, and actions",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "policy_violation_check",
+        "description": "Evaluate extracted IAM policies and CloudTrail events against security policy registry; identify violations, misconfigurations, access control breaches, and compliance gaps",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": [
+          "iam_scan",
+          "cloudtrail_audit"
+        ]
+      },
+      {
+        "id": "compliance_report",
+        "description": "Reconcile IAM policy findings, CloudTrail audit results, and violation assessments; generate comprehensive compliance report with risk ratings, violation summaries, remediation recommendations, and audit trail",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "iam_scan",
+          "cloudtrail_audit",
+          "policy_violation_check"
+        ]
+      }
+    ],
+    "cost_rationale": "Four subtasks form the minimal workflow: (1) IAM policy extraction (mid-tier: handles complex nested policy documents and multiple attachment types), (2) CloudTrail log querying (mid-tier: SQL aggregation across multiple security event types), (3) policy violation evaluation (mid-tier: multi-policy reasoning against extracted IAM and audit data), (4) compliance reconciliation (mid-tier: synthesizing findings across three sources with risk classification and recommendations). Each subtask is necessary and cannot be combined\u2014they represent distinct operations (extract, query, evaluate, reconcile) on different data substrates. All tiers assigned to 'mid' due to moderate complexity of security workflows, policy reasoning, and cross-source analysis. This is appropriate for enterprise security auditing without frontier-level complexity (no complex ML inference or exception-driven policy logic needed)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "iam_scan",
+      "specialist": "extract",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 363,
+      "output_tokens": 11,
+      "cached_tokens": 0,
+      "latency_ms": 921,
+      "output": {
+        "policies": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cloudtrail_audit",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 722,
+      "output_tokens": 122,
+      "cached_tokens": 0,
+      "latency_ms": 2335,
+      "output": {
+        "sql": "SELECT access_time, user_id, permission, resource, action, result FROM access_log_facts WHERE result IN ('DENIED','FAILURE') OR action IN ('POLICY_CHANGE','CONFIG_CHANGE','AUTH_FAILURE') ORDER BY access_time DESC LIMIT 500"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "policy_violation_check",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 464,
+      "output_tokens": 277,
+      "cached_tokens": 0,
+      "latency_ms": 3090,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-001": "fail",
+          "POL-002": "pass_conditional",
+          "POL-003": "pending_review",
+          "POL-004": "not_applicable",
+          "POL-005": "fail"
+        },
+        "reason": "Security audit workflow cannot execute due to missing IAM policy data (iam_scan.policies is null), incomplete upstream dependencies, and lack of approval authorization for CloudTrail access and compliance report generation. Requires: (1) valid IAM policy extraction, (2) explicit audit approval token, (3) data governance review for CloudTrail PII handling, (4) authorization scope verification for compliance reporting.",
+        "applied_constraints": [
+          "CloudTrail query execution requires MFA-authenticated approval",
+          "Compliance report generation limited to authorized users with audit:read permission",
+          "Policy violation findings must be reviewed before escalation",
+          "Access log results must be filtered to remove sensitive user identifiers",
+          "Audit scope must be pre-approved by security governance board"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "compliance_report",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 601,
+      "output_tokens": 629,
+      "cached_tokens": 0,
+      "latency_ms": 4194,
+      "output": {
+        "reconciled": [],
+        "audit_status": "BLOCKED",
+        "blocking_issues": [
+          {
+            "issue": "Missing upstream dependency",
+            "source": "iam_scan.policies",
+            "value": null,
+            "impact": "Cannot perform IAM policy reconciliation without policy baseline data",
+            "severity": "CRITICAL"
+          },
+          {
+            "issue": "Insufficient authorization",
+            "source": "policy_violation_check",
+            "reason": "deny_pending_approvals",
+            "requirement": "MFA-authenticated approval token for CloudTrail query execution",
+            "severity": "CRITICAL"
+          },
+          {
+            "issue": "Missing approval authorization",
+            "source": "policy_violation_check.applied_constraints",
+            "requirement": "Explicit audit approval token from security governance board",
+            "severity": "CRITICAL"
+          },
+          {
+            "issue": "Data governance not completed",
+            "source": "policy_violation_check.applied_constraints",
+            "requirement": "Data governance review for CloudTrail PII handling before query execution",
+            "severity": "HIGH"
+          },
+          {
+            "issue": "Authorization scope not verified",
+            "source": "policy_violation_check.applied_constraints",
+            "requirement": "User must have audit:read permission and authorization scope pre-approval",
+            "severity": "HIGH"
+          }
+        ],
+        "policy_compliance_summary": {
+          "POL-001": {
+            "status": "fail",
+            "classification": "at_risk"
+          },
+          "POL-002": {
+            "status": "pass_conditional",
+            "classification": "hold"
+          },
+          "POL-003": {
+            "status": "pending_review",
+            "classification": "no_recent_activity"
+          },
+          "POL-004": {
+            "status": "not_applicable",
+            "classification": "stable"
+          },
+          "POL-005": {
+            "status": "fail",
+            "classification": "at_risk"
+          }
+        },
+        "required_actions": [
+          "Obtain MFA-authenticated approval token from authorized security personnel",
+          "Complete IAM policy extraction (iam_scan.policies must contain valid policy data)",
+          "Complete data governance review for CloudTrail access and PII handling",
+          "Verify user has audit:read permission and authorization scope pre-approval",
+          "Obtain security governance board approval for audit scope",
+          "Resubmit audit request with all dependencies satisfied"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.014345,
+  "total_latency_ms": 10540,
+  "cumulative_spend_usd": 7.777521000000003,
+  "evaluator_reason": "no_plan_in_output"
+}

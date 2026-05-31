@@ -1,0 +1,53 @@
+{
+  "task_id": "PAC-005",
+  "task_class": "policy_action",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_pii_export",
+        "description": "Evaluate the bulk PII export request against data governance and compliance policies. Determine if the export is permitted, what access controls apply, and whether audit logging or data masking requirements exist.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This request requires a POLICY_ACTION specialist to evaluate governance compliance before any data extraction occurs. Bulk PII export is a high-risk operation that must be assessed against privacy regulations (GDPR, CCPA, etc.), data classification policies, role-based access controls, and audit requirements. The tier is MID because the evaluation involves multiple policy dimensions (compliance, access control, audit obligations) and requires conditional approval logic. No SQL extraction subtask is created until policy clearance is obtained — this is a control gate, not a downstream task.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_pii_export",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 518,
+      "output_tokens": 255,
+      "cached_tokens": 0,
+      "latency_ms": 2855,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-501": "fail",
+          "POL-502": "pass_conditional",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "Bulk PII export request cannot be approved without mandatory Legal and CISO sign-off per POL-501. While data minimization (POL-502) and audit logging (POL-503) requirements can be satisfied with constraints, the foundational approval requirement is not met.",
+        "applied_constraints": [
+          "Pending approval: Legal department review required",
+          "Pending approval: CISO sign-off required",
+          "If approved: Audit logging must be enabled for entire export operation",
+          "If approved: Data retention limited to 30 days post-export",
+          "If approved: Verify business criticality justification for PII inclusion",
+          "If approved: Consider data masking of non-essential PII fields (phone numbers if not critical)"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001793,
+  "total_latency_ms": 2855,
+  "cumulative_spend_usd": 8.493841000000003
+}

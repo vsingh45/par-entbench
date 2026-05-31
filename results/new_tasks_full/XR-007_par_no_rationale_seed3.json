@@ -1,0 +1,191 @@
+{
+  "task_id": "XR-007",
+  "task_class": "cross_recon",
+  "router": "par_no_rationale",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_commit_data",
+        "description": "Extract AWS contracted commit levels (Savings Plans, Reserved Instances) from source systems",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "query_actual_spend",
+        "description": "Query AWS Cost and Usage reports to retrieve actual spend by service, region, and commitment type",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "match_commits_to_spend",
+        "description": "Match committed capacity with actual usage to identify coverage and utilization rates",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "extract_commit_data",
+          "query_actual_spend"
+        ]
+      },
+      {
+        "id": "analyze_variance",
+        "description": "Analyze variance between commit levels and actual spend to identify overcommitment and underutilization patterns",
+        "specialist": "multitool_plan",
+        "tier": "frontier",
+        "depends_on": [
+          "match_commits_to_spend"
+        ]
+      },
+      {
+        "id": "generate_recommendations",
+        "description": "Generate actionable recommendations for commitment adjustments (increase, decrease, or reallocate) and cost optimization actions",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": [
+          "analyze_variance"
+        ]
+      }
+    ],
+    "cost_rationale": "Multi-step analysis requiring data extraction, querying, reconciliation, and complex variance analysis to identify commitment gaps. Frontier tier needed for sophisticated pattern analysis across multiple dimensions."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_commit_data",
+      "specialist": "extract",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 232,
+      "output_tokens": 115,
+      "cached_tokens": 0,
+      "latency_ms": 2903,
+      "output": {
+        "contracted_commit_levels": null,
+        "savings_plans": null,
+        "reserved_instances": null,
+        "actual_spend": null,
+        "overcommitment": null,
+        "underutilization": null,
+        "extraction_note": "No source document or upstream data was provided. All fields are null due to absence of input data containing AWS contracted commit levels, Savings Plans, Reserved Instances, or actual spend figures."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_actual_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 453,
+      "output_tokens": 198,
+      "cached_tokens": 0,
+      "latency_ms": 3743,
+      "output": {
+        "sql": "SELECT publisher, product AS service, SUM(amount_usd) AS actual_spend, COUNT(DISTINCT license_id) AS active_licenses, SUM(daily_active_seats) AS total_active_seats, AVG(daily_active_seats) AS avg_daily_active_seats, MIN(event_date) AS first_event, MAX(event_date) AS last_event, COUNT(DISTINCT event_id) AS event_count, fiscal_year, fiscal_quarter, event_type AS commitment_type FROM consumption_facts WHERE publisher ILIKE '%AWS%' OR publisher ILIKE '%Amazon%' OR product ILIKE '%AWS%' OR product ILIKE '%Amazon%' GROUP BY publisher, product, fiscal_year, fiscal_quarter, event_type ORDER BY fiscal_year DESC, fiscal_quarter DESC, actual_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "match_commits_to_spend",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 545,
+      "output_tokens": 534,
+      "cached_tokens": 0,
+      "latency_ms": 7338,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "AWS_committed_capacity_vs_actual_spend",
+            "mongo_value": {
+              "contracted_commit_levels": null,
+              "savings_plans": null,
+              "reserved_instances": null,
+              "actual_spend": null,
+              "overcommitment": null,
+              "underutilization": null,
+              "extraction_note": "No source document or upstream data was provided. All fields are null due to absence of input data containing AWS contracted commit levels, Savings Plans, Reserved Instances, or actual spend figures."
+            },
+            "sql_value": {
+              "sql_status": "query_defined_but_not_executed",
+              "query": "SELECT publisher, product AS service, SUM(amount_usd) AS actual_spend, COUNT(DISTINCT license_id) AS active_licenses, SUM(daily_active_seats) AS total_active_seats, AVG(daily_active_seats) AS avg_daily_active_seats, MIN(event_date) AS first_event, MAX(event_date) AS last_event, COUNT(DISTINCT event_id) AS event_count, fiscal_year, fiscal_quarter, event_type AS commitment_type FROM consumption_facts WHERE publisher ILIKE '%AWS%' OR publisher ILIKE '%Amazon%' OR product ILIKE '%AWS%' OR product ILIKE '%Amazon%' GROUP BY publisher, product, fiscal_year, fiscal_quarter, event_type ORDER BY fiscal_year DESC, fiscal_quarter DESC, actual_spend DESC",
+              "actual_spend": null,
+              "active_licenses": null,
+              "total_active_seats": null,
+              "avg_daily_active_seats": null,
+              "first_event": null,
+              "last_event": null,
+              "event_count": null,
+              "fiscal_year": null,
+              "fiscal_quarter": null,
+              "commitment_type": null
+            },
+            "classification": "no_recent_activity",
+            "coverage_rate": null,
+            "utilization_rate": null,
+            "overcommitment_flag": null,
+            "underutilization_flag": null,
+            "reconciliation_note": "Both MongoDB and SQL sources returned null or unexecuted results. MongoDB extraction confirms absence of contracted commit data. SQL query is structurally defined but produced no result set. No coverage or utilization rates can be calculated. Entity is classified as no_recent_activity pending ingestion of actual AWS billing and commitment data."
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "analyze_variance",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1419,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9076,
+      "output": {
+        "raw_output": "{\"plan\":[{\"tool\":\"mongo.find\",\"arguments\":{\"collection\":\"contracts\",\"filter\":{\"vendor\":{\"$regex\":\"AWS|Amazon\",\"$options\":\"i\"},\"contract_type\":{\"$in\":[\"savings_plan\",\"reserved_instance\",\"committed_use\"]}},\"projection\":{\"contract_id\":1,\"vendor\":1,\"commit_amount_usd\":1,\"commit_term\":1,\"start_date\":1,\"end_date\":1,\"service\":1,\"contract_type\":1}},\"depends_on\":[]},{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT publisher, product AS service, fiscal_year, fiscal_quarter, event_type AS commitment_type, SUM(amount_usd) AS actual_spend, COUNT(DISTINCT license_id) AS active_licenses, SUM(daily_active_seats) AS total_active_seats, AVG(daily_active_seats) AS avg_daily_active_seats, MIN(event_date) AS first_event, MAX(event_date) AS last_event, COUNT(DISTINCT event_id) AS event_count FROM consumption_facts WHERE publisher ILIKE '%AWS%' OR publisher ILIKE '%Amazon%' OR product ILIKE '%AWS%' OR product ILIKE '%Amazon%' GROUP BY publisher, product, fiscal_year, fiscal_quarter, event_type ORDER BY fiscal_year DESC, fiscal_quarter DESC, actual_spend DESC\"},\"depends_on\":[]},{\"tool\":\"mongo.aggregate\",\"arguments\":{\"collection\":\"aws_billing\",\"pipeline\":[{\"$match\":{\"vendor\":{\"$regex\":\"AWS|Amazon\",\"$options\":\"i\"}}},{\"$group\":{\"_id\":{\"service\":\"$service\",\"fiscal_year\":\"$fiscal_year\",\"fiscal_quarter\":\"$fiscal_quarter\"},\"actual_spend\":{\"$sum\":\"$amount_usd\"},\"covered_spend\":{\"$sum\":\"$covered_amount_usd\"},\"on_demand_spend\":{\"$sum\":\"$on_demand_amount_usd\"}}}]},\"depends_on\":[]},{\"tool\":\"file.write\",\"arguments\":{\"path\":\"/analysis/aws_commit_variance_analysis.json\",\"content\":{\"contracts\":\"$1.results\",\"cons"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "generate_recommendations",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 959,
+      "output_tokens": 506,
+      "cached_tokens": 0,
+      "latency_ms": 11548,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-DATA-001": "fail",
+          "POL-DATA-002": "fail",
+          "POL-ACCESS-001": "fail",
+          "POL-EXEC-001": "fail",
+          "POL-OUTPUT-001": "pending_review",
+          "POL-AUDIT-001": "pending_review",
+          "POL-INFOSEC-001": "fail",
+          "POL-PIPELINE-001": "fail"
+        },
+        "reason": "Multiple critical policy violations detected. (1) The upstream output is malformed/truncated JSON, indicating an incomplete or corrupted pipeline execution — no downstream action should proceed from an unreliable upstream state. (2) The upstream plan includes a 'file.write' tool call to '/analysis/aws_commit_variance_analysis.json' with unresolved template variable '$1.results', meaning raw pipeline references were never substituted — executing recommendations based on this would produce incorrect outputs. (3) The task requires generating actionable financial commitment adjustments (increase/decrease/reallocate) which constitute financial decisions; no human approval gate or authorization context is present in the request. (4) The upstream query scope includes broad regex patterns against financial contract and billing data without scoped user authorization evidence. (5) Generating commitment adjustment recommendations without validated, complete spend and contract data creates risk of material financial harm.",
+        "applied_constraints": [
+          "Upstream pipeline output is truncated and structurally invalid — downstream recommendation generation is blocked until a complete, validated output is provided.",
+          "Unresolved template variable '$1.results' in file.write step must be resolved before any output is trusted.",
+          "Financial commitment adjustment recommendations (increase, decrease, reallocate) require explicit human authorization and approval workflow before action.",
+          "All contract and billing data access must be scoped to an authenticated, authorized user context with documented entitlements.",
+          "Resubmit with: (a) complete upstream JSON output, (b) named authorizing principal, (c) approval reference or escalation token for financial action recommendations."
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.053957000000000005,
+  "total_latency_ms": 34608,
+  "cumulative_spend_usd": 0.6677699999999999
+}

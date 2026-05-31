@@ -1,0 +1,69 @@
+{
+  "task_id": "SQLC-007",
+  "task_class": "sql_compose",
+  "router": "sink_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "spending_analysis",
+        "description": "Query SQL warehouse to identify top spending publishers and calculate their spend by product category. Return publisher name, total spend, and spending breakdown by product type/family.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "leverage_assessment",
+        "description": "Assess negotiation leverage for each top publisher based on their spending patterns, product concentration, contract terms, and market alternatives. Classify leverage position (high/medium/low) and generate prioritized negotiation recommendations.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Two subtasks capture the minimum workflow: (1) sql_gen (mid-tier) aggregates multi-table spend data with product mix breakdown\u2014requires joins across publishers, products, and transactions but no complex window functions. (2) cross_recon (frontier-tier) synthesizes the spending output with contract metadata, historical negotiation context, and market intelligence to classify leverage and generate strategic recommendations\u2014this requires multi-signal reasoning and judgment that benefits from frontier capability. No separate cross-source reconciliation is needed since the spend query and contract/market data can be consolidated by the second agent. No policy_action is required since leverage assessment is strategic analysis, not compliance evaluation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "spending_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 709,
+      "output_tokens": 141,
+      "cached_tokens": 0,
+      "latency_ms": 2290,
+      "output": {
+        "sql": "SELECT publisher, product, SUM(amount_usd) AS product_spend, SUM(SUM(amount_usd)) OVER (PARTITION BY publisher) AS total_publisher_spend FROM consumption_facts WHERE event_date >= '2024-01-01' GROUP BY publisher, product ORDER BY total_publisher_spend DESC, product_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "leverage_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 433,
+      "output_tokens": 59,
+      "cached_tokens": 0,
+      "latency_ms": 1324,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "no_upstream_data",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "insufficient_data"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01071,
+  "total_latency_ms": 3614,
+  "cumulative_spend_usd": 1.2898510000000003,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-001",
+  "task_class": "sql_compose",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top_publishers",
+        "description": "Generate SQL query to fetch top 5 publishers by spend in Q4 2024 (October-December 2024), including total spend, transaction count, and any relevant metrics for at-risk assessment",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "risk_analysis",
+        "description": "Analyze the top 5 publishers data to identify at-risk publishers based on spend patterns, concentration risk, volatility, contract status, or other SAM-relevant indicators. Produce summary and recommendations for SAM team",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_top_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (small tier) for straightforward Q4 spend aggregation by publisher \u2014 this is a simple GROUP BY on spend metrics with temporal filtering; (2) cross_recon (mid tier) to analyze the publisher spend data against at-risk signals (concentration, volatility, dependency patterns). This is mid rather than small because at-risk classification requires multi-signal reasoning and contextual judgment typical of SAM assessments. We do not add a separate policy_action subtask because the risk summarization is analytical classification, not a governance policy evaluation. Plan is minimal: one data fetch + one analysis."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 747,
+      "output_tokens": 203,
+      "cached_tokens": 0,
+      "latency_ms": 2949,
+      "output": {
+        "sql": "SELECT publisher, SUM(amount_usd) AS total_spend, COUNT(*) AS transaction_count, AVG(amount_usd) AS avg_transaction_value, SUM(daily_active_seats) AS total_active_seats, COUNT(DISTINCT product) AS product_count, COUNT(DISTINCT license_id) AS license_count FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date <= '2024-12-31' GROUP BY publisher ORDER BY total_spend DESC LIMIT 5"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "risk_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 430,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 3902,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"Publisher_1\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"publisher\": \"Publisher_1\",\n        \"total_spend\": 0,\n        \"transaction_count\": 0,\n        \"avg_transaction_value\": 0,\n        \"total_active_seats\": 0,\n        \"product_count\": 0,\n        \"license_count\": 0\n      },\n      \"classification\": \"no_recent_activity\"\n    },\n    {\n      \"entity_key\": \"Publisher_2\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"publisher\": \"Publisher_2\",\n        \"total_spend\": 0,\n        \"transaction_count\": 0,\n        \"avg_transaction_value\": 0,\n        \"total_active_seats\": 0,\n        \"product_count\": 0,\n        \"license_count\": 0\n      },\n      \"classification\": \"no_recent_activity\"\n    },\n    {\n      \"entity_key\": \"Publisher_3\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"publisher\": \"Publisher_3\",\n        \"total_spend\": 0,\n        \"transaction_count\": 0,\n        \"avg_transaction_value\": 0,\n        \"total_active_seats\": 0,\n        \"product_count\": 0,\n        \"license_count\": 0\n      },\n      \"classification\": \"no_recent_activity\"\n    },\n    {\n      \"entity_key\": \"Publisher_4\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"publisher\": \"Publisher_4\",\n        \"total_spend\": 0,\n        \"transaction_count\": 0,\n        \"avg_transaction_value\": 0,\n        \"total_active_seats\": 0,\n        \"product_count\": 0,\n        \"license_count\": 0\n      },\n      \"classification\": \"no_recent_activity\"\n    },\n    {\n      \"entity_key\": \"Publisher_5\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"publisher\": \"Publisher_5\",\n        \"total_spend\": 0,\n        \"transaction_count\": 0,\n        \"avg_transaction_value\": 0,\n        \"total_active_seats\": 0,\n        \"product_count\": 0,\n        \"license_count\": 0\n      },\n      \"classification\": \"no_recent_activity\"\n    }\n  ],\n  \"sam_analysis_summary\": {\n    \"period\": \"Q4 2024 (2024-10-01 to 2024-12-31)\",\n    \"top_5_publishers_status\": \"INSUFFICIENT_DATA\",\n    \"at_risk_indicators\": {\n      \"concentration_risk\": \"UNASSESSED - No transaction data available\",\n      \"volatility_risk\": \"UNASSESSED - Insufficient baseline metrics\",\n      \"seat_utilization_risk\": \"UNASSESSED - Zero active seats recorded\",\n      \"product_diversification\": \"UNASSESSED - No product diversity data\",\n      \"license_fragmentation\": \"UNASSESSED - No license allocation data\"\n    }\n  },\n  \""
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.013240000000000002,
+  "total_latency_ms": 6851,
+  "cumulative_spend_usd": 0.5558119999999999,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

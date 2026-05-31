@@ -1,0 +1,193 @@
+{
+  "task_id": "MTP-001",
+  "task_class": "multitool_plan",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_ms_licenses",
+        "description": "Query MongoDB to count total Microsoft licenses and break down by license type/product",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_ms_spend",
+        "description": "Query Snowflake to retrieve last month's Microsoft spend (sum by vendor/product or cost center)",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "email_summary",
+        "description": "Reconcile license count and spend data, generate summary report, and compose/send email to SAM team with counts and costs",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "mongo_ms_licenses",
+          "sql_ms_spend"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks: (1) mongo_query (small) for license count\u2014straightforward aggregation on a single collection, no joins or complex lookups. (2) sql_gen (small) for spend\u2014simple time-filtered SUM query from Snowflake spend table, likely single or two-table join. (3) multitool_plan (mid) to coordinate email dispatch because it requires invoking the enterprise tool registry (email service) with data from two upstream sources; mid tier handles the context-aware orchestration and composition of the SAM team summary. No policy_action is needed\u2014this is informational reporting, not a governance decision. No cross_recon subtask is used because the reconciliation here is minimal (just pairing counts with costs for summary); the multitool_plan itself handles assembly into the email body."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_ms_licenses",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1217,
+      "output_tokens": 171,
+      "cached_tokens": 0,
+      "latency_ms": 1294,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Microsoft"
+            }
+          },
+          {
+            "$group": {
+              "_id": "$product",
+              "count": {
+                "$sum": 1
+              },
+              "total_contract_value": {
+                "$sum": "$contract_value_usd"
+              },
+              "total_seats": {
+                "$sum": "$seat_count"
+              }
+            }
+          },
+          {
+            "$sort": {
+              "count": -1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_ms_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 469,
+      "output_tokens": 88,
+      "cached_tokens": 0,
+      "latency_ms": 1215,
+      "output": {
+        "sql": "SELECT vendor_name, SUM(amount_usd) as total_spend FROM invoice_facts WHERE vendor_name = 'Microsoft' AND invoice_date >= CURRENT_DATE - INTERVAL '1 month' AND invoice_date < DATE_TRUNC('month', CURRENT_DATE) GROUP BY vendor_name"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "email_summary",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 633,
+      "output_tokens": 670,
+      "cached_tokens": 0,
+      "latency_ms": 4128,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "resource": "sam_licenses",
+              "action": "read",
+              "context": "license_reconciliation"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "mongo.aggregate",
+            "arguments": {
+              "collection": "sam_licenses",
+              "pipeline": [
+                {
+                  "$match": {
+                    "publisher": "Microsoft"
+                  }
+                },
+                {
+                  "$group": {
+                    "_id": "$product",
+                    "count": {
+                      "$sum": 1
+                    },
+                    "total_contract_value": {
+                      "$sum": "$contract_value_usd"
+                    },
+                    "total_seats": {
+                      "$sum": "$seat_count"
+                    }
+                  }
+                },
+                {
+                  "$sort": {
+                    "count": -1
+                  }
+                }
+              ]
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "sql.snowflake.query",
+            "arguments": {
+              "query": "SELECT vendor_name, SUM(amount_usd) as total_spend FROM invoice_facts WHERE vendor_name = 'Microsoft' AND invoice_date >= CURRENT_DATE - INTERVAL '1 month' AND invoice_date < DATE_TRUNC('month', CURRENT_DATE) GROUP BY vendor_name"
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "license_spend_reconciliation",
+              "resource": "sam_licenses,invoice_facts",
+              "details": "Reconciled Microsoft license counts from MongoDB and spend data from Snowflake",
+              "status": "completed"
+            },
+            "depends_on": [
+              2,
+              3
+            ]
+          },
+          {
+            "tool": "email.send",
+            "arguments": {
+              "to": "sam-team@company.com",
+              "subject": "Microsoft License & Spend Reconciliation Report",
+              "body": "SAM Team,\n\nMonthly Microsoft License & Spend Summary:\n\nLicense Inventory by Product:\n$2.results\n\nLast Month Spend Summary:\nVendor: $3.results[0].vendor_name\nTotal Spend (USD): $3.results[0].total_spend\n\nPlease review the attached reconciliation for any discrepancies.\n\nBest regards,\nSAM Automation"
+            },
+            "depends_on": [
+              2,
+              3,
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.006964000000000001,
+  "total_latency_ms": 6637,
+  "cumulative_spend_usd": 3.825875000000005,
+  "evaluator_reason": "missing_tools: {'mongo.find'}"
+}

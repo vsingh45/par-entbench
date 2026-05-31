@@ -1,0 +1,109 @@
+{
+  "task_id": "XR-006",
+  "task_class": "cross_recon",
+  "router": "all_small",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_query_slack_contracts",
+        "description": "Query SAM MongoDB to retrieve Slack contract records with renewal dates, license counts, contract terms, and renewal status.",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_slack_consumption",
+        "description": "Query consumption data warehouse to extract Slack usage trends over time (active users, usage frequency, seat utilization) aligned with contract periods.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal_trajectory",
+        "description": "Reconcile SAM contract renewals with consumption trends. Compare license commitments to actual usage patterns, identify utilization gaps/overages, classify renewal posture (at-risk, healthy, over-provisioned), and generate renewal recommendations with trajectory analysis.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "mongo_query_slack_contracts",
+          "sql_slack_consumption"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks are required: (1) mongo_query to fetch Slack contract renewal data from SAM, (2) sql_gen to extract consumption metrics from the data warehouse aligned to contract periods, (3) cross_recon to reconcile both sources and generate renewal trajectory analysis with posture classification. The cross_recon is frontier tier because it must synthesize dual data streams, perform multi-signal analysis (commitment vs. usage), classify renewal risk, and generate trajectory recommendations—requiring inference across contract cycles and consumption patterns. Both data retrieval tasks are mid tier due to aggregation and time-series filtering needs."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_query_slack_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1212,
+      "output_tokens": 168,
+      "cached_tokens": 0,
+      "latency_ms": 1157,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Slack"
+            }
+          },
+          {
+            "$project": {
+              "license_id": 1,
+              "publisher": 1,
+              "product": 1,
+              "contract_value_usd": 1,
+              "seat_count": 1,
+              "cost_per_seat_usd": 1,
+              "term_start": 1,
+              "term_end": 1,
+              "renewal_terms": 1,
+              "status": 1,
+              "assigned_team": 1,
+              "criticality_tier": 1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_slack_consumption",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 462,
+      "output_tokens": 177,
+      "cached_tokens": 0,
+      "latency_ms": 2010,
+      "output": {
+        "sql": "SELECT cf.event_date, cf.publisher, cf.product, COUNT(DISTINCT cf.user_id) AS active_users, COUNT(cf.event_id) AS usage_frequency, AVG(cf.daily_active_seats) AS avg_seat_utilization, cf.fiscal_year, cf.fiscal_quarter, cf.license_id FROM consumption_facts cf WHERE cf.publisher = 'Slack' AND cf.event_date >= '2024-01-01' GROUP BY cf.event_date, cf.publisher, cf.product, cf.fiscal_year, cf.fiscal_quarter, cf.license_id ORDER BY cf.event_date ASC, cf.license_id ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal_trajectory",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 593,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 5947,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"slack_contract_renewal_analysis\",\n      \"mongo_value\": {\n        \"source\": \"sam_licenses\",\n        \"collection_status\": \"awaiting_data\",\n        \"expected_fields\": [\n          \"license_id\",\n          \"publisher\",\n          \"product\",\n          \"contract_value_usd\",\n          \"seat_count\",\n          \"cost_per_seat_usd\",\n          \"term_start\",\n          \"term_end\",\n          \"renewal_terms\",\n          \"status\",\n          \"assigned_team\",\n          \"criticality_tier\"\n        ]\n      },\n      \"sql_value\": {\n        \"source\": \"consumption_facts\",\n        \"collection_status\": \"awaiting_data\",\n        \"expected_metrics\": [\n          \"active_users\",\n          \"usage_frequency\",\n          \"avg_seat_utilization\",\n          \"fiscal_period\"\n        ],\n        \"date_range\": \"2024-01-01 onwards\"\n      },\n      \"classification\": \"data_pending\",\n      \"reconciliation_note\": \"Awaiting actual query results from both MongoDB and SQL sources to perform LEFT JOIN reconciliation with MongoDB as primary source\"\n    },\n    {\n      \"entity_key\": \"renewal_posture_framework\",\n      \"mongo_value\": null,\n      \"sql_value\": null,\n      \"classification\": \"framework_definition\",\n      \"analysis_template\": {\n        \"healthy\": {\n          \"criteria\": \"seat_utilization >= 75% AND utilization_trend = stable_or_growing AND contract_alignment = true\",\n          \"action\": \"standard_renewal\"\n        },\n        \"at_risk\": {\n          \"criteria\": \"seat_utilization < 50% OR contract_value_trend = negative OR renewal_terms = unfavorable\",\n          \"action\": \"renegotiate_or_reduce\"\n        },\n        \"over_provisioned\": {\n          \"criteria\": \"seat_utilization < 60% AND seat_count > active_users * 1.5\",\n          \"action\": \"rightsize_and_reduce_commitment\"\n        },\n        \"no_recent_activity\": {\n          \"criteria\": \"avg_seat_utilization = 0 OR active_users = 0 in recent_period\",\n          \"action\": \"discontinue_or_suspend\"\n        },\n        \"growing\": {\n          \"criteria\": \"utilization_trend = increasing AND active_users_trend = upward AND forecast_utilization >= 80%\",\n          \"action\": \"expand_commitment\"\n        }\n      },\n      \"trajectory_analysis_dimensions\": [\n        \"utilization_rate_trend\",\n        \"active_user_count_trend\",\n        \"cost_per_seat_trend\",\n        \"renewal_term_momentum\",\n        \"criticality_tier_alignment\"\n      ]\n    }\n  ],\n  \"metadata\": {\n    \"reconciliation_type\": \"LEFT_JOIN\",\n    \"primary_source\": \"mongodb_sam_licenses\",\n    \"secondary_source\": \"sql_consumption_facts\",\n    \"join_key\": \"license_id\",\n    \"status\": \"ready_for_data_population\",\n    \"expected_output_enrichment\": \"Each SAM contract will be matched with consumption metrics; missing SQL values will be nullified; classifications"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007991999999999999,
+  "total_latency_ms": 9114,
+  "cumulative_spend_usd": 3.6558950000000014
+}

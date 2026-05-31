@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-002",
+  "task_class": "sql_compose",
+  "router": "par_lite",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_identify_customers",
+        "description": "Query TPC-H to identify top 10 customers by lifetime value in 'BUILDING' market segment, including customer ID, name, total revenue, order count, and order date range for narrative context.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_narratives",
+        "description": "For each of the 10 identified customers, reconcile their order patterns (order frequency, revenue trends, product mix) with customer attributes to generate personalized retention narratives highlighting their value trajectory and engagement patterns.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_identify_customers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid-tier) to query TPC-H warehouse for top 10 BUILDING segment customers with lifetime value and order metadata\u2014multi-table join across CUSTOMER, ORDERS, LINEITEM with aggregation and filtering; (2) cross_recon (mid-tier) to synthesize order patterns from SQL output into personalized narratives per customer. Cross_recon handles narrative generation as part of reconciliation/synthesis. No separate extract, policy_action, or multitool_plan needed\u2014this is a straightforward value analysis and narrative generation workflow. Mid-tier sufficient for both: SQL is moderately complex (aggregations, filters) but standard; cross_recon needs to reason about patterns and generate text but does not require multi-signal complex inference."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_identify_customers",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 496,
+      "output_tokens": 174,
+      "cached_tokens": 0,
+      "latency_ms": 2846,
+      "output": {
+        "sql": "SELECT c.c_custkey, c.c_name, SUM(l.l_extendedprice * (1 - l.l_discount)) AS total_revenue, COUNT(DISTINCT o.o_orderkey) AS order_count, MIN(o.o_orderdate) AS first_order_date, MAX(o.o_orderdate) AS last_order_date FROM customer c JOIN orders o ON c.c_custkey = o.o_custkey JOIN lineitem l ON o.o_orderkey = l.l_orderkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name ORDER BY total_revenue DESC LIMIT 10"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_narratives",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 470,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10823,
+      "output": {
+        "raw_output": "I need to reconcile the SQL results with MongoDB data. Since no MongoDB operational data was provided, I'll apply LEFT JOIN semantics with MongoDB as primary source \u2014 but here the SQL is the identifying source and MongoDB is absent. I'll treat SQL as the primary entity source and mark MongoDB values as null, classifying based purely on SQL signals.\n\n```json\n{\"reconciled\": [{\"entity_key\": \"c_custkey_TOP1\", \"mongo_value\": null, \"sql_value\": {\"c_custkey\": null, \"c_name\": \"Customer#TOP1\", \"total_revenue\": null, \"order_count\": null, \"first_order_date\": null, \"last_order_date\": null, \"narrative\": \"No MongoDB operational state available. SQL historical record indicates this customer ranks #1 in lifetime value within the BUILDING segment. Without real query execution results, exact revenue and order count cannot be confirmed. Recommend re-running pipeline with live data before acting on retention strategy.\"}, \"classification\": \"no_recent_activity\"}, {\"entity_key\": \"c_custkey_TOP2\", \"mongo_value\": null, \"sql_value\": {\"c_custkey\": null, \"c_name\": \"Customer#TOP2\", \"total_revenue\": null, \"order_count\": null, \"first_order_date\": null, \"last_order_date\": null, \"narrative\": \"No MongoDB operational state available. SQL historical record indicates this customer ranks #2 in lifetime value within the BUILDING segment. Missing MongoDB engagement data prevents full retention narrative generation.\"}, \"classification\": \"no_recent_activity\"}, {\"entity_key\": \"c_custkey_TOP3\", \"mongo_value\": null, \"sql_value\": {\"c_custkey\": null, \"c_name\": \"Customer#TOP3\", \"total_revenue\": null, \"order_count\": null, \"first_order_date\": null, \"last_order_date\": null, \"narrative\": \"No MongoDB operational state available. SQL historical record indicates this customer ranks #3 in lifetime value within the BUILDING segment. Retention narrative generation requires live query execution results.\"}, \"classification\": \"no_recent_activity\"}, {\"entity_key\": \"c_custkey_TOP4\", \"mongo_value\": null, \"sql_value\": {\"c_custkey\": null, \"c_name\": \"Customer#TOP4\", \"total_revenue\": null, \"order_count\": null, \"first_order_date\": null, \"last_order_date\": null, \"narrative\": \"No MongoDB operational state available. SQL historical record indicates this customer ranks #4 in lifetime value within the BUILDING segment. Retention narrative generation requires live query execution results.\"}, \"classification\": \"no_recent_activity\"}, {\"entity_key\": \"c_custkey_TOP5\", \"mongo_value\": null, \"sql_value\": {\"c_custkey\": null, \"c_name\": \"Customer#TOP5\", \"total_revenue\": null, \"order_count\": null, \"first_order_date\": null, \"last_order_date\": null, \"narrative\": \"No MongoDB operational state available. SQL historical record indicates this customer ranks #5 in lifetime value within the BUILDING segment. Retention narrative generation requires live query execution results.\"}, \"classification\": \"no_recent_activity\"}, {\"entity_key\": \"c_custkey_TOP6\", \"mongo_value\": null, \"sql_value\": {\"c_custkey\": null, \"c_name\": \"Customer#TOP6\", \"total_revenue\": null, \"order_count\": null, \"first"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.017508,
+  "total_latency_ms": 13669,
+  "cumulative_spend_usd": 0.9998669999999998,
+  "evaluator_reason": "step2_consumer_narrative_check_failed"
+}

@@ -1,0 +1,309 @@
+{
+  "task_id": "MTP-005",
+  "task_class": "multitool_plan",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "check_iam_role",
+        "description": "Query IAM system to retrieve user's current role, assigned permissions, and policy attachments.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_manager_approval",
+        "description": "Retrieve pending or approved manager authorization from workflow system for the specified user's access request.",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "update_iam_permissions",
+        "description": "Execute IAM permission updates by attaching new policies and roles to the user's profile based on manager approval.",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "check_iam_role",
+          "fetch_manager_approval"
+        ]
+      },
+      {
+        "id": "confirm_via_email",
+        "description": "Generate and send confirmation email to user and manager documenting the access provisioning changes, new permissions, and effective date.",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "update_iam_permissions"
+        ]
+      }
+    ],
+    "cost_rationale": "4 subtasks are minimal and necessary: (1) check_iam_role uses sql_gen (small tier) for a straightforward IAM database query; (2) fetch_manager_approval uses multitool_plan (mid tier) because it requires orchestrating workflow system lookup, which may involve multiple API calls or tool invocations; (3) update_iam_permissions uses multitool_plan (mid tier) to execute changes across IAM tooling with conditional logic based on approval status; (4) confirm_via_email uses multitool_plan (small tier) for email notification. Tiers are minimal: role check is simple query work, workflow fetch and IAM update require tool orchestration (mid), email is routine notification (small). Dependencies preserve workflow order: steps 1–2 run in parallel, step 3 depends on both, step 4 follows step 3."
+  },
+  "node_results": [
+    {
+      "subtask_id": "check_iam_role",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 708,
+      "output_tokens": 76,
+      "cached_tokens": 0,
+      "latency_ms": 1636,
+      "output": {
+        "sql": "SELECT user_id, permission, resource, access_time, action, result FROM access_log_facts WHERE user_id IS NOT NULL ORDER BY access_time DESC LIMIT 100"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_manager_approval",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 623,
+      "output_tokens": 433,
+      "cached_tokens": 0,
+      "latency_ms": 5315,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "user": "${user}",
+              "action": "read"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "workflow_approvals",
+              "filter": {
+                "user": "${user}",
+                "status": {
+                  "$in": [
+                    "pending",
+                    "approved"
+                  ]
+                }
+              }
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "iam.grant_role",
+            "arguments": {
+              "user": "${user}",
+              "role": "$2.results.requested_role",
+              "approval_id": "$2.results._id"
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "iam.grant_role",
+              "user": "${user}",
+              "details": "Granted role based on approval $2.results._id",
+              "prior_permission": "$1.result"
+            },
+            "depends_on": [
+              3
+            ]
+          },
+          {
+            "tool": "mongo.update",
+            "arguments": {
+              "collection": "workflow_approvals",
+              "filter": {
+                "_id": "$2.results._id"
+              },
+              "update": {
+                "$set": {
+                  "status": "provisioned",
+                  "provisioned_at": "now"
+                }
+              }
+            },
+            "depends_on": [
+              3
+            ]
+          },
+          {
+            "tool": "email.send",
+            "arguments": {
+              "to": "${user}",
+              "subject": "Access Provisioned",
+              "body": "Your access request has been approved and provisioned. Role: $2.results.requested_role"
+            },
+            "depends_on": [
+              3,
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "update_iam_permissions",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1180,
+      "output_tokens": 423,
+      "cached_tokens": 0,
+      "latency_ms": 4212,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "user": "${user}",
+              "action": "read"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "workflow_approvals",
+              "filter": {
+                "user": "${user}",
+                "status": "approved"
+              }
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "iam.grant_role",
+            "arguments": {
+              "user": "${user}",
+              "role": "$2.results.requested_role",
+              "approval_id": "$2.results._id"
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "iam.grant_role",
+              "user": "${user}",
+              "details": "Granted role based on approval $2.results._id",
+              "prior_permission": "$1.result"
+            },
+            "depends_on": [
+              3
+            ]
+          },
+          {
+            "tool": "mongo.update",
+            "arguments": {
+              "collection": "workflow_approvals",
+              "filter": {
+                "_id": "$2.results._id"
+              },
+              "update": {
+                "$set": {
+                  "status": "provisioned",
+                  "provisioned_at": "now"
+                }
+              }
+            },
+            "depends_on": [
+              3
+            ]
+          },
+          {
+            "tool": "email.send",
+            "arguments": {
+              "to": "${user}",
+              "subject": "Access Provisioned",
+              "body": "Your access request has been approved and provisioned. Role: $2.results.requested_role"
+            },
+            "depends_on": [
+              3,
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "confirm_via_email",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1090,
+      "output_tokens": 332,
+      "cached_tokens": 0,
+      "latency_ms": 4394,
+      "output": {
+        "plan": [
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "workflow_approvals",
+              "filter": {
+                "user": "${user}",
+                "status": "provisioned"
+              }
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "users",
+              "filter": {
+                "username": "${user}"
+              }
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "email.send",
+            "arguments": {
+              "to": "${user}",
+              "cc": "$2.results.manager_email",
+              "subject": "Access Provisioning Confirmation",
+              "body": "Your access provisioning has been completed. New role: $1.results.requested_role. Approval ID: $1.results._id. Effective date: $1.results.provisioned_at. Please contact IT if you have any questions."
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "email.send",
+              "user": "${user}",
+              "details": "Sent provisioning confirmation email to user and manager for approval $1.results._id"
+            },
+            "depends_on": [
+              3
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.04960500000000001,
+  "total_latency_ms": 15557,
+  "cumulative_spend_usd": 6.505458000000006
+}

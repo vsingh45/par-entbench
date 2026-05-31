@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_fetch_declining_publishers",
+        "description": "Query SQL to identify publishers with declining quarterly revenue/usage trends in 2024 (Q1 > Q2 > Q3 > Q4 or similar declining pattern). Return publisher ID, name, and quarterly metrics.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal_recommend",
+        "description": "For each declining publisher from the SQL results, perform cross-reconciliation of current contract state (MongoDB) with historical trend data, then generate renewal recommendations (hold/expand/reduce) based on financial decline, contract terms, and risk signals.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_fetch_declining_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks with minimal overhead: (1) sql_gen (mid-tier) to fetch declining publishers because the quarterly trend detection requires multi-column aggregation and date logic across 2024 data; (2) cross_recon (mid-tier) to reconcile contract state (MongoDB) with the SQL trend data and generate recommendations, since recommendation logic involves multiple signals (trend, contract terms, risk) from two sources. No separate policy_action needed because renewal recommendation is a core output of cross_recon reconciliation, not a separate compliance evaluation. Total subtasks = 2 (the minimum needed)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_fetch_declining_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 487,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 4483,
+      "output": {
+        "raw_output": "{\n  \"sql\": \"WITH quarterly_revenue AS (SELECT publisher, CASE WHEN event_date >= '2024-01-01' AND event_date < '2024-04-01' THEN 1 WHEN event_date >= '2024-04-01' AND event_date < '2024-07-01' THEN 2 WHEN event_date >= '2024-07-01' AND event_date < '2024-10-01' THEN 3 WHEN event_date >= '2024-10-01' AND event_date < '2025-01-01' THEN 4 END AS quarter, SUM(amount_usd) AS quarterly_revenue, SUM(daily_active_seats) AS quarterly_seats FROM consumption_facts WHERE event_date >= '2024-01-01' AND event_date < '2025-01-01' GROUP BY publisher, quarter), pivot_quarters AS (SELECT publisher, MAX(CASE WHEN quarter = 1 THEN quarterly_revenue END) AS q1_revenue, MAX(CASE WHEN quarter = 2 THEN quarterly_revenue END) AS q2_revenue, MAX(CASE WHEN quarter = 3 THEN quarterly_revenue END) AS q3_revenue, MAX(CASE WHEN quarter = 4 THEN quarterly_revenue END) AS q4_revenue, MAX(CASE WHEN quarter = 1 THEN quarterly_seats END) AS q1_seats, MAX(CASE WHEN quarter = 2 THEN quarterly_seats END) AS q2_seats, MAX(CASE WHEN quarter = 3 THEN quarterly_seats END) AS q3_seats, MAX(CASE WHEN quarter = 4 THEN quarterly_seats END) AS q4_seats FROM quarterly_revenue GROUP BY publisher) SELECT publisher, COALESCE(q1_revenue, 0) AS q1_revenue_usd, COALESCE(q2_revenue, 0) AS q2_revenue_usd, COALESCE(q3_revenue, 0) AS q3_revenue_usd, COALESCE(q4_revenue, 0) AS q4_revenue_usd, COALESCE(q1_seats, 0) AS q1_seats, COALESCE(q2_seats, 0) AS q2_seats, COALESCE(q3_seats, 0) AS q3_seats, COALESCE(q4_seats, 0) AS q4_seats, CASE WHEN COALESCE(q1_revenue, 0) > COALESCE(q2_revenue, 0) AND COALESCE(q2_revenue, 0) > COALESCE(q3_revenue, 0) AND COALESCE(q3_revenue, 0) > COALESCE(q4_revenue, 0) THEN 'REDUCE' WHEN COALESCE(q1_revenue, 0) > COALESCE(q2_revenue, 0) AND COALESCE(q2_revenue, 0) > COALESCE(q3_revenue, 0) THEN 'REDUCE' WHEN COALESCE(q2_revenue, 0) > COALESCE(q3_revenue, 0) AND COALESCE(q3_revenue, 0) > COALESCE(q4_revenue"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal_recommend",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1608,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 978,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.012877,
+  "total_latency_ms": 5461,
+  "cumulative_spend_usd": 1.2064359999999996,
+  "evaluator_reason": "step1_sql_fail: no_sql_in_output"
+}

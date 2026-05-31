@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-001",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top_publishers",
+        "description": "Generate SQL query to fetch top 5 publishers by spend in Q4 2024, including total spend, transaction count, and year-over-year trend metrics to enable risk assessment",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_risk_assessment",
+        "description": "Reconcile Q4 2024 spend data with historical trends and SLA/contract status to identify at-risk publishers based on volatility, concentration, compliance flags, and contract renewal dates. Classify each publisher by risk posture and generate summary recommendations for SAM team",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_top_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid tier) to produce a multi-table Q4 spend query with YoY comparison and trend metrics \u2014 mid tier justified by the need to aggregate spending data with temporal comparison logic; (2) cross_recon (mid tier) to reconcile the SQL results with contract/SLA metadata and historical patterns, classify risk posture (concentration, volatility, renewal exposure), and generate executive summary. cross_recon includes the classification and recommendation synthesis \u2014 no separate policy_action is needed since the query does not ask for governance/compliance evaluation, only business risk assessment. Total: 2 subtasks (minimal necessary). Tier assignment: mid for both because the spend query requires multi-table joins and the reconciliation requires multi-signal reasoning (spend trends + contract data + risk factors) but neither requires frontier-level complexity like CTEs with window functions or complex inference."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 493,
+      "output_tokens": 683,
+      "cached_tokens": 0,
+      "latency_ms": 8227,
+      "output": {
+        "sql": "SELECT\n    publisher,\n    SUM(CASE WHEN event_date >= '2024-10-01' AND event_date <= '2024-12-31' THEN amount_usd ELSE 0 END) AS q4_2024_spend,\n    COUNT(CASE WHEN event_date >= '2024-10-01' AND event_date <= '2024-12-31' THEN event_id END) AS q4_2024_transaction_count,\n    SUM(CASE WHEN event_date >= '2023-10-01' AND event_date <= '2023-12-31' THEN amount_usd ELSE 0 END) AS q4_2023_spend,\n    COUNT(CASE WHEN event_date >= '2023-10-01' AND event_date <= '2023-12-31' THEN event_id END) AS q4_2023_transaction_count,\n    ROUND(\n        CASE\n            WHEN SUM(CASE WHEN event_date >= '2023-10-01' AND event_date <= '2023-12-31' THEN amount_usd ELSE 0 END) = 0 THEN NULL\n            ELSE (\n                SUM(CASE WHEN event_date >= '2024-10-01' AND event_date <= '2024-12-31' THEN amount_usd ELSE 0 END)\n                - SUM(CASE WHEN event_date >= '2023-10-01' AND event_date <= '2023-12-31' THEN amount_usd ELSE 0 END)\n            ) * 100.0\n            / NULLIF(SUM(CASE WHEN event_date >= '2023-10-01' AND event_date <= '2023-12-31' THEN amount_usd ELSE 0 END), 0)\n        END,\n    2) AS yoy_spend_change_pct,\n    AVG(CASE WHEN event_date >= '2024-10-01' AND event_date <= '2024-12-31' THEN daily_active_seats END) AS avg_daily_active_seats_q4_2024,\n    COUNT(DISTINCT CASE WHEN event_date >= '2024-10-01' AND event_date <= '2024-12-31' THEN user_id END) AS distinct_users_q4_2024\nFROM\n    consumption_facts\nWHERE\n    event_date >= '2023-10-01'\n    AND event_date <= '2024-12-31'\nGROUP BY\n    publisher\nORDER BY\n    q4_2024_spend DESC\nLIMIT 5"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_risk_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 991,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 11780,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"publisher_1\",\n      \"mongo_value\": {\n        \"publisher\": \"publisher_1\",\n        \"contract_status\": \"active\",\n        \"sla_compliance_flag\": false,\n        \"contract_renewal_date\": \"2025-01-31\",\n        \"concentration_pct\": 34.2,\n        \"volatility_score\": 8.7,\n        \"compliance_incidents_q4\": 3,\n        \"account_manager\": \"J. Torres\"\n      },\n      \"sql_value\": {\n        \"q4_2024_spend\": 4120000,\n        \"q4_2024_transaction_count\": 1842,\n        \"q4_2023_spend\": 2980000,\n        \"q4_2023_transaction_count\": 1310,\n        \"yoy_spend_change_pct\": 38.26,\n        \"avg_daily_active_seats_q4_2024\": 412.3,\n        \"distinct_users_q4_2024\": 5890\n      },\n      \"classification\": \"at_risk\",\n      \"risk_signals\": {\n        \"sla_breach\": true,\n        \"renewal_imminent_days\": 29,\n        \"high_concentration\": true,\n        \"high_volatility\": true,\n        \"compliance_incidents\": 3\n      },\n      \"sam_recommendation\": \"URGENT: Contract renewal due 2025-01-31 with active SLA breach and 3 compliance incidents in Q4. Publisher represents 34.2% spend concentration \u2014 single-vendor dependency risk is critical. Despite +38.26% YoY spend growth, risk posture is deteriorating. SAM team should escalate to executive sponsor, schedule emergency QBR before renewal date, and prepare contingency sourcing plan. Do not auto-renew without remediation commitments on SLA and compliance items.\"\n    },\n    {\n      \"entity_key\": \"publisher_2\",\n      \"mongo_value\": {\n        \"publisher\": \"publisher_2\",\n        \"contract_status\": \"active\",\n        \"sla_compliance_flag\": true,\n        \"contract_renewal_date\": \"2025-06-30\",\n        \"concentration_pct\": 22.1,\n        \"volatility_score\": 3.2,\n        \"compliance_incidents_q4\": 0,\n        \"account_manager\": \"M. Patel\"\n      },\n      \"sql_value\": {\n        \"q4_2024_spend\": 2870000,\n        \"q4_2024_transaction_count\": 2210,\n        \"q4_2023_spend\": 2650000,\n        \"q4_2023_transaction_count\": 2088,\n        \"yoy_spend_change_pct\": 8.3,\n        \"avg_daily_active_seats_q4_2024\": 388.7,\n        \"distinct_users_q4_2024\": 4210\n      },\n      \"classification\": \"stable\",\n      \"risk_signals\": {\n        \"sla_breach\": false,\n        \"renewal_imminent_days\": 181,\n        \"high_concentration\": false,\n        \"high_volatility\": false,\n        \"compliance_incidents\": 0\n      },\n      \"sam_"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.026697,
+  "total_latency_ms": 20007,
+  "cumulative_spend_usd": 0.39181799999999994,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

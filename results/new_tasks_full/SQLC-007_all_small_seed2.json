@@ -1,0 +1,63 @@
+{
+  "task_id": "SQLC-007",
+  "task_class": "sql_compose",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "spend_product_query",
+        "description": "Query SQL data warehouse to retrieve top spending publishers ranked by total spend, including detailed breakdown of product mix (product categories, volume, and spend per product) for each publisher",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_leverage_assessment",
+        "description": "Cross-reference publisher spending patterns with contract terms, renewal history, and market concentration data to assess negotiation leverage for each top publisher (e.g., market share concentration, spend volatility, switching costs, alternative suppliers, contract expiration proximity). Produce leverage score and negotiation recommendations.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "spend_product_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid tier) to query spend and product mix in a single multi-table join with aggregation—this is one coherent data pull, not multiple queries; (2) cross_recon (frontier tier) to assess leverage by reconciling spend data with contract metadata, renewal patterns, and market signals. Cross_recon is needed because leverage assessment requires synthesizing multiple dimensions (concentration, volatility, switching costs, alternatives, expiration dates) and producing classification/recommendations. Frontier tier is justified because it must infer leverage from multi-signal patterns and handle exceptions in contract terms. No policy_action is added because the query asks for assessment and recommendations, not compliance or governance approval. No multitool_plan because leverage assessment is analytical, not tool orchestration."
+  },
+  "node_results": [
+    {
+      "subtask_id": "spend_product_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 465,
+      "output_tokens": 165,
+      "cached_tokens": 0,
+      "latency_ms": 1840,
+      "output": {
+        "sql": "SELECT publisher, SUM(amount_usd) as total_spend, COUNT(DISTINCT event_id) as total_events, COUNT(DISTINCT product) as product_count, JSON_AGG(JSON_BUILD_OBJECT('product', product, 'volume', product_volume, 'spend', product_spend) ORDER BY product_spend DESC) as product_mix FROM (SELECT publisher, product, SUM(amount_usd) as product_spend, COUNT(event_id) as product_volume FROM consumption_facts WHERE event_date >= '2024-01-01' GROUP BY publisher, product) subquery GROUP BY publisher ORDER BY total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_leverage_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 445,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 5962,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"publisher_leverage_assessment\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"query_status\": \"executable\",\n        \"data_structure\": \"aggregated_spend_metrics\",\n        \"fields\": [\"publisher\", \"total_spend\", \"total_events\", \"product_count\", \"product_mix\"]\n      },\n      \"classification\": \"requires_enrichment\",\n      \"note\": \"SQL query provides foundation metrics; MongoDB operational state not provided for reconciliation\"\n    },\n    {\n      \"entity_key\": \"leverage_scoring_gap\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"available_metrics\": [\"spend_volume\", \"event_frequency\", \"product_diversification\"],\n        \"missing_metrics\": [\"market_share_concentration\", \"spend_volatility\", \"switching_costs\", \"alternative_suppliers\", \"contract_expiration_proximity\", \"renewal_history\"]\n      },\n      \"classification\": \"data_incomplete\",\n      \"recommendation\": \"Require additional data sources: (1) market_share_data for concentration calc, (2) spend_variance_table for volatility, (3) contract_terms_table for expiration dates, (4) supplier_alternatives_table, (5) renewal_history_table\"\n    },\n    {\n      \"entity_key\": \"negotiation_leverage_calculation\",\n      \"mongo_value\": null,\n      \"sql_value\": null,\n      \"classification\": \"blocked_insufficient_context\",\n      \"required_inputs\": [\n        \"contract_expiration_dates (contract_terms)\",\n        \"historical_renewal_outcomes (renewal_history)\",\n        \"market_concentration_index (competitive_landscape)\",\n        \"spend_volatility_coefficient (12-month variance)\",\n        \"switching_cost_estimates (transition_complexity)\",\n        \"alternative_supplier_count (market_alternatives)\"\n      ],\n      \"leverage_formula_skeleton\": \"leverage_score = (market_share_weight * concentration) + (volatility_weight * (1 - spend_volatility)) + (contract_weight * expiration_proximity) + (switching_weight * switching_costs) - (alternatives_weight * alternative_count) + (renewal_weight * renewal_risk)\"\n    },\n    {\n      \"entity_key\": \"recommended_enrichment_queries\",\n      \"mongo_value\": null,\n      \"sql_value\": [\n        {\n          \"priority\": 1,\n          \"query_type\": \"contract_terms\",\n          \"purpose\": \"Extract expiration dates and renewal terms for each publisher\",\n          \"sample_logic\": \"SELECT publisher, contract_id, renewal_date, contract_value, renewal_probability FROM contracts WHERE active=true\"\n        },\n        {\n          \"priority\": 2,\n          \"query_type\": \"market_concentration\",\n          \"purpose\": \"Calculate Herfindahl index and market share percentages\",\n          \"sample_logic\": \"SELECT publisher, total_spend / SUM(total_spend) OVER() as market_share FROM publisher_spend GROUP BY publisher\"\n        },\n        {\n          \"priority\": 3,\n          \"query_type\": \"spend_volatility\",\n          \"purpose\": \"Calculate coefficient of variation across 12-month periods\",\n          \"sample_logic\": \"SELECT publisher, STDDEV(monthly_spend) / AVG(monthly"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0057350000000000005,
+  "total_latency_ms": 7802,
+  "cumulative_spend_usd": 1.2726950000000004
+}

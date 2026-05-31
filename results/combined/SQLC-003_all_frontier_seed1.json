@@ -1,0 +1,71 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "all_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_publishers_2024",
+        "description": "Query SQL warehouse to identify publishers with declining quarterly trends in 2024. Return publisher IDs, names, and Q1-Q4 2024 metrics (spend, volume, or performance indicator) showing quarter-over-quarter decline.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "generate_renewal_recommendations",
+        "description": "Reconcile publisher performance data with contract state and renewal history. For each declining publisher, classify renewal posture (hold, expand, reduce) based on trend severity, contract value, and strategic importance. Return recommendation rationale for each publisher.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "fetch_publishers_2024"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) SQL query to extract publishers with declining 2024 trends across quarters\u2014mid tier due to quarter-over-quarter comparison logic and potential aggregation across multiple metrics; (2) cross_recon to reconcile the performance data with contract/renewal context and generate classification (hold/expand/reduce). This is a posture decision, not a policy evaluation, so cross_recon is appropriate. Both are mid tier: the SQL requires conditional aggregation across quarters but is single-table/warehouse; the cross_recon combines one data source (SQL output) with implicit contract context to make a classification decision, which is moderate complexity. Frontier not needed because no complex multi-CTE, no cross-collection joins, and classification logic is deterministic (trend severity + contract context)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_publishers_2024",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 758,
+      "output_tokens": 488,
+      "cached_tokens": 0,
+      "latency_ms": 5030,
+      "output": {
+        "sql": "WITH quarterly AS (SELECT publisher, fiscal_quarter, SUM(amount_usd) AS spend FROM consumption_facts WHERE event_date >= '2024-01-01' AND event_date <= '2024-12-31' AND fiscal_year = 2024 GROUP BY publisher, fiscal_quarter), pivoted AS (SELECT publisher, MAX(CASE WHEN fiscal_quarter = 1 THEN spend END) AS q1_spend, MAX(CASE WHEN fiscal_quarter = 2 THEN spend END) AS q2_spend, MAX(CASE WHEN fiscal_quarter = 3 THEN spend END) AS q3_spend, MAX(CASE WHEN fiscal_quarter = 4 THEN spend END) AS q4_spend FROM quarterly GROUP BY publisher) SELECT publisher AS publisher_id, publisher AS publisher_name, q1_spend, q2_spend, q3_spend, q4_spend FROM pivoted WHERE q1_spend IS NOT NULL AND q2_spend IS NOT NULL AND q3_spend IS NOT NULL AND q4_spend IS NOT NULL AND q2_spend < q1_spend AND q3_spend < q2_spend AND q4_spend < q3_spend ORDER BY (q1_spend - q4_spend) DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "generate_renewal_recommendations",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 955,
+      "output_tokens": 72,
+      "cached_tokens": 0,
+      "latency_ms": 1666,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "fetch_publishers_2024",
+            "mongo_value": null,
+            "sql_value": "declining_publishers_query_result",
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.022565,
+  "total_latency_ms": 6696,
+  "cumulative_spend_usd": 1.1044279999999997,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

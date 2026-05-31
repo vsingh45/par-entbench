@@ -1,0 +1,40 @@
+{
+  "task_id": "MGO-003",
+  "task_class": "mongo_gen",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_gen_adobe_inactive",
+        "description": "Generate SQL query to compute for each Adobe license the count of assigned seats inactive for >90 days, including seats with null activity dates. Join license and seat assignment tables, filter on inactivity threshold, and group by license.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single SQL query required to join license and seat assignment tables, apply date-based filtering for inactivity >90 days, and handle NULL activity dates in a single aggregation. Mid tier assigned because the query requires multi-table joins, conditional logic for NULL handling, and grouped aggregation\u2014more complex than a simple single-table query, but not requiring window functions or CTEs. One subtask is sufficient as all work is sourced from the same SQL warehouse and can be executed in a single call.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_gen_adobe_inactive",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 746,
+      "output_tokens": 190,
+      "cached_tokens": 0,
+      "latency_ms": 2661,
+      "output": {
+        "sql": "SELECT license_id, COUNT(DISTINCT user_id) AS inactive_seat_count FROM consumption_facts cf WHERE publisher = 'Adobe' AND user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM consumption_facts cf2 WHERE cf2.license_id = cf.license_id AND cf2.user_id = cf.user_id AND cf2.event_date >= CURRENT_DATE - INTERVAL '90 days') GROUP BY license_id"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.00848,
+  "total_latency_ms": 2661,
+  "cumulative_spend_usd": 1.5799990000000008,
+  "evaluator_reason": "no_pipeline_in_output"
+}

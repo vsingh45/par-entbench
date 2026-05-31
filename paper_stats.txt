@@ -1,0 +1,158 @@
+Loaded 1157 result records from results/combined/
+
+======================================================================
+SECTION 1: OVERALL PER-ROUTER (all 54 tasks)
+======================================================================
+router                   N  correct    acc%   cost_mean   cost_std
+all_frontier           162       40   24.7% $   0.0189 $  0.0158
+source_frontier        161       39   24.2% $   0.0150 $  0.0097
+par                    162       36   22.2% $   0.0114 $  0.0126
+sink_frontier          162       35   21.6% $   0.0125 $  0.0080
+frugal_cascade         162       34   21.0% $   0.0039 $  0.0034
+all_small              162       34   21.0% $   0.0042 $  0.0036
+par_lite               162       34   21.0% $   0.0115 $  0.0128
+par_no_rationale        24        0    0.0% $   0.0544 $  0.0154
+
+======================================================================
+SECTION 2: EXCLUDING SQL-COMPOSE
+======================================================================
+router                   N  correct    acc%   cost_mean
+all_frontier           138       40   29.0% $   0.0182
+source_frontier        137       39   28.5% $   0.0146
+par                    138       36   26.1% $   0.0101
+sink_frontier          138       35   25.4% $   0.0127
+frugal_cascade         138       34   24.6% $   0.0036
+all_small              138       34   24.6% $   0.0039
+par_lite               138       34   24.6% $   0.0105
+par_no_rationale        24        0    0.0% $   0.0544
+
+======================================================================
+SECTION 3: PER-CLASS x PER-ROUTER ACCURACY MATRIX
+======================================================================
+class            all_frontie   all_small frugal_casc         par    par_lite par_no_rati sink_fronti source_fron
+cross_recon            12.5%       12.5%       12.5%       12.5%       12.5%        0.0%        8.3%       12.5%
+extract                28.6%       23.8%       19.0%       28.6%       28.6%           —       28.6%       28.6%
+mongo_gen              37.5%       29.2%       25.0%       25.0%       25.0%           —       37.5%       39.1%
+multitool_plan         16.7%        4.2%       12.5%       12.5%        4.2%           —        4.2%        4.2%
+policy_action          28.6%       28.6%       28.6%       28.6%       28.6%           —       23.8%       28.6%
+sql_compose             0.0%        0.0%        0.0%        0.0%        0.0%           —        0.0%        0.0%
+sql_gen                50.0%       50.0%       50.0%       50.0%       50.0%           —       50.0%       58.3%
+
+======================================================================
+SECTION 4: PER-CLASS AGGREGATE (all routers)
+======================================================================
+class                N    acc%   cost_mean  best_router
+cross_recon        192   10.4% $   0.0239  all_frontier (12.5%)
+extract            147   26.5% $   0.0037  all_frontier (28.6%)
+mongo_gen          167   31.1% $   0.0055  source_frontier (39.1%)
+multitool_plan     168    8.3% $   0.0221  all_frontier (16.7%)
+policy_action      147   27.9% $   0.0061  all_frontier (28.6%)
+sql_compose        168    0.0% $   0.0141  all_frontier (0.0%)
+sql_gen            168   51.2% $   0.0047  source_frontier (58.3%)
+
+======================================================================
+SECTION 5: PER-SEED ACCURACY (for significance / variance)
+======================================================================
+router                   seed1     seed2     seed3      mean      std
+all_frontier             30.4%     28.3%     28.3%     29.0%    1.26
+all_small                26.1%     26.1%     21.7%     24.6%    2.51
+frugal_cascade           23.9%     28.3%     21.7%     24.6%    3.32
+par                      28.3%     26.1%     23.9%     26.1%    2.17
+par_lite                 23.9%     26.1%     23.9%     24.6%    1.26
+par_no_rationale          0.0%      0.0%      0.0%      0.0%    0.00
+sink_frontier            26.1%     23.9%     26.1%     25.4%    1.26
+source_frontier          28.3%     28.3%     28.9%     28.5%    0.36
+
+======================================================================
+SECTION 6: UTILITY U = A / C^alpha  (excl SQL-Compose)
+======================================================================
+
+alpha = 0.5:
+  frugal_cascade       U =        408.9
+  all_small            U =        393.4
+  par                  U =        259.2  <-- PaR
+  par_lite             U =        240.6
+  source_frontier      U =        235.8
+  sink_frontier        U =        224.8
+  all_frontier         U =        215.0
+
+alpha = 1.0:
+  frugal_cascade       U =       6787.5
+  all_small            U =       6281.1
+  par                  U =       2575.0  <-- PaR
+  par_lite             U =       2348.7
+  sink_frontier        U =       1991.8
+  source_frontier      U =       1953.6
+  all_frontier         U =       1595.4
+
+alpha = 1.5:
+  frugal_cascade       U =     112659.7
+  all_small            U =     100288.1
+  par                  U =      25583.8  <-- PaR
+  par_lite             U =      22931.6
+  sink_frontier        U =      17650.7
+  source_frontier      U =      16183.3
+  all_frontier         U =      11836.3
+
+alpha = 2.0:
+  frugal_cascade       U =    1869927.3
+  all_small            U =    1601274.9
+  par                  U =     254182.8  <-- PaR
+  par_lite             U =     223895.8
+  sink_frontier        U =     156418.1
+  source_frontier      U =     134063.1
+  all_frontier         U =      87813.5
+
+======================================================================
+SECTION 7: PaR TIER-ASSIGNMENT DISTRIBUTION
+======================================================================
+Tier assignment frequency across all PaR subtasks:
+  small        132 (45.4%)
+  mid          135 (46.4%)
+  frontier      24 (8.2%)
+Avg subtasks per PaR plan: 1.80
+
+======================================================================
+SECTION 8: FAILURE MODE FREQUENCY
+======================================================================
+    108  no_mongo_node
+     94  step1_sql_fail: result_bag_mismatch
+     81  result_bag_mismatch
+     73  no_plan_in_output
+     65  selected_action_mismatch
+     62  doc_bag_mismatch
+     53  no_pipeline_in_output
+     41  policy_compliance_mismatch
+     28  stage1_mongo_fail: doc_bag_mismatch
+     23  stage2_sql_fail: result_bag_mismatch
+     23  step1_sql_fail: generated_sql_execution_error
+     21  f1=0.364_below_0.85
+     21  step2_consumer_narrative_check_failed
+     20  f1=0.600_below_0.85
+     20  f1=0.870_below_0.9
+
+======================================================================
+SECTION 9: WORKED CASE STUDY CANDIDATES (PaR on XR tasks)
+======================================================================
+
+Task XR-002 (seed 2): correct=True, cost=$0.0157
+  cost_rationale: Three subtasks required: (1) mongo_query to fetch active contracts from MongoDB document store—small tier suffices for straightforward contract retrieval; (2) sql_gen to aggregate 2024 invoices by con
+    [mongo_contracts] mongo_query -> small
+    [sql_invoices] sql_gen -> small
+    [reconcile_variance] cross_recon -> mid
+
+Task XR-003 (seed 3): correct=False, cost=$0.0220
+  cost_rationale: Three subtasks required: (1) extract to pull granted IAM role permissions from the policy store; (2) sql_gen (mid tier) to query the audit log warehouse for actual permission exercises over 180 days w
+    [iam_roles_extract] extract -> small
+    [iam_exercised_query] sql_gen -> mid
+    [permission_reconciliation] cross_recon -> frontier
+
+Task XR-005 (seed 2): correct=False, cost=$0.0190
+  cost_rationale: Three subtasks cover the minimum required scope: (1) licensed seat inventory is a straightforward single-domain SQL query (small tier), (2) actual assignment audit is a single MongoDB query (small tie
+    [sql_licensed_seats] sql_gen -> small
+    [mongo_actual_assignments] mongo_query -> small
+    [cross_recon_utilization] cross_recon -> mid
+
+======================================================================
+DONE — paste this entire output back to continue building the paper
+======================================================================

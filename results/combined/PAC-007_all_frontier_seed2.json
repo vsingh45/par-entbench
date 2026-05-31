@@ -1,0 +1,51 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_contractor_access",
+        "description": "Evaluate whether a contractor with temporary access is permitted to download full customer database backups according to data governance, access control, and data classification policies. Determine if the request violates confidentiality, data residency, or compliance requirements.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask at mid tier because this requires evaluating the contractor access request against multiple overlapping policy dimensions (access control policies, data classification rules, compliance restrictions, and potentially contractual constraints). A single policy_action agent can assess all applicable rules and constraints in one pass. Mid tier is justified because the decision involves multi-signal policy reasoning (contractor status + temporary access + full database scope + local analysis) rather than a simple single-rule check, which would be small tier."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_contractor_access",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 756,
+      "output_tokens": 210,
+      "cached_tokens": 0,
+      "latency_ms": 3634,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "Contractor role is prohibited from accessing raw database backups (POL-701, POL-702). The requested action is a bulk raw data export, which is explicitly disallowed. Additionally, no project manager approval or 7-day notice is on record (POL-703).",
+        "applied_constraints": [
+          "Contractor must use de-identified query interface instead",
+          "Any future access requires PM approval and 7-day notice",
+          "Raw backup downloads restricted to FTE DBAs only"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.00903,
+  "total_latency_ms": 3634,
+  "cumulative_spend_usd": 8.712932000000006,
+  "evaluator_reason": "selected_action_mismatch"
+}

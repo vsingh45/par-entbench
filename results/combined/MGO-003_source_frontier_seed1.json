@@ -1,0 +1,40 @@
+{
+  "task_id": "MGO-003",
+  "task_class": "mongo_gen",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "query_inactive_seats",
+        "description": "Query the license and seat activity database to compute, for each Adobe license, the count of assigned seats that have been inactive for more than 90 days (including seats with null/missing activity dates treated as inactive).",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This is a single-source database query requiring aggregation and date-based filtering across license and seat tables. The complexity is mid-tier because it involves: (1) joining license and seat tables, (2) calculating inactivity duration relative to today, (3) handling null activity dates as inactive, and (4) grouping by license with COUNT aggregation. This does not require cross-source reconciliation, multi-tool orchestration, or policy evaluation\u2014just a well-formed SQL query with date arithmetic and grouped aggregation. A single sql_gen subtask is sufficient; no decomposition is needed."
+  },
+  "node_results": [
+    {
+      "subtask_id": "query_inactive_seats",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 737,
+      "output_tokens": 125,
+      "cached_tokens": 0,
+      "latency_ms": 1879,
+      "output": {
+        "sql": "SELECT license_id, COUNT(DISTINCT user_id) AS inactive_seats FROM consumption_facts WHERE publisher = 'Adobe' GROUP BY license_id HAVING MAX(event_date) < CURRENT_DATE - INTERVAL '90 days' OR MAX(event_date) IS NULL"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.00681,
+  "total_latency_ms": 1879,
+  "cumulative_spend_usd": 1.6192280000000008,
+  "evaluator_reason": "no_pipeline_in_output"
+}

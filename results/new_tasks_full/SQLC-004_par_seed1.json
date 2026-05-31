@@ -1,0 +1,63 @@
+{
+  "task_id": "SQLC-004",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "query_vendor_data",
+        "description": "Query vendor reliability data including incident counts, uptime metrics, and historical performance scores from the vendor database",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "classify_risk",
+        "description": "Reconcile vendor reliability metrics with incident history and classify each vendor into low_risk, medium_risk, or high_risk categories based on incident patterns and performance thresholds",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "query_vendor_data"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen at small tier to fetch vendor reliability metrics from a single SQL source—straightforward relational query; (2) cross_recon at mid tier to apply classification logic across the vendor dataset, assigning risk categories based on incident history and performance thresholds. cross_recon is appropriate here because it consolidates metrics from the query result and applies rule-based classification as part of reconciliation, not as a separate policy_action (which would only apply if a governance policy decision were required). Mid tier is sufficient because the classification involves multi-signal reasoning (incidents + reliability) but not complex cross-source reconciliation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "query_vendor_data",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 467,
+      "output_tokens": 204,
+      "cached_tokens": 0,
+      "latency_ms": 1707,
+      "output": {
+        "sql": "SELECT vendor_name, COUNT(invoice_id) as incident_count, COUNT(CASE WHEN status = 'paid' THEN 1 END) as successful_payments, ROUND(100.0 * COUNT(CASE WHEN status = 'paid' THEN 1 END) / COUNT(invoice_id), 2) as uptime_percentage, CASE WHEN COUNT(CASE WHEN status != 'paid' THEN 1 END) <= 2 THEN 'low_risk' WHEN COUNT(CASE WHEN status != 'paid' THEN 1 END) BETWEEN 3 AND 5 THEN 'medium_risk' ELSE 'high_risk' END as vendor_risk_classification FROM invoice_facts GROUP BY vendor_name ORDER BY incident_count DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "classify_risk",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 479,
+      "output_tokens": 575,
+      "cached_tokens": 0,
+      "latency_ms": 11110,
+      "output": {
+        "raw_output": "I need to reconcile the provided data. However, I notice that only a SQL query definition was provided without actual result sets from either MongoDB or SQL execution. I'll treat the SQL result as the primary structured source and apply reconciliation with null MongoDB operational state, inferring classifications from the SQL logic described.\n\nSince no actual row data was returned, I'll construct the reconciled output based on the schema and classification logic embedded in the SQL, reflecting that MongoDB source has no conflicting operational override — resulting in SQL-driven classification with null mongo values.\n\n```json\n{\"reconciled\": [{\"entity_key\": \"NO_DATA_RETURNED\", \"mongo_value\": null, \"sql_value\": null, \"classification\": \"unresolvable — no upstream query results provided for reconciliation\"}]}\n```\n\nIf you provide the actual query result payloads, here is the reconciliation I will apply:\n\n{\"reconciled\": [{\"entity_key\": \"vendor_name_placeholder\", \"mongo_value\": null, \"sql_value\": {\"incident_count\": null, \"successful_payments\": null, \"uptime_percentage\": null, \"vendor_risk_classification\": null}, \"classification\": \"unresolvable\"}]}\n\n**To produce a valid reconciled output, please provide:**\n\n1. **MongoDB result** — e.g. `[{\"vendor_id\": \"V001\", \"vendor_name\": \"Acme Corp\", \"active\": true, \"contract_score\": 87}, ...]`\n2. **SQL result** — e.g. `[{\"vendor_name\": \"Acme Corp\", \"incident_count\": 10, \"successful_payments\": 8, \"uptime_percentage\": 80.00, \"vendor_risk_classification\": \"medium_risk\"}, ...]`\n\nOnce provided, the output will follow this structure:\n\n{\"reconciled\": [{\"entity_key\": \"Acme Corp\", \"mongo_value\": {\"active\": true, \"contract_score\": 87}, \"sql_value\": {\"incident_count\": 10, \"successful_payments\": 8, \"uptime_percentage\": 80.0, \"vendor_risk_classification\": \"medium_risk\"}, \"classification\": \"medium_risk\"}, {\"entity_key\": \"VendorOnlyInMongo\", \"mongo_value\": {\"active\": true, \"contract_score\": 95}, \"sql_value\": {\"incident_count\": 0, \"successful_payments\": 0, \"uptime_percentage\": null, \"vendor_risk_classification\": null}, \"classification\": \"low_risk\"}]}"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.011549000000000002,
+  "total_latency_ms": 12817,
+  "cumulative_spend_usd": 0.4344760000000001
+}

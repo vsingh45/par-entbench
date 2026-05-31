@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_declining_publishers",
+        "description": "Query SQL warehouse to identify publishers with declining quarterly trends in 2024 (Q1 > Q2 > Q3 > Q4 or similar negative trajectory). Return publisher ID, name, and quarterly spend metrics.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "generate_renewal_recommendations",
+        "description": "For each declining publisher, generate a renewal recommendation (hold, expand, or reduce) based on the quarterly trend data, spending patterns, and contract posture. Classify each recommendation with rationale.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "fetch_declining_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks with minimal overhead: (1) sql_gen at mid-tier to fetch publishers with declining quarterly trends in 2024 using window functions and multi-quarter comparisons; (2) cross_recon at mid-tier to reconcile the trend data with renewal posture and generate hold/expand/reduce recommendations for each publisher. The recommendation generation (not a policy_action, as it is classification and prioritization) is integrated into the cross_recon agent's workflow. No policy_action subtask needed as the query asks for a recommendation heuristic, not governance approval."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_declining_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 755,
+      "output_tokens": 390,
+      "cached_tokens": 0,
+      "latency_ms": 4109,
+      "output": {
+        "sql": "WITH quarterly AS (SELECT publisher, SUM(CASE WHEN fiscal_quarter = 1 THEN amount_usd ELSE 0 END) AS q1_spend, SUM(CASE WHEN fiscal_quarter = 2 THEN amount_usd ELSE 0 END) AS q2_spend, SUM(CASE WHEN fiscal_quarter = 3 THEN amount_usd ELSE 0 END) AS q3_spend, SUM(CASE WHEN fiscal_quarter = 4 THEN amount_usd ELSE 0 END) AS q4_spend FROM consumption_facts WHERE event_date >= '2024-01-01' AND event_date < '2025-01-01' GROUP BY publisher) SELECT publisher AS publisher_id, publisher AS publisher_name, q1_spend, q2_spend, q3_spend, q4_spend FROM quarterly WHERE q1_spend > q2_spend AND q2_spend > q3_spend AND q3_spend > q4_spend ORDER BY (q1_spend - q4_spend) DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "generate_renewal_recommendations",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 538,
+      "output_tokens": 356,
+      "cached_tokens": 0,
+      "latency_ms": 4501,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"publisher_decline_analysis\",\n      \"mongo_value\": null,\n      \"sql_value\": \"declining_publishers_with_quarterly_trends\",\n      \"classification\": \"no_recent_activity\",\n      \"note\": \"MongoDB operational state not provided; SQL historical data available for reconciliation\"\n    }\n  ],\n  \"recommendations_framework\": {\n    \"status\": \"awaiting_mongo_data\",\n    \"message\": \"Cannot perform cross-backend reconciliation without MongoDB query results\",\n    \"expected_mongo_output\": \"collection: publishers, query: {status: 'active', recent_activity: {$exists: true}}\",\n    \"sql_baseline\": \"12-month declining trend analysis available\",\n    \"next_action\": \"Provide MongoDB operational state to reconcile with SQL historical trends\"\n  }\n}\n```\n\n**Note**: To generate renewal recommendations, please provide:\n1. **MongoDB results**: Current publisher status, contract terms, renewal dates, negotiation status\n2. **SQL confirmation**: The declining publishers list from the query above will serve as the historical baseline\n\nOnce both sources are available, reconciliation will classify each publisher and generate recommendations using this logic:\n- **REDUCE**: Q1\u2192Q4 decline >40% + contract flexibility + no strategic value\n- **HOLD**: Q1\u2192Q4 decline 20-40% + monitor performance + negotiate terms\n- **EXPAND**: Q1\u2192Q4 decline <20% + stable minimum spend + strategic importance"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.015843,
+  "total_latency_ms": 8610,
+  "cumulative_spend_usd": 1.2490369999999997,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

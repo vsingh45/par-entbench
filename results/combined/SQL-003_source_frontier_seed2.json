@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-003",
+  "task_class": "sql_gen",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_qoq_ranking",
+        "description": "Query spend data for Adobe and Microsoft products across all 2024 quarters. Compute quarter-over-quarter spend change for each publisher and rank products within each publisher by Q4 spend.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single SQL subtask sufficient: this is a multi-table aggregation requiring window functions (for QoQ change calculation and product ranking within publisher groups) and conditional grouping, but it is one logical query with one substrate. Assigned mid-tier (Sonnet) because it requires window functions (LAG for QoQ), grouping by multiple dimensions (publisher, quarter, product), and ranking logic\u2014more than a simple single-table query but not complex enough for frontier-level work like multi-CTE dependencies or cross-source reconciliation. No cross_recon or policy_action needed; the query is purely analytical. The plan contains 1 subtask because the entire analysis can be performed in a single SQL statement with CTEs and window functions.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_qoq_ranking",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 748,
+      "output_tokens": 503,
+      "cached_tokens": 0,
+      "latency_ms": 5226,
+      "output": {
+        "sql": "WITH quarterly AS (SELECT publisher, product, fiscal_quarter, SUM(amount_usd) AS spend FROM consumption_facts WHERE publisher IN ('Adobe','Microsoft') AND event_date >= '2024-01-01' AND event_date < '2025-01-01' GROUP BY publisher, product, fiscal_quarter), pub_q AS (SELECT publisher, fiscal_quarter, SUM(spend) AS pub_spend FROM quarterly GROUP BY publisher, fiscal_quarter), pub_qoq AS (SELECT publisher, fiscal_quarter, pub_spend, pub_spend - LAG(pub_spend) OVER (PARTITION BY publisher ORDER BY fiscal_quarter) AS qoq_change FROM pub_q), q4_rank AS (SELECT publisher, product, spend AS q4_spend, RANK() OVER (PARTITION BY publisher ORDER BY spend DESC) AS q4_rank FROM quarterly WHERE fiscal_quarter = 4) SELECT p.publisher, p.fiscal_quarter, p.pub_spend, p.qoq_change, r.product, r.q4_spend, r.q4_rank FROM pub_qoq p LEFT JOIN q4_rank r ON p.publisher = r.publisher ORDER BY p.publisher, p.fiscal_quarter, r.q4_rank"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.016315000000000003,
+  "total_latency_ms": 5226,
+  "cumulative_spend_usd": 0.30175599999999997,
+  "evaluator_reason": "result_bag_mismatch"
+}

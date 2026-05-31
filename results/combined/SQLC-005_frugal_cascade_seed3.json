@@ -1,0 +1,92 @@
+{
+  "task_id": "SQLC-005",
+  "task_class": "sql_compose",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_retrieve_licenses",
+        "description": "Query Postgres to retrieve all licenses expiring within the next 6 months, including license ID, vendor, expiration date, and other relevant renewal fields",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "generate_renewal_recommendations",
+        "description": "Analyze the retrieved licenses and generate renewal recommendations for each, considering expiration timeline, vendor, and licensing patterns",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_retrieve_licenses"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks with minimal decomposition: (1) sql_gen (small tier) for a straightforward single-table time-window query on Postgres; (2) cross_recon (mid tier) to analyze the SQL results and generate renewal recommendations with business logic (prioritization by expiration date, vendor patterns, etc.). We avoid a separate policy_action because renewal recommendation generation is analytical/advisory, not governance approval. cross_recon handles the downstream synthesis and recommendation logic as part of its reconciliation scope. Total: 2 subtasks, keeping work consolidated."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_retrieve_licenses",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 469,
+      "output_tokens": 69,
+      "cached_tokens": 0,
+      "latency_ms": 1185,
+      "output": {
+        "sql": "SELECT invoice_id, vendor_name, due_date FROM invoice_facts WHERE due_date >= CURRENT_DATE AND due_date <= CURRENT_DATE + INTERVAL '6 months' AND status != 'paid' ORDER BY due_date ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "generate_renewal_recommendations",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 324,
+      "output_tokens": 253,
+      "cached_tokens": 0,
+      "latency_ms": 2470,
+      "output": {
+        "reconciled": [],
+        "error": "INSUFFICIENT_DATA",
+        "details": {
+          "mongo_source": "NOT_PROVIDED",
+          "sql_source": "QUERY_PROVIDED_BUT_NO_RESULTS",
+          "message": "Cannot perform LEFT JOIN reconciliation without MongoDB operational state. Received only SQL query definition without result data.",
+          "required_inputs": [
+            "MongoDB query results (operational licenses)",
+            "SQL query results (historical invoice data)"
+          ],
+          "expected_format": {
+            "mongo_data": [
+              {
+                "entity_key": "license_id",
+                "vendor_name": "string",
+                "expiration_date": "date",
+                "status": "string"
+              }
+            ],
+            "sql_data": [
+              {
+                "invoice_id": "string",
+                "vendor_name": "string",
+                "due_date": "date",
+                "status": "string"
+              }
+            ]
+          }
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.002403,
+  "total_latency_ms": 3655,
+  "cumulative_spend_usd": 0.7947049999999999,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

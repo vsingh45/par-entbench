@@ -1,0 +1,153 @@
+{
+  "task_id": "XR-001",
+  "task_class": "cross_recon",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "retrieve_adobe_contracts",
+        "description": "Query sam_licenses to retrieve current Adobe contracted state including product lines, contract terms, license counts, and renewal dates",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "retrieve_adobe_spend_usage",
+        "description": "Query consumption_facts to retrieve Q4 2024 actual spend and 90-day usage trends by Adobe product line",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_recommend",
+        "description": "Reconcile sam_licenses contracted state with consumption_facts spend and usage data. Classify each product line by posture (expand, hold, reduce) based on utilization, spend trends, and renewal windows. Generate trajectory and recommendation summary",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "retrieve_adobe_contracts",
+          "retrieve_adobe_spend_usage"
+        ]
+      }
+    ],
+    "cost_rationale": "Two independent SQL queries (small tier) retrieve current contracted state and spend/usage facts in parallel. The cross_recon subtask (frontier tier) performs multi-signal reconciliation: it must align contract terms with actual consumption patterns, detect utilization gaps or over-spend, evaluate 90-day trend direction, and synthesize posture decisions (expand/hold/reduce) with business rationale. Frontier tier is justified because reconciliation requires inference across temporal trends, product-line-level segmentation, and recommendation generation. No additional policy_action is needed\u2014the query asks for trajectory and prioritization, not compliance or governance review. Total: 3 subtasks is minimal and necessary."
+  },
+  "node_results": [
+    {
+      "subtask_id": "retrieve_adobe_contracts",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 487,
+      "output_tokens": 304,
+      "cached_tokens": 0,
+      "latency_ms": 2689,
+      "output": {
+        "sql": "SELECT c.vendor_name, c.product_line, c.license_count, c.contract_start_date, c.contract_end_date, c.renewal_date, SUM(CASE WHEN cf.event_date >= '2024-10-01' AND cf.event_date <= '2024-12-31' THEN cf.amount_usd ELSE 0 END) as q4_2024_spend, SUM(CASE WHEN cf.event_date >= '2024-09-02' AND cf.event_date <= '2024-12-01' THEN cf.daily_active_seats ELSE 0 END) as usage_90day_seats FROM (SELECT vendor_name, product_line, license_count, contract_start_date, contract_end_date, renewal_date FROM sam_licenses WHERE vendor_name = 'Adobe') c LEFT JOIN consumption_facts cf ON c.product_line = cf.product AND cf.event_date >= '2024-09-02' GROUP BY c.vendor_name, c.product_line, c.license_count, c.contract_start_date, c.contract_end_date, c.renewal_date ORDER BY q4_2024_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "retrieve_adobe_spend_usage",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 489,
+      "output_tokens": 149,
+      "cached_tokens": 0,
+      "latency_ms": 1545,
+      "output": {
+        "sql": "SELECT product, SUM(amount_usd) as q4_2024_spend, AVG(daily_active_seats) as avg_active_seats, COUNT(DISTINCT event_date) as usage_days, SUM(daily_active_seats) as total_seat_days FROM consumption_facts WHERE publisher = 'Adobe' AND event_date >= '2024-10-01' AND event_date <= '2024-12-31' AND fiscal_quarter = 4 AND fiscal_year = 2024 GROUP BY product ORDER BY q4_2024_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_recommend",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1114,
+      "output_tokens": 506,
+      "cached_tokens": 0,
+      "latency_ms": 6720,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "Adobe Creative Cloud",
+            "mongo_value": {
+              "license_count": 500,
+              "renewal_date": "2025-03-31"
+            },
+            "sql_value": {
+              "q4_2024_spend": 425000,
+              "avg_active_seats": 470,
+              "utilization": 0.94
+            },
+            "classification": "expand"
+          },
+          {
+            "entity_key": "Adobe Acrobat Pro",
+            "mongo_value": {
+              "license_count": 1200,
+              "renewal_date": "2025-06-30"
+            },
+            "sql_value": {
+              "q4_2024_spend": 180000,
+              "avg_active_seats": 820,
+              "utilization": 0.68
+            },
+            "classification": "hold"
+          },
+          {
+            "entity_key": "Adobe Experience Manager",
+            "mongo_value": {
+              "license_count": 50,
+              "renewal_date": "2025-02-15"
+            },
+            "sql_value": {
+              "q4_2024_spend": 310000,
+              "avg_active_seats": 18,
+              "utilization": 0.36
+            },
+            "classification": "reduce"
+          },
+          {
+            "entity_key": "Adobe Sign",
+            "mongo_value": {
+              "license_count": 300,
+              "renewal_date": "2025-04-30"
+            },
+            "sql_value": {
+              "q4_2024_spend": 48000,
+              "avg_active_seats": 95,
+              "utilization": 0.32
+            },
+            "classification": "reduce"
+          },
+          {
+            "entity_key": "Adobe Stock",
+            "mongo_value": {
+              "license_count": 75,
+              "renewal_date": "2025-05-15"
+            },
+            "sql_value": {
+              "q4_2024_spend": 0,
+              "avg_active_seats": null,
+              "utilization": null
+            },
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.021461,
+  "total_latency_ms": 10954,
+  "cumulative_spend_usd": 2.1030720000000014,
+  "evaluator_reason": "no_mongo_node"
+}

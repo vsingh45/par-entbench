@@ -1,0 +1,353 @@
+{
+  "task_id": "MTP-008",
+  "task_class": "multitool_plan",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "step_1_jira_retrieval",
+        "description": "Retrieve project requirements and tasks from Jira using the Jira API connector to get relevant project data, issue details, and requirements.",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "step_2_calendar_check",
+        "description": "Query team availability from calendar API to identify free time slots for standup meeting scheduling.",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "step_3_schedule_meeting",
+        "description": "Schedule the standup meeting in calendar system using identified available time slots from step_2.",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "step_2_calendar_check"
+        ]
+      },
+      {
+        "id": "step_4_slack_agenda",
+        "description": "Compose and share standup agenda via Slack, incorporating project requirements from step_1 and meeting details from step_3.",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "step_1_jira_retrieval",
+          "step_3_schedule_meeting"
+        ]
+      }
+    ],
+    "cost_rationale": "This query explicitly requires multi-tool orchestration across four distinct enterprise systems (Jira, Calendar API, Calendar scheduling, and Slack), so multitool_plan is the appropriate specialist for all subtasks. The plan is minimally decomposed into 4 steps that represent the logical workflow sequence: retrieve requirements (independent), check availability (independent), schedule (depends on availability), and communicate (depends on both requirements and meeting details). Tier assignments: step_1 is mid-tier because Jira API calls often require filtering and data transformation; steps 2, 3, and 4 are small-tier as they are straightforward tool invocations without complex logic. Dependencies ensure proper sequencing of the workflow."
+  },
+  "node_results": [
+    {
+      "subtask_id": "step_1_jira_retrieval",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 644,
+      "output_tokens": 359,
+      "cached_tokens": 0,
+      "latency_ms": 5427,
+      "output": {
+        "plan": [
+          {
+            "tool": "jira.list_tickets",
+            "arguments": {
+              "filter": {
+                "project": "current",
+                "fields": [
+                  "summary",
+                  "description",
+                  "status",
+                  "assignee",
+                  "priority",
+                  "requirements"
+                ]
+              }
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "team": "project_team",
+              "time_range": "next_24_hours",
+              "check_availability": true
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.create_event",
+            "arguments": {
+              "title": "Project Standup Meeting",
+              "attendees": "$2.available_members",
+              "duration_minutes": 30,
+              "agenda_ref": "$1.results"
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#project-team",
+              "message": "Standup scheduled: $3.event_link\n\nAgenda based on Jira requirements: $1.results"
+            },
+            "depends_on": [
+              1,
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "standup_scheduled",
+              "details": {
+                "event": "$3.event_id",
+                "tickets": "$1.results"
+              }
+            },
+            "depends_on": [
+              3
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "step_2_calendar_check",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 630,
+      "output_tokens": 379,
+      "cached_tokens": 0,
+      "latency_ms": 6052,
+      "output": {
+        "plan": [
+          {
+            "tool": "jira.list_tickets",
+            "arguments": {
+              "filter": {
+                "project": "CROSS_TEAM",
+                "type": "Requirement",
+                "status": "Open"
+              }
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "team": "cross-team",
+              "time_range": "next_5_business_days",
+              "purpose": "find_free_slots"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.create_event",
+            "arguments": {
+              "title": "Cross-Team Standup",
+              "slot": "$2.first_available_slot",
+              "attendees": "$2.attendees",
+              "agenda_source": "$1.results"
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "calendar.event_created",
+              "event_id": "$3.event_id",
+              "details": "Standup scheduled based on Jira requirements and team availability"
+            },
+            "depends_on": [
+              3
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#cross-team-standup",
+              "message": "\ud83d\udcc5 Standup scheduled: $3.event_link\nAgenda based on requirements: $1.results"
+            },
+            "depends_on": [
+              3
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "step_3_schedule_meeting",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 760,
+      "output_tokens": 424,
+      "cached_tokens": 0,
+      "latency_ms": 5736,
+      "output": {
+        "plan": [
+          {
+            "tool": "jira.list_tickets",
+            "arguments": {
+              "filter": {
+                "project": "CROSS_TEAM",
+                "type": "Requirement",
+                "status": "Open"
+              }
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "team": "cross-team",
+              "time_range": "next_5_business_days",
+              "purpose": "find_free_slots"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.create_event",
+            "arguments": {
+              "title": "Cross-Team Standup",
+              "slot": "$2.first_available_slot",
+              "attendees": "$2.attendees",
+              "agenda_source": "$1.results"
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "calendar.event_created",
+              "event_id": "$3.event_id",
+              "details": "Standup scheduled based on Jira requirements and team availability"
+            },
+            "depends_on": [
+              3
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#cross-team-standup",
+              "message": "\ud83d\udcc5 Standup scheduled: $3.event_link\nAgenda based on requirements: $1.results"
+            },
+            "depends_on": [
+              3
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "step_4_slack_agenda",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1071,
+      "output_tokens": 514,
+      "cached_tokens": 0,
+      "latency_ms": 3163,
+      "output": {
+        "plan": [
+          {
+            "tool": "jira.list_tickets",
+            "arguments": {
+              "filter": {
+                "project": "current",
+                "fields": [
+                  "summary",
+                  "description",
+                  "status",
+                  "assignee",
+                  "priority",
+                  "requirements"
+                ]
+              }
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.list_events",
+            "arguments": {
+              "team": "project_team",
+              "time_range": "next_24_hours",
+              "check_availability": true
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "calendar.create_event",
+            "arguments": {
+              "title": "Project Standup Meeting",
+              "attendees": "$2.available_members",
+              "duration_minutes": 30,
+              "agenda_ref": "$1.results"
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#project-team",
+              "message": "\ud83d\udccb Standup Agenda\n\nEvent: $3.event_link\n\n**Project Requirements:**\n$1.results\n\n**Meeting Details:**\nTime: $3.start_time\nDuration: 30 minutes\nAttendees: $2.available_members\n\nPlease review the requirements and come prepared to discuss progress and blockers."
+            },
+            "depends_on": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "standup_agenda_shared",
+              "details": {
+                "event_id": "$3.event_id",
+                "tickets_referenced": "$1.results",
+                "channel": "#project-team",
+                "message_timestamp": "$4.message_ts"
+              }
+            },
+            "depends_on": [
+              3,
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.031341,
+  "total_latency_ms": 20378,
+  "cumulative_spend_usd": 8.181598000000001,
+  "evaluator_reason": "missing_tools: {'slack.messages.post', 'calendar.events.create', 'calendar.availability.check', 'jira.issue.get'}"
+}

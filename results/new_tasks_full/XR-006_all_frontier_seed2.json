@@ -1,0 +1,130 @@
+{
+  "task_id": "XR-006",
+  "task_class": "cross_recon",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_slack_contracts",
+        "description": "Query SAM MongoDB for Slack contract records including renewal dates, terms, licensed seat counts, and contract status",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_slack_consumption",
+        "description": "Query SQL warehouse for Slack usage consumption trends including daily/monthly active users, message volume, and feature adoption over the contract period",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal_trajectory",
+        "description": "Reconcile SAM contract renewals with consumption trends; classify renewal posture (e.g., over-licensed, under-licensed, right-sized); identify trajectory (growing, declining, stable) and generate renewal recommendations",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "mongo_slack_contracts",
+          "sql_slack_consumption"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks minimum: (1) MongoDB query to extract contract renewal states and terms from SAM (mid tier for aggregation across contract records); (2) SQL query for consumption metrics across the warehouse (mid tier for multi-table joins of usage data); (3) frontier-tier cross_recon to reconcile contract lifecycle against consumption trends, classify renewal posture, and generate trajectory-based recommendations. The frontier tier is justified for cross_recon because it must synthesize two distinct data sources, apply multi-signal reasoning (contract dates + usage patterns), and produce nuanced renewal recommendations that account for growth/decline trajectories and seat utilization dynamics."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_slack_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1733,
+      "output_tokens": 89,
+      "cached_tokens": 0,
+      "latency_ms": 2037,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Slack"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_slack_consumption",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 711,
+      "output_tokens": 182,
+      "cached_tokens": 0,
+      "latency_ms": 2719,
+      "output": {
+        "sql": "SELECT date_trunc('month', event_date) AS month, COUNT(DISTINCT user_id) AS active_users, COUNT(DISTINCT license_id) AS active_licenses, SUM(daily_active_seats) AS total_active_seats, SUM(amount_usd) AS total_consumption_usd, COUNT(event_id) AS event_count FROM consumption_facts WHERE product ILIKE '%slack%' GROUP BY date_trunc('month', event_date) ORDER BY month"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal_trajectory",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 687,
+      "output_tokens": 311,
+      "cached_tokens": 0,
+      "latency_ms": 4241,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "slack_contract_renewals",
+            "mongo_value": {
+              "publisher": "Slack",
+              "contracts": "all_active"
+            },
+            "sql_value": {
+              "trend": "monthly_consumption_series",
+              "metrics": [
+                "active_users",
+                "active_licenses",
+                "total_active_seats",
+                "total_consumption_usd",
+                "event_count"
+              ]
+            },
+            "classification": "requires_trend_analysis"
+          },
+          {
+            "entity_key": "slack_renewal_posture",
+            "mongo_value": "licensed_seats_from_sam",
+            "sql_value": "active_seats_from_consumption",
+            "classification": "right_sized_pending_ratio_check"
+          },
+          {
+            "entity_key": "slack_trajectory",
+            "mongo_value": null,
+            "sql_value": "monthly_active_users_trend",
+            "classification": "stable"
+          },
+          {
+            "entity_key": "slack_renewal_recommendation",
+            "mongo_value": "contract_terms",
+            "sql_value": "consumption_trend",
+            "classification": "hold"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.030205000000000003,
+  "total_latency_ms": 8997,
+  "cumulative_spend_usd": 3.6225430000000016
+}

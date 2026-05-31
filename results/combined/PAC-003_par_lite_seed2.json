@@ -1,0 +1,54 @@
+{
+  "task_id": "PAC-003",
+  "task_class": "policy_action",
+  "router": "par_lite",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_1",
+        "description": "Evaluate emergency access request for u_9981 (senior-engineer) to db-payments-primary against access control and incident response policies. Check role-based access rules, emergency escalation criteria, audit logging requirements, and time-bound approval conditions.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask at mid tier. This is explicitly a governance/access control decision requiring multi-policy reasoning: (1) RBAC rules for senior-engineer role, (2) emergency incident protocols, (3) audit and approval workflows, (4) time-bound access constraints. Mid tier handles multi-policy interactions and exception pathways. No other subtasks needed\u2014this is a pure policy evaluation with no cross-source data reconciliation or multi-tool orchestration required. The decision output (approve/deny with conditions) is the terminal deliverable."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_1",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 559,
+      "output_tokens": 373,
+      "cached_tokens": 0,
+      "latency_ms": 7882,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-501": "pass",
+          "POL-502": "pass_conditional",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "User u_9981 (senior-engineer) has an active P1 incident ticket INC-20241215-0042, satisfying POL-501's active incident ticket requirement. POL-502's dual approval requirement is waived due to the declared P1 incident status. POL-503 requires post-access audit logging and mandatory review within 24 hours. Access is permitted with enforced time-bound and audit constraints.",
+        "applied_constraints": [
+          "Access is time-limited: grant expires automatically upon P1 incident closure or within 4 hours, whichever comes first.",
+          "All read/write operations on db-payments-primary must be fully logged to the audit trail with incident ticket reference INC-20241215-0042.",
+          "Emergency access grant must be reviewed by a DBA or security officer within 24 hours of issuance per POL-503.",
+          "Access scope is restricted to the minimum necessary for P1 incident investigation; bulk exports and schema modifications are prohibited.",
+          "User u_9981 must acknowledge the emergency access policy terms before access is provisioned.",
+          "Incident ticket INC-20241215-0042 must remain active and in P1 status for the duration of this access grant; automatic revocation triggers upon ticket status change."
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007272000000000001,
+  "total_latency_ms": 7882,
+  "cumulative_spend_usd": 5.099089000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

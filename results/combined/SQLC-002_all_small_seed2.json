@@ -1,0 +1,135 @@
+{
+  "task_id": "SQLC-002",
+  "task_class": "sql_compose",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top_customers",
+        "description": "Query TPC-H to identify top 10 customers by lifetime value in BUILDING market segment. Return customer_id, customer_name, total_lifetime_value, and order_count for ranking and context.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_order_patterns",
+        "description": "Query TPC-H to retrieve detailed order pattern metrics for the top 10 customers: order frequency, average order value, order date ranges, product categories ordered, and seasonal trends. Include customer_id to match with ranking results.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "narrative_generation",
+        "description": "For each of the top 10 customers, synthesize a personalized retention narrative that references their specific order patterns (frequency, value trends, product preferences, seasonality). Combine customer LTV context with order behavior insights to create compelling, data-driven retention messaging.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_top_customers",
+          "sql_order_patterns"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) Top 10 customer ranking by LTV in BUILDING segment requires a multi-table join and aggregation (mid-tier sql_gen). (2) Order pattern analysis requires a separate query with window functions and aggregations across orders table (mid-tier sql_gen). These are split because they query different granularities (customer summary vs. order detail). (3) Narrative generation synthesizes ranked customer data with behavioral patterns to produce personalized retention messaging, requiring cross_recon (mid-tier) to combine insights and generate contextual narratives. No policy_action needed\u2014this is contextual synthesis, not governance evaluation. No multitool_plan needed\u2014this uses only SQL and synthesis. Mid-tier assigned to cross_recon because it must intelligently weave customer LTV and order patterns into coherent, personalized narratives.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top_customers",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 496,
+      "output_tokens": 134,
+      "cached_tokens": 0,
+      "latency_ms": 1049,
+      "output": {
+        "sql": "SELECT c.c_custkey AS customer_id, c.c_name AS customer_name, SUM(o.o_totalprice) AS total_lifetime_value, COUNT(o.o_orderkey) AS order_count FROM customer c INNER JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name ORDER BY total_lifetime_value DESC LIMIT 10"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_order_patterns",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 499,
+      "output_tokens": 222,
+      "cached_tokens": 0,
+      "latency_ms": 2102,
+      "output": {
+        "sql": "SELECT c.c_custkey AS customer_id, c.c_name, COUNT(DISTINCT o.o_orderkey) AS order_frequency, AVG(o.o_totalprice) AS avg_order_value, MIN(o.o_orderdate) AS first_order_date, MAX(o.o_orderdate) AS last_order_date, EXTRACT(YEAR FROM o.o_orderdate)::INT AS order_year, COUNT(DISTINCT EXTRACT(QUARTER FROM o.o_orderdate)) AS distinct_quarters_ordered, SUM(o.o_totalprice) AS lifetime_value FROM customer c INNER JOIN orders o ON c.c_custkey = o.o_custkey WHERE c.c_mktsegment = 'BUILDING' GROUP BY c.c_custkey, c.c_name ORDER BY lifetime_value DESC LIMIT 10"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "narrative_generation",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 648,
+      "output_tokens": 751,
+      "cached_tokens": 0,
+      "latency_ms": 8536,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "top_10_customers_building_segment",
+            "mongo_value": null,
+            "sql_value": "INNER JOIN on c_custkey aggregating total_lifetime_value DESC",
+            "classification": "data_source_primary_sql",
+            "note": "No MongoDB operational state provided; SQL is authoritative source"
+          }
+        ],
+        "retention_narratives": [
+          {
+            "customer_id": null,
+            "customer_name": null,
+            "lifetime_value": null,
+            "order_count": null,
+            "avg_order_value": null,
+            "order_frequency_classification": null,
+            "seasonality_pattern": null,
+            "ltv_trend": null,
+            "personalized_narrative": "UNABLE_TO_GENERATE - No actual query results provided in upstream_outputs. The SQL queries are defined but not executed. To generate retention narratives, please execute: (1) sql_top_customers query to identify top 10 BUILDING segment customers by LTV, (2) sql_order_patterns query to extract frequency, value trends, and temporal patterns. Then cross-reference with any MongoDB operational metrics if available.",
+            "retention_strategy": "PENDING_DATA_EXECUTION",
+            "recommended_actions": [
+              "Execute SQL queries against TPC-H database",
+              "Extract order frequency distribution (orders per quarter/year)",
+              "Calculate order value trend (growth/decline over time)",
+              "Identify product category preferences from line items",
+              "Detect seasonal ordering peaks (by quarter/month)",
+              "Segment by recency (last_order_date proximity)",
+              "Match with MongoDB customer engagement metrics if available",
+              "Generate individual narratives with specific order references"
+            ]
+          }
+        ],
+        "data_requirements_for_narratives": {
+          "required_sql_enrichment": [
+            "l_productkey, l_quantity, l_extendedprice JOIN lineitem to identify preferred product categories",
+            "p_name, p_category JOIN part to categorize product preferences",
+            "DATE_PART analysis on o_orderdate for seasonality detection",
+            "Year-over-year order value comparison for trend analysis"
+          ],
+          "mongodb_operational_metrics_if_available": [
+            "customer_engagement_score",
+            "last_interaction_date",
+            "support_ticket_count",
+            "product_browse_history",
+            "email_engagement_rate"
+          ],
+          "narrative_generation_logic": "For each top-10 customer: (1) LTV Position - state their rank and total value, (2) Order Rhythm - cite frequency pattern and avg order size, (3) Value Trajectory - describe trend (growing/stable/declining), (4) Product Loyalty - reference top 2-3 preferred categories, (5) Seasonality Insight - note peak ordering quarters, (6) Recency Signal - assess engagement level, (7) Risk/Opportunity Assessment - classify as at_risk/stable/growing, (8) Personalized CTA - recommend specific retention action"
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007178,
+  "total_latency_ms": 11687,
+  "cumulative_spend_usd": 0.8167929999999997,
+  "evaluator_reason": "step2_consumer_narrative_check_failed"
+}

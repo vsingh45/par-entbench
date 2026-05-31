@@ -1,0 +1,44 @@
+{
+  "task_id": "EXT-006",
+  "task_class": "extract",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "Extract timestamp, user ID, resource accessed, action performed, and result from this access log entry.",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "extract",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 422,
+      "output_tokens": 87,
+      "cached_tokens": 0,
+      "latency_ms": 1468,
+      "output": {
+        "timestamp": "2024-08-15T14:32:47Z",
+        "user_id": "john.doe@company.com",
+        "resource_accessed": "s3://finance-reports/Q3-2024.pdf",
+        "action_performed": "read",
+        "result": "success"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.004285000000000001,
+  "total_latency_ms": 1468,
+  "cumulative_spend_usd": 5.5318420000000055,
+  "evaluator_reason": "f1=0.364_below_0.85"
+}

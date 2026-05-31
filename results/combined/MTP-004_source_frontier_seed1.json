@@ -1,0 +1,149 @@
+{
+  "task_id": "MTP-004",
+  "task_class": "multitool_plan",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "cloudwatch_identify",
+        "description": "Query CloudWatch metrics and alarms to identify the affected service, extract service name, error rate, and alarm triggers",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "s3_fetch_logs",
+        "description": "Retrieve logs from S3 for the affected service using the identified service name, filter for error patterns and timestamps",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": [
+          "cloudwatch_identify"
+        ]
+      },
+      {
+        "id": "orchestrate_slack_severity",
+        "description": "Generate a multi-tool orchestration plan to: (1) create Slack incident channel, (2) assess severity from CloudWatch metrics and S3 logs, (3) post initial severity assessment to the channel",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "cloudwatch_identify",
+          "s3_fetch_logs"
+        ]
+      }
+    ],
+    "cost_rationale": "This incident response workflow is decomposed into 3 subtasks representing distinct work phases: (1) CloudWatch identification (small tier\u2014straightforward metric/alarm query), (2) S3 log retrieval (mid tier\u2014document extraction with context from upstream subtask), and (3) multi-tool orchestration (mid tier\u2014coordinating Slack API calls and severity assessment synthesis). The multitool_plan agent is required because the query explicitly asks for tool orchestration across CloudWatch, Slack, and log analysis\u2014this is enterprise registry work that a single specialist cannot handle. We do NOT split the Slack creation and posting into separate subtasks because they are dependent steps in the same workflow; multitool_plan handles the sequencing. Total: 3 subtasks (minimum necessary). No cross_recon is needed because we are not reconciling conflicting data sources; we are sequencing operations. No policy_action is included because severity assessment is advisory classification, not governance approval."
+  },
+  "node_results": [
+    {
+      "subtask_id": "cloudwatch_identify",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 722,
+      "output_tokens": 210,
+      "cached_tokens": 0,
+      "latency_ms": 4253,
+      "output": {
+        "sql": "SELECT resource AS service_name, COUNT(*) FILTER (WHERE result = 'ERROR')::NUMERIC / NULLIF(COUNT(*), 0) AS error_rate, COUNT(*) FILTER (WHERE result = 'ERROR') AS alarm_triggers FROM access_log_facts WHERE access_time >= NOW() - INTERVAL '1 hour' GROUP BY resource HAVING COUNT(*) FILTER (WHERE result = 'ERROR') > 0 ORDER BY error_rate DESC LIMIT 1"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "s3_fetch_logs",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 369,
+      "output_tokens": 219,
+      "cached_tokens": 0,
+      "latency_ms": 1432,
+      "output": {
+        "task": "Retrieve logs from S3 for the affected service using the identified service name, filter for error patterns and timestamps",
+        "upstream_outputs": {
+          "cloudwatch_identify": {
+            "sql": "SELECT resource AS service_name, COUNT(*) FILTER (WHERE result = 'ERROR')::NUMERIC / NULLIF(COUNT(*), 0) AS error_rate, COUNT(*) FILTER (WHERE result = 'ERROR') AS alarm_triggers FROM access_log_facts WHERE access_time >= NOW() - INTERVAL '1 hour' GROUP BY resource HAVING COUNT(*) FILTER (WHERE result = 'ERROR') > 0 ORDER BY error_rate DESC LIMIT 1"
+          }
+        },
+        "query": "Generate an incident response workflow: identify the affected service from CloudWatch, fetch logs from S3, create a Slack incident channel, and post initial severity assessment."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "orchestrate_slack_severity",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 790,
+      "output_tokens": 584,
+      "cached_tokens": 0,
+      "latency_ms": 4190,
+      "output": {
+        "plan": [
+          {
+            "tool": "sql.postgres.query",
+            "arguments": {
+              "query": "SELECT resource AS service_name, COUNT(*) FILTER (WHERE result = 'ERROR')::NUMERIC / NULLIF(COUNT(*), 0) AS error_rate, COUNT(*) FILTER (WHERE result = 'ERROR') AS alarm_triggers FROM access_log_facts WHERE access_time >= NOW() - INTERVAL '1 hour' GROUP BY resource HAVING COUNT(*) FILTER (WHERE result = 'ERROR') > 0 ORDER BY error_rate DESC LIMIT 1"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "file.read",
+            "arguments": {
+              "path": "s3://logs/$1.service_name/errors-$(date -u +%Y-%m-%d)",
+              "filter_pattern": "ERROR"
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "datadog.query_metric",
+            "arguments": {
+              "query": "avg:system.cpu{service:$1.service_name}",
+              "from": "-1h",
+              "to": "now"
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#incident-$1.service_name",
+              "message": "\ud83d\udea8 **INCIDENT DETECTED** - Service: $1.service_name\n**Severity Assessment:**\n\u2022 Error Rate: $1.error_rate (threshold exceeded)\n\u2022 Alarm Triggers (1h): $1.alarm_triggers\n\u2022 Log Entries Retrieved: $2.count\n\u2022 Current Metrics: CPU avg $3.value%\n**Status:** Initial assessment complete, investigating root cause"
+            },
+            "depends_on": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "incident_response_initiated",
+              "service": "$1.service_name",
+              "error_rate": "$1.error_rate",
+              "channel": "#incident-$1.service_name",
+              "timestamp": "now()"
+            },
+            "depends_on": [
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.014034,
+  "total_latency_ms": 9875,
+  "cumulative_spend_usd": 6.089507000000005,
+  "evaluator_reason": "missing_tools: {'slack.messages.post', 's3.read', 'cloudwatch.metrics', 'slack.channels.create'}"
+}

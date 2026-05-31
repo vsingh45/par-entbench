@@ -1,0 +1,50 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_contractor_access",
+        "description": "Evaluate contractor's temporary access request against data governance and access control policies. Determine if downloading full customer database backup is permitted given contractor status, access scope, and data sensitivity.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This query explicitly asks for a governance/access control decision. A single policy_action subtask (mid tier) is appropriate because it requires evaluating multiple policy dimensions: contractor status vs. full-database access, temporary access limitations, data sensitivity classification, and backup download restrictions. Mid tier handles multi-policy reasoning and exception cases (e.g., does the contractor have explicit backup exemptions). No additional subtasks needed\u2014this is a pure access control evaluation, not a data retrieval or reconciliation task."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_contractor_access",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 745,
+      "output_tokens": 187,
+      "cached_tokens": 0,
+      "latency_ms": 3333,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "Contractor role cannot access raw database backups (POL-701 restricts to DBA full-time employees), full backup violates de-identification requirement (POL-702), and no PM approval or 7-day notice on record (POL-703).",
+        "applied_constraints": [
+          "Redirect contractor to sanctioned de-identified query interface",
+          "Require PM approval with 7-day notice for any future data access requests"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.008400000000000001,
+  "total_latency_ms": 3333,
+  "cumulative_spend_usd": 8.765520000000006,
+  "evaluator_reason": "selected_action_mismatch"
+}

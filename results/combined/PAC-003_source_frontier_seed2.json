@@ -1,0 +1,54 @@
+{
+  "task_id": "PAC-003",
+  "task_class": "policy_action",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "check_policy",
+        "description": "Evaluate emergency access request for u_9981 (senior-engineer) to db-payments-primary against access control policy and incident governance rules. Determine if emergency override is justified given P1 incident context, check role/resource compatibility, and return decision with required conditions (audit logging, time-limit, escalation path).",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single subtask required: this is a governance/access control decision explicitly requiring policy_action evaluation. The request involves checking a user's credentials and role against a policy registry to determine if emergency access is permitted under incident conditions. Mid-tier assigned because multi-signal reasoning is needed: evaluate role permissions, incident severity (P1), resource sensitivity (production payment database), emergency override rules, and any conditional requirements (audit logging, session limits, escalation notification). This is not a simple yes/no lookup but requires policy interaction with context awareness."
+  },
+  "node_results": [
+    {
+      "subtask_id": "check_policy",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 825,
+      "output_tokens": 299,
+      "cached_tokens": 0,
+      "latency_ms": 4915,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-501": "pass",
+          "POL-502": "pass_conditional",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "Senior-engineer u_9981 has valid P1 incident ticket INC-20241215-0042 satisfying POL-501. POL-502 dual approval waived under declared P1 exception. Emergency access granted with mandatory audit logging and 24-hour post-incident review per POL-503.",
+        "applied_constraints": [
+          "time_limit:4h_or_incident_resolution",
+          "audit_log:all_read_write_operations_to_db-payments-primary",
+          "post_access_review:within_24h_by_security_team",
+          "escalation_path:notify_DBA_lead_and_incident_commander",
+          "scope_restriction:actions_must_reference_INC-20241215-0042",
+          "auto_revoke:on_incident_closure"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.011600000000000001,
+  "total_latency_ms": 4915,
+  "cumulative_spend_usd": 5.068192000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

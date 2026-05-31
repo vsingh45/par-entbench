@@ -1,0 +1,46 @@
+{
+  "task_id": "EXT-007",
+  "task_class": "extract",
+  "router": "frugal_cascade",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_vendor_details",
+        "description": "Extract company details, primary contact information, and banking details from the vendor onboarding form into structured JSON with fields for company name, address, contact person, email, phone, bank account, routing number, and account type.",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single document extraction task with straightforward, well-defined fields (company name, contact info, banking details). Small tier (Haiku) is sufficient for explicit field mapping from a structured form with no cross-source reconciliation or complex inference needed.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_vendor_details",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 443,
+      "output_tokens": 123,
+      "cached_tokens": 0,
+      "latency_ms": 974,
+      "output": {
+        "company_name": "TechVendor Solutions Inc.",
+        "address": "999 Tech Lane, Austin, TX 78701",
+        "contact_person": "Sarah Johnson",
+        "email": "sarah.johnson@techvendor.com",
+        "phone": "(512) 555-0123",
+        "bank_account": "4567890123",
+        "routing_number": "021000021",
+        "account_type": "Business Checking"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0010580000000000001,
+  "total_latency_ms": 974,
+  "cumulative_spend_usd": 5.631425000000007
+}

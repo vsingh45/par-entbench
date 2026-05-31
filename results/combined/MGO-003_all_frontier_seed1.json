@@ -1,0 +1,40 @@
+{
+  "task_id": "MGO-003",
+  "task_class": "mongo_gen",
+  "router": "all_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_inactive_seats",
+        "description": "Query Adobe licenses table and joined seat activity data to compute for each license the count of seats inactive for >90 days (including seats with NULL activity dates treated as inactive). Group by license ID and return license identifier with inactive seat count.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single SQL task with moderate complexity: requires joining licenses to seats, calculating days since last activity (handling NULL dates as inactive), and aggregating by license. A mid-tier model handles multi-table joins and date arithmetic reliably. No cross-source reconciliation, extraction, or policy logic needed. One subtask is sufficient because the entire metric can be computed in a single SQL query with proper GROUP BY and conditional logic.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_inactive_seats",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 750,
+      "output_tokens": 213,
+      "cached_tokens": 0,
+      "latency_ms": 2804,
+      "output": {
+        "sql": "SELECT license_id, COUNT(DISTINCT user_id) AS inactive_seat_count FROM consumption_facts WHERE publisher = 'Adobe' AND license_id IN (SELECT DISTINCT license_id FROM consumption_facts WHERE publisher = 'Adobe') AND user_id NOT IN (SELECT DISTINCT user_id FROM consumption_facts WHERE publisher = 'Adobe' AND event_date >= CURRENT_DATE - INTERVAL '90 days' AND event_date IS NOT NULL) GROUP BY license_id"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009075,
+  "total_latency_ms": 2804,
+  "cumulative_spend_usd": 1.5715190000000008,
+  "evaluator_reason": "no_pipeline_in_output"
+}

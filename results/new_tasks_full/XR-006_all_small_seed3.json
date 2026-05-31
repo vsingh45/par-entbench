@@ -1,0 +1,177 @@
+{
+  "task_id": "XR-006",
+  "task_class": "cross_recon",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_1",
+        "description": "Query SAM contracts for Slack license renewals: retrieve contract ID, renewal date, seat count, and renewal status for all active or upcoming Slack contracts",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_1",
+        "description": "Query consumption data warehouse for Slack usage trends: monthly active users, seats consumed, peak concurrent users, and daily active users over the past 12-24 months",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_1",
+        "description": "Reconcile SAM contract renewal schedule with consumption usage trends. Align renewal dates with usage trajectory. Classify renewal posture (under-licensed, appropriately-licensed, over-licensed) based on consumption delta vs. contracted seats. Generate renewal trajectory recommendations (expedite, defer, adjust seat count)",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "mongo_1",
+          "sql_1"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks, minimum needed: (1) SAM contract data retrieval is straightforward single-collection MongoDB query (small tier). (2) Consumption SQL is multi-table aggregation over time with clear metrics but single source (small tier). (3) Cross-reconciliation of two data sources with classification and recommendation generation requires mid-tier reasoning to correlate renewal timing with usage trends, detect misalignment patterns, and synthesize renewal strategy. No separate policy_action subtask needed since renewal classification is part of the reconciliation logic, not a compliance gate. No multitool_plan needed as this is a standard data pipeline."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_1",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1221,
+      "output_tokens": 127,
+      "cached_tokens": 0,
+      "latency_ms": 2049,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Slack",
+              "status": {
+                "$in": [
+                  "active",
+                  "upcoming"
+                ]
+              }
+            }
+          },
+          {
+            "$project": {
+              "license_id": 1,
+              "product": 1,
+              "renewal_terms": 1,
+              "term_end": 1,
+              "seat_count": 1,
+              "status": 1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 469,
+      "output_tokens": 182,
+      "cached_tokens": 0,
+      "latency_ms": 2080,
+      "output": {
+        "sql": "SELECT DATE_TRUNC('month', cf.event_date)::DATE AS month, cf.publisher, cf.product, COUNT(DISTINCT cf.user_id) AS monthly_active_users, SUM(cf.daily_active_seats) AS total_seats_consumed, MAX(cf.daily_active_seats) AS peak_concurrent_users, AVG(cf.daily_active_seats) AS avg_daily_active_users FROM consumption_facts cf WHERE cf.publisher = 'Slack' AND cf.event_date >= CURRENT_DATE - INTERVAL '24 months' GROUP BY DATE_TRUNC('month', cf.event_date), cf.publisher, cf.product ORDER BY month DESC, cf.product"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_1",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 561,
+      "output_tokens": 711,
+      "cached_tokens": 0,
+      "latency_ms": 5966,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "slack_license_renewal_analysis",
+            "mongo_value": {
+              "source": "sam_licenses",
+              "match_criteria": {
+                "publisher": "Slack",
+                "status": [
+                  "active",
+                  "upcoming"
+                ]
+              },
+              "fields_projected": [
+                "license_id",
+                "product",
+                "renewal_terms",
+                "term_end",
+                "seat_count",
+                "status"
+              ]
+            },
+            "sql_value": {
+              "source": "consumption_facts",
+              "time_window": "24_months",
+              "metrics": [
+                "monthly_active_users",
+                "total_seats_consumed",
+                "peak_concurrent_users",
+                "avg_daily_active_users"
+              ],
+              "aggregation": "monthly"
+            },
+            "reconciliation_output": [
+              {
+                "entity_key": "slack_active_licenses",
+                "mongo_value": "active_and_upcoming_records_from_sam",
+                "sql_value": "consumption_trends_24_months",
+                "classification": "requires_individual_assessment",
+                "recommendation_framework": {
+                  "under_licensed": {
+                    "signal": "peak_concurrent_users > seat_count * 0.95",
+                    "action": "expedite_renewal_with_seat_increase"
+                  },
+                  "appropriately_licensed": {
+                    "signal": "avg_daily_active_users <= seat_count * 0.75 AND peak_concurrent_users <= seat_count * 0.95",
+                    "action": "proceed_with_standard_renewal_timeline"
+                  },
+                  "over_licensed": {
+                    "signal": "avg_daily_active_users < seat_count * 0.50",
+                    "action": "defer_renewal_and_reduce_seat_count"
+                  },
+                  "no_recent_activity": {
+                    "signal": "monthly_active_users = 0 OR null in sql_consumption",
+                    "action": "investigate_and_consider_license_termination"
+                  }
+                }
+              }
+            ],
+            "join_semantics": "LEFT_JOIN_mongo_on_sql",
+            "reconciliation_notes": {
+              "mongo_primary": "All SAM license records included regardless of SQL match",
+              "missing_sql_data": "Null values for consumption metrics indicate no recent usage",
+              "renewal_posture_determination": "Compare contracted_seats (mongo) vs peak_concurrent_users and avg_daily_active_users (sql)",
+              "trajectory_analysis": "Calculate month_over_month consumption trend to project future licensing needs",
+              "output_requires": "Entity-level analysis with specific consumption deltas and renewal recommendations per license record"
+            }
+          }
+        ],
+        "execution_note": "Return detailed reconciliation with one record per Slack license_id, including consumption metrics aligned to renewal_terms and seat_count for renewal posture classification and trajectory recommendations."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007351000000000001,
+  "total_latency_ms": 10095,
+  "cumulative_spend_usd": 3.6723820000000016
+}

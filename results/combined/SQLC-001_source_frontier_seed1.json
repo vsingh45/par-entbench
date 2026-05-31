@@ -1,0 +1,115 @@
+{
+  "task_id": "SQLC-001",
+  "task_class": "sql_compose",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top5_publishers",
+        "description": "Generate SQL query to fetch top 5 publishers by spend in Q4 2024 (Oct-Dec 2024), including total spend, transaction count, and relevant publisher metadata",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_risk_assessment",
+        "description": "Reconcile top 5 publishers spend data with historical trends, SLA performance, and contract status to identify at-risk publishers. Classify each by risk level (critical, high, medium, low) based on spend volatility, renewal status, and performance metrics. Generate SAM team summary with recommendations",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_top5_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid-tier) to fetch Q4 spend rankings with multi-table joins across spend/transaction and publisher tables\u2014mid complexity due to date filtering and aggregation; (2) cross_recon (mid-tier) to assess at-risk status by reconciling current spend against historical data, SLA metrics, and contract status, then classify and summarize for SAM. No separate policy_action needed since risk classification is part of the reconciliation analysis. The \"summarize\" request is fulfilled by cross_recon's native output generation, not a separate reporting step."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top5_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 745,
+      "output_tokens": 185,
+      "cached_tokens": 0,
+      "latency_ms": 2649,
+      "output": {
+        "sql": "SELECT publisher, SUM(amount_usd) AS total_spend, COUNT(*) AS transaction_count, COUNT(DISTINCT license_id) AS license_count, COUNT(DISTINCT product) AS product_count, AVG(daily_active_seats) AS avg_daily_active_seats FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date < '2025-01-01' GROUP BY publisher ORDER BY total_spend DESC LIMIT 5"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_risk_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 435,
+      "output_tokens": 602,
+      "cached_tokens": 0,
+      "latency_ms": 5362,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "publisher_1",
+            "mongo_value": null,
+            "sql_value": {
+              "publisher": "publisher_1",
+              "total_spend": 0,
+              "transaction_count": 0,
+              "license_count": 0,
+              "product_count": 0,
+              "avg_daily_active_seats": 0
+            },
+            "classification": "no_recent_activity"
+          }
+        ],
+        "error": "INCOMPLETE_INPUT",
+        "message": "MongoDB operational state not provided. Cannot perform LEFT JOIN reconciliation. Required inputs: (1) MongoDB query results with current publisher spend/performance, (2) SQL historical baseline data for comparison, (3) Contract renewal status, (4) SLA compliance metrics. Please provide complete upstream_outputs including both mongo and sql result sets with actual data points.",
+        "expected_schema": {
+          "mongo_publishers": [
+            {
+              "publisher_name": "string",
+              "current_spend_usd": "number",
+              "current_transaction_count": "number",
+              "current_licenses": "number",
+              "sla_uptime_pct": "number",
+              "renewal_date": "string",
+              "renewal_status": "enum: due|pending|renewed|at_risk"
+            }
+          ],
+          "sql_historical": [
+            {
+              "publisher": "string",
+              "total_spend": "number",
+              "transaction_count": "number",
+              "license_count": "number",
+              "product_count": "number",
+              "avg_daily_active_seats": "number",
+              "period": "Q4_2024"
+            }
+          ]
+        },
+        "reconciliation_requirements": {
+          "volatility_analysis": "Compare current vs historical spend to detect >20% variance",
+          "renewal_risk": "Flag publishers with renewal_date < 30 days AND declining usage",
+          "performance_risk": "Flag SLA_uptime < 99.5% OR product_count decrease",
+          "risk_classification": {
+            "critical": "renewal due + spend volatility >30% + SLA breach",
+            "high": "renewal due + spend decline OR SLA uptime <99%",
+            "medium": "spend variance 15-30% OR renewal pending",
+            "low": "stable spend + SLA compliant + renewal >60 days"
+          }
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.011795000000000002,
+  "total_latency_ms": 8011,
+  "cumulative_spend_usd": 0.5335079999999999,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

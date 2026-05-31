@@ -1,0 +1,40 @@
+{
+  "task_id": "MGO-003",
+  "task_class": "mongo_gen",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "adobe_inactive_seats_query",
+        "description": "Generate SQL query to compute count of inactive seats (>90 days without activity or NULL activity date) grouped by Adobe license. Join license and seat assignment tables, filter for inactivity using current_date and activity_date column, return license identifier and inactive seat count.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This is a single SQL query task with moderate complexity: it requires a join between license and seat assignment tables, date-based filtering logic (comparing activity_date to current_date with a 90-day threshold, plus handling NULL activity dates), and GROUP BY aggregation. A mid-tier model can reliably handle the multi-table join and date arithmetic. No cross-source reconciliation is needed\u2014this is a single SQL warehouse query. No policy evaluation is required. One subtask is sufficient and minimal."
+  },
+  "node_results": [
+    {
+      "subtask_id": "adobe_inactive_seats_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 760,
+      "output_tokens": 168,
+      "cached_tokens": 0,
+      "latency_ms": 3095,
+      "output": {
+        "sql": "SELECT license_id, COUNT(DISTINCT user_id) AS inactive_seat_count FROM consumption_facts WHERE publisher = 'Adobe' AND license_id NOT IN (SELECT DISTINCT license_id FROM consumption_facts WHERE publisher = 'Adobe' AND event_date >= CURRENT_DATE - INTERVAL '90 days' AND event_date IS NOT NULL) GROUP BY license_id"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.008,
+  "total_latency_ms": 3095,
+  "cumulative_spend_usd": 1.6272280000000008,
+  "evaluator_reason": "no_pipeline_in_output"
+}

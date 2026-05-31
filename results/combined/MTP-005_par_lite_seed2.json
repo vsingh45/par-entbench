@@ -1,0 +1,112 @@
+{
+  "task_id": "MTP-005",
+  "task_class": "multitool_plan",
+  "router": "par_lite",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_iam_role",
+        "description": "Query IAM system to retrieve the user's current role, permissions, and group memberships",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "get_manager_approval",
+        "description": "Retrieve manager approval status and workflow metadata from workflow management system using multi-tool orchestration (workflow API query, approval document fetch)",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "fetch_iam_role"
+        ]
+      },
+      {
+        "id": "update_iam_permissions",
+        "description": "Generate tool invocation plan to update IAM permissions based on approval, including role assignment, permission grants, and audit logging",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "get_manager_approval"
+        ]
+      },
+      {
+        "id": "send_confirmation_email",
+        "description": "Generate email notification plan confirming IAM permission update to user and manager with timestamp and change summary",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "update_iam_permissions"
+        ]
+      }
+    ],
+    "cost_rationale": "Four subtasks required because this is a sequential operational workflow with distinct system interactions: (1) IAM role fetch is a straightforward single-source query (small tier sql_gen); (2) Manager approval requires multi-tool orchestration across workflow and document systems (mid tier multitool_plan); (3) IAM permission update is a multi-step tool sequence with audit requirements (mid tier multitool_plan); (4) Email confirmation is a simple notification task (small tier multitool_plan). Each step depends on prior outputs. No cross_recon needed (single source per step), no policy_action needed (approval is fetched, not evaluated). Tiers reflect complexity of tool orchestration at each stage."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_iam_role",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 463,
+      "output_tokens": 64,
+      "cached_tokens": 0,
+      "latency_ms": 930,
+      "output": {
+        "sql": "SELECT user_id, permission, resource, action, result FROM access_log_facts WHERE access_time = (SELECT MAX(access_time) FROM access_log_facts) GROUP BY user_id, permission, resource, action, result"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "get_manager_approval",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 514,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10474,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"user_id\": \"$upstream.fetch_iam_role.user_id\",\n        \"permission\": \"$upstream.fetch_iam_role.permission\",\n        \"resource\": \"$upstream.fetch_iam_role.resource\",\n        \"action\": \"$upstream.fetch_iam_role.action\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"workflow_approvals\",\n        \"filter\": {\n          \"user_id\": \"$upstream.fetch_iam_role.user_id\",\n          \"approval_type\": \"manager_approval\",\n          \"status\": { \"$in\": [\"approved\", \"pending\", \"rejected\"] }\n        },\n        \"projection\": {\n          \"workflow_id\": 1,\n          \"approver_id\": 1,\n          \"approval_status\": 1,\n          \"approved_at\": 1,\n          \"requested_role\": 1,\n          \"metadata\": 1\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT workflow_id, requested_permission, requested_resource, requested_action, approval_status, manager_id, created_at, updated_at FROM workflow_metadata WHERE user_id = '$upstream.fetch_iam_role.user_id' ORDER BY created_at DESC LIMIT 1\"\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"iam.grant_role\",\n      \"arguments\": {\n        \"user_id\": \"$upstream.fetch_iam_role.user_id\",\n        \"role\": \"$2.results.requested_role\",\n        \"resource\": \"$upstream.fetch_iam_role.resource\",\n        \"approved_by\": \"$2.results.approver_id\",\n        \"workflow_id\": \"$2.results.workflow_id\",\n        \"condition\": {\n          \"approval_status_check\": \"$2.results.approval_status\",\n          \"required_status\": \"approved\"\n        }\n      },\n      \"depends_on\": [2, 3]\n    },\n    {\n      \"tool\": \"audit.log_action\",\n      \"arguments\": {\n        \"action\": \"iam.grant_role\",\n        \"performed_by\": \"orchestration_system\",\n        \"target_user_id\": \"$upstream.fetch_iam_role.user_id\",\n        \"role_granted\": \"$2.results.requested_role\",\n        \"resource\": \"$upstream.fetch_iam_role.resource\",\n        \"workflow_id\": \"$2.results.workflow_id\",\n        \"approver_id\": \"$2.results.approver_id\",\n        \"approval_status\": \"$2.results.approval_status\",\n        \"iam_check_result\": \"$1.result\",\n        \"timestamp\": \"$4.granted_at\",\n        \"metadata\": {\n          \"snowflake_workflow_record\": \"$3.results\",\n          \"mongo_approval_record\": \"$2.results\"\n        }\n      },\n      \"depends_on\": [4]"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "update_iam_permissions",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1434,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 7508,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"user_id\": \"$upstream.fetch_iam_role.user_id\",\n        \"permission\": \"$upstream.fetch_iam_role.permission\",\n        \"resource\": \"$upstream.fetch_iam_role.resource\",\n        \"action\": \"$upstream.fetch_iam_role.action\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"workflow_approvals\",\n        \"filter\": {\n          \"user_id\": \"$upstream.fetch_iam_role.user_id\",\n          \"approval_type\": \"manager_approval\",\n          \"status\": { \"$in\": [\"approved\", \"pending\", \"rejected\"] }\n        },\n        \"projection\": {\n          \"workflow_id\": 1,\n          \"approver_id\": 1,\n          \"approval_status\": 1,\n          \"approved_at\": 1,\n          \"requested_role\": 1,\n          \"metadata\": 1\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT workflow_id, requested_permission, requested_resource, requested_action, approval_status, manager_id, created_at, updated_at FROM workflow_metadata WHERE user_id = '$upstream.fetch_iam_role.user_id' ORDER BY created_at DESC LIMIT 1\"\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"iam.grant_role\",\n      \"arguments\": {\n        \"user_id\": \"$upstream.fetch_iam_role.user_id\",\n        \"role\": \"$2.results.requested_role\",\n        \"resource\": \"$upstream.fetch_iam_role.resource\",\n        \"approved_by\": \"$2.results.approver_id\",\n        \"workflow_id\": \"$2.results.workflow_id\",\n        \"condition\": {\n          \"approval_status_check\": \"$2.results.approval_status\",\n          \"required_status\": \"approved\"\n        }\n      },\n      \"depends_on\": [2, 3]\n    },\n    {\n      \"tool\": \"audit.log_action\",\n      \"arguments\": {\n        \"action\": \"iam.grant_role\",\n        \"performed_by\": \"orchestration_system\",\n        \"target_user_id\": \"$upstream.fetch_iam_role.user_id\",\n        \"role_granted\": \"$2.results.requested_role\",\n        \"resource\": \"$upstream.fetch_iam_role.resource\",\n        \"workflow_id\": \"$2.results.workflow_id\",\n        \"approver_id\": \"$2.results.approver_id\",\n        \"approval_status\": \"$2.results.approval_status\",\n        \"iam_check_result\": \"$1.result\",\n        \"timestamp\": \"$4.granted_at\",\n        \"metadata\": {\n          \"snowflake_workflow_record\": \"$3.results\",\n          \"mongo_approval_record\": \"$2.results\"\n        }\n      },\n      \"depends_on\": [4]"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "send_confirmation_email",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1429,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 3462,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"user_id\": \"$upstream.fetch_iam_role.user_id\",\n        \"permission\": \"$upstream.fetch_iam_role.permission\",\n        \"resource\": \"$upstream.fetch_iam_role.resource\",\n        \"action\": \"$upstream.fetch_iam_role.action\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"workflow_approvals\",\n        \"filter\": {\n          \"user_id\": \"$upstream.fetch_iam_role.user_id\",\n          \"approval_type\": \"manager_approval\",\n          \"status\": {\n            \"$in\": [\n              \"approved\",\n              \"pending\",\n              \"rejected\"\n            ]\n          }\n        },\n        \"projection\": {\n          \"workflow_id\": 1,\n          \"approver_id\": 1,\n          \"approval_status\": 1,\n          \"approved_at\": 1,\n          \"requested_role\": 1,\n          \"metadata\": 1\n        }\n      },\n      \"depends_on\": [\n        1\n      ]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT workflow_id, requested_permission, requested_resource, requested_action, approval_status, manager_id, created_at, updated_at FROM workflow_metadata WHERE user_id = '$upstream.fetch_iam_role.user_id' ORDER BY created_at DESC LIMIT 1\"\n      },\n      \"depends_on\": [\n        1\n      ]\n    },\n    {\n      \"tool\": \"iam.grant_role\",\n      \"arguments\": {\n        \"user_id\": \"$upstream.fetch_iam_role.user_id\",\n        \"role\": \"$2.results.requested_role\",\n        \"resource\": \"$upstream.fetch_iam_role.resource\",\n        \"approved_by\": \"$2.results.approver_id\",\n        \"workflow_id\": \"$2.results.workflow_id\",\n        \"condition\": {\n          \"approval_status_check\": \"$2.results.approval_status\",\n          \"required_status\": \"approved\"\n        }\n      },\n      \"depends_on\": [\n        2,\n        3\n      ]\n    },\n    {\n      \"tool\": \"audit.log_action\",\n      \"arguments\": {\n        \"action\": \"iam.grant_role\",\n        \"performed_by\": \"orchestration_system\",\n        \"target_user_id\": \"$upstream.fetch_iam_role.user_id\",\n        \"role_granted\": \"$2.results.requested_role\",\n        \"resource\": \"$upstream.fetch_iam_role.resource\",\n        \"workflow_id\": \"$2.results.workflow_id\",\n        \"approver_id\": \"$2.results.approver_id\",\n        \"approval_status\": \"$2.results.approval_status\",\n        \"iam_check_result\": \"$1.result\",\n        \"timestamp\": \"$4.granted_at\",\n        \"metadata\": {\n          \"snowflake_workflow_record\": \"$3.results\",\n          \"mongo_"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.036056000000000005,
+  "total_latency_ms": 22374,
+  "cumulative_spend_usd": 6.824219000000007,
+  "evaluator_reason": "no_plan_in_output"
+}

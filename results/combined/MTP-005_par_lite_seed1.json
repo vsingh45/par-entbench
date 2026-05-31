@@ -1,0 +1,101 @@
+{
+  "task_id": "MTP-005",
+  "task_class": "multitool_plan",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "iam_role_check",
+        "description": "Query IAM system to retrieve the user's current role and existing permissions",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "manager_approval_fetch",
+        "description": "Retrieve pending manager approval decision from workflow system (MongoDB or API state). Check approval status and timestamp.",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "orchestrate_provisioning",
+        "description": "Generate multi-step tool-call plan to: (1) update IAM permissions via identity management tool, (2) send confirmation email via notification service, and (3) log the action to audit trail. Requires orchestrating 2-3 tools from enterprise registry based on approval confirmation.",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "iam_role_check",
+          "manager_approval_fetch"
+        ]
+      }
+    ],
+    "cost_rationale": "3 subtasks required: (1) iam_role_check is a simple single-table IAM query (small tier). (2) manager_approval_fetch is a basic workflow state lookup (small tier). (3) orchestrate_provisioning is a multitool_plan because the query explicitly asks for multi-step execution across distinct systems (IAM update + email confirmation + implicit audit logging). This cannot be handled by a single specialist\u2014it requires coordinating tool calls from the 25-tool registry. Assigned mid tier because it involves conditional branching based on approval status and multiple tool dependencies. No cross_recon needed since there is no multi-source reconciliation requirement; no policy_action needed since approval is fetched from workflow, not policy-evaluated. Minimum decomposition: the four workflow steps map cleanly to three subtasks (role check, approval fetch run in parallel, then orchestrate the provisioning actions)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "iam_role_check",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 459,
+      "output_tokens": 48,
+      "cached_tokens": 0,
+      "latency_ms": 1007,
+      "output": {
+        "sql": "SELECT user_id, permission, resource, action, result FROM access_log_facts WHERE user_id IS NOT NULL ORDER BY access_time DESC LIMIT 100"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "manager_approval_fetch",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1219,
+      "output_tokens": 92,
+      "cached_tokens": 0,
+      "latency_ms": 795,
+      "output": {
+        "collection": "iam_roles",
+        "pipeline": [
+          {
+            "$match": {
+              "is_elevated": true
+            }
+          },
+          {
+            "$project": {
+              "role_name": 1,
+              "permissions": 1,
+              "is_elevated": 1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "orchestrate_provisioning",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 592,
+      "output_tokens": 799,
+      "cached_tokens": 0,
+      "latency_ms": 11099,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"user_id\": \"$upstream.iam_role_check.user_id\",\n        \"resource\": \"$upstream.iam_role_check.resource\",\n        \"action\": \"iam:grant_role\"\n      },\n      \"depends_on\": [],\n      \"step\": 1\n    },\n    {\n      \"tool\": \"mongo.aggregate\",\n      \"arguments\": {\n        \"collection\": \"iam_roles\",\n        \"pipeline\": [\n          { \"$match\": { \"is_elevated\": true } },\n          { \"$project\": { \"role_name\": 1, \"permissions\": 1, \"is_elevated\": 1 } }\n        ]\n      },\n      \"depends_on\": [1],\n      \"step\": 2\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT user_id, permission, resource, action, result FROM access_log_facts WHERE user_id IS NOT NULL ORDER BY access_time DESC LIMIT 100\"\n      },\n      \"depends_on\": [1],\n      \"step\": 3\n    },\n    {\n      \"tool\": \"iam.grant_role\",\n      \"arguments\": {\n        \"user_id\": \"$3.results[0].user_id\",\n        \"role\": \"$2.results[0].role_name\",\n        \"permissions\": \"$2.results[0].permissions\",\n        \"justification\": \"Manager approval confirmed via workflow system\",\n        \"approved_by\": \"$2.results[0].approved_by\",\n        \"condition\": \"$1.allowed == true\"\n      },\n      \"depends_on\": [1, 2, 3],\n      \"step\": 4\n    },\n    {\n      \"tool\": \"audit.log_action\",\n      \"arguments\": {\n        \"action\": \"iam:grant_role\",\n        \"actor\": \"$3.results[0].user_id\",\n        \"target_user\": \"$3.results[0].user_id\",\n        \"role_granted\": \"$2.results[0].role_name\",\n        \"permissions\": \"$2.results[0].permissions\",\n        \"permission_check_result\": \"$1.allowed\",\n        \"outcome\": \"$4.status\",\n        \"timestamp\": \"$4.updated_at\",\n        \"source\": \"access_provisioning_workflow\"\n      },\n      \"depends_on\": [4],\n      \"step\": 5\n    },\n    {\n      \"tool\": \"email.send\",\n      \"arguments\": {\n        \"to\": \"$3.results[0].user_id\",\n        \"subject\": \"Access Provisioning Confirmed: Role Grant Notification\",\n        \"body\": \"Your IAM role has been updated. Role: $2.results[0].role_name. Permissions: $2.results[0].permissions. This change was approved and logged with audit ID: $5.audit_id. If you did not request this change, contact your security team immediately.\",\n        \"cc\": [\"security-team@enterprise.com\"],\n        \"metadata\": {\n          \"audit_id\": \"$5.audit_id\",\n          \"workflow\": \"access_provisioning\"\n        }\n      },\n      \"depends_on\": [5],"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.016139,
+  "total_latency_ms": 12901,
+  "cumulative_spend_usd": 6.788163000000007,
+  "evaluator_reason": "no_plan_in_output"
+}

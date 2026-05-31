@@ -1,0 +1,106 @@
+{
+  "task_id": "MTP-007",
+  "task_class": "multitool_plan",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "cloudtrail_audit",
+        "description": "Query CloudTrail logs from SQL data warehouse to extract audit events, timestamps, principals, actions, resources, and outcomes. Identify authentication attempts, policy changes, access denials, and suspicious activities.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "iam_policy_scan",
+        "description": "Extract IAM policy documents from MongoDB to retrieve policy statements, principals, resources, conditions, and effect rules. Structure all policy metadata for compliance assessment.",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "violation_detection",
+        "description": "Reconcile CloudTrail audit events with IAM policies to detect violations: overly permissive policies, unauthorized actions, policy mismatches, and anomalous access patterns. Classify violations by severity and risk category.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": []
+      },
+      {
+        "id": "compliance_policy_check",
+        "description": "Evaluate detected violations and policy configurations against compliance policy registry for regulatory requirements (SOC2, CIS, NIST). Determine compliance gaps and required remediation actions.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Four subtasks required: (1) CloudTrail SQL audit\u2014mid tier due to complex event filtering and aggregation across multiple event types; (2) IAM policy extraction\u2014mid tier for multi-document MongoDB pipeline to surface all policy attributes; (3) Violation detection\u2014frontier tier because it requires sophisticated cross-source reconciliation of audit events against policies, anomaly detection, and classification with business logic; (4) Compliance policy check\u2014mid tier for evaluating violations against a policy registry with clear rule mapping. This is a minimal decomposition: CloudTrail and IAM scans cannot be combined (different sources), violation detection requires both scan outputs (dependency), and compliance evaluation is explicitly requested (policy_action required)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "cloudtrail_audit",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 482,
+      "output_tokens": 211,
+      "cached_tokens": 0,
+      "latency_ms": 5248,
+      "output": {
+        "sql": "SELECT log_id, user_id, permission, resource, access_time, action, result, CASE WHEN action IN ('LOGIN','AUTHENTICATE','AUTH') THEN 'Authentication Attempt' WHEN action IN ('PUT_POLICY','DELETE_POLICY','ATTACH_POLICY','DETACH_POLICY','CREATE_POLICY','UPDATE_POLICY') THEN 'Policy Change' WHEN result IN ('DENY','DENIED','FORBIDDEN','UNAUTHORIZED') THEN 'Access Denial' WHEN result NOT IN ('ALLOW','ALLOWED','SUCCESS','OK') AND action IN ('LOGIN','AUTHENTICATE','AUTH') THEN 'Failed Authentication' ELSE 'General Access Event' END AS event_category, CASE WHEN result IN ('DENY','DENIED','FORBIDDEN','UNAUTHORIZED') THEN TRUE ELSE FALSE END AS is_suspicious FROM access_log_facts ORDER BY access_time DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "iam_policy_scan",
+      "specialist": "mongo_query",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1225,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9769,
+      "output": {
+        "collection": "iam_roles"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "violation_detection",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 450,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 872,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "compliance_policy_check",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 384,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 14222,
+      "output": {
+        "raw_output": "{\n  \"selected_action\": \"allow_with_constraints\",\n  \"policy_compliance\": {\n    \"POL-SOC2-CC6.1\": \"pass_conditional\",\n    \"POL-SOC2-CC6.2\": \"pass_conditional\",\n    \"POL-SOC2-CC6.3\": \"pass\",\n    \"POL-SOC2-CC7.1\": \"pass\",\n    \"POL-SOC2-CC7.2\": \"pass_conditional\",\n    \"POL-SOC2-CC8.1\": \"pass_conditional\",\n    \"POL-CIS-1.1\": \"pass_conditional\",\n    \"POL-CIS-1.2\": \"pass\",\n    \"POL-CIS-2.1\": \"pass\",\n    \"POL-CIS-2.2\": \"pass_conditional\",\n    \"POL-CIS-3.1\": \"pass\",\n    \"POL-CIS-3.3\": \"pass_conditional\",\n    \"POL-NIST-AC-2\": \"pass_conditional\",\n    \"POL-NIST-AC-3\": \"pass\",\n    \"POL-NIST-AU-2\": \"pass\",\n    \"POL-NIST-AU-6\": \"pass_conditional\",\n    \"POL-NIST-AU-9\": \"pass_conditional\",\n    \"POL-NIST-CA-7\": \"pass_conditional\",\n    \"POL-NIST-RA-5\": \"pass\",\n    \"POL-NIST-SI-4\": \"pass_conditional\",\n    \"POL-DATA-PRIVACY-001\": \"pass_conditional\",\n    \"POL-ACCESS-CTRL-001\": \"pass\",\n    \"POL-CHANGE-MGMT-001\": \"pass_conditional\",\n    \"POL-INCIDENT-001\": \"not_applicable\",\n    \"POL-BCP-001\": \"not_applicable\"\n  },\n  \"reason\": \"Security audit workflow covering IAM policy scanning, CloudTrail log auditing, violation detection, and compliance report generation is permitted under SOC2, CIS, and NIST frameworks as a read-only/analytical control activity. All scan and audit operations must be performed under least-privilege audit roles with no mutation of production resources. Findings containing sensitive identity or credential data must be masked in the generated report per data privacy policy. Audit log access must itself be logged for chain-of-custody integrity. No incident response or BCP policies are triggered as this is a proactive audit, not a live incident.\",\n  \"applied_constraints\": [\n    \"CONSTRAINT-1: IAM policy scanning must use a dedicated read-only audit role (e.g., SecurityAudit or equivalent) \u2014 write/mutate IAM permissions are strictly prohibited during this workflow.\",\n    \"CONSTRAINT-2: CloudTrail log access must be scoped to the minimum required time window and log groups; bulk export of raw logs to non-audited storage is prohibited.\",\n    \"CONSTRAINT-3: All audit workflow actions must themselves be logged in a tamper-evident audit trail (CloudTrail or equivalent) to satisfy NIST AU-9 and SOC2 CC7.2 chain-of-custody requirements.\",\n    \"CONSTRAINT-4: Generated compliance reports must redact or mask sensitive data fields (e.g., secret ARNs, credential fragments, P"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.036038,
+  "total_latency_ms": 30111,
+  "cumulative_spend_usd": 7.543866000000005,
+  "evaluator_reason": "no_plan_in_output"
+}

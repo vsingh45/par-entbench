@@ -1,0 +1,276 @@
+{
+  "task_id": "MTP-005",
+  "task_class": "multitool_plan",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "iam_check_role",
+        "description": "Query IAM system to retrieve user's current role, group memberships, and existing permissions",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_approval",
+        "description": "Retrieve manager approval status and authorization details from workflow system (e.g., Jira, ServiceNow, or internal approval queue)",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "iam_check_role"
+        ]
+      },
+      {
+        "id": "update_permissions",
+        "description": "Execute IAM permission update based on approved role assignment, including group additions and policy attachments",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "fetch_approval"
+        ]
+      },
+      {
+        "id": "confirm_email",
+        "description": "Send confirmation email to user and manager with updated IAM role, permissions granted, and effective date",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "update_permissions"
+        ]
+      }
+    ],
+    "cost_rationale": "This access provisioning workflow requires multi-tool orchestration across four distinct systems: IAM query, workflow approval retrieval, IAM update execution, and email notification. Each step is a separate tool invocation with dependencies on prior results. This is explicitly a multi-step tool-call scenario requiring the multitool_plan specialist. Tier assignments: iam_check_role (mid) — IAM queries often require filtering and credential validation; fetch_approval (small) — straightforward approval lookup; update_permissions (mid) — IAM mutations are complex operations requiring careful validation; confirm_email (small) — basic templated notification. Total of 4 subtasks justified by the sequential, multi-system nature of the request. No cross_recon or policy_action needed because the query does not ask for reconciliation or explicit policy evaluation—it describes an operational workflow."
+  },
+  "node_results": [
+    {
+      "subtask_id": "iam_check_role",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 621,
+      "output_tokens": 440,
+      "cached_tokens": 0,
+      "latency_ms": 5760,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "user": "$context.user",
+              "action": "read_iam_profile"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "iam_users",
+              "filter": {
+                "user_id": "$context.user"
+              },
+              "projection": {
+                "role": 1,
+                "groups": 1,
+                "permissions": 1
+              }
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "approval_workflows",
+              "filter": {
+                "user_id": "$context.user",
+                "status": "approved",
+                "type": "access_provisioning"
+              }
+            },
+            "depends_on": [
+              2
+            ]
+          },
+          {
+            "tool": "iam.grant_role",
+            "arguments": {
+              "user": "$context.user",
+              "role": "$3.results.requested_role",
+              "approval_id": "$3.results._id"
+            },
+            "depends_on": [
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "iam.grant_role",
+              "user": "$context.user",
+              "details": {
+                "prior": "$2.results",
+                "granted": "$4.result",
+                "approval": "$3.results._id"
+              }
+            },
+            "depends_on": [
+              4
+            ]
+          },
+          {
+            "tool": "email.send",
+            "arguments": {
+              "to": "$2.results.email",
+              "subject": "Access provisioning complete",
+              "body": "Your access has been updated based on approved request $3.results._id. New role: $4.result.role"
+            },
+            "depends_on": [
+              5
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_approval",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 823,
+      "output_tokens": 630,
+      "cached_tokens": 0,
+      "latency_ms": 3920,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "user": "$context.user",
+              "action": "read_approval_status"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "jira.list_tickets",
+            "arguments": {
+              "jql": "assignee = currentUser() AND type = 'Access Request' AND status IN ('Pending Manager Approval', 'Approved')",
+              "fields": [
+                "status",
+                "customfield_manager_approval",
+                "customfield_authorization_level"
+              ]
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "approval_workflows",
+              "filter": {
+                "user_id": "$context.user",
+                "type": "access_provisioning"
+              },
+              "projection": {
+                "status": 1,
+                "manager_approval": 1,
+                "authorization_details": 1,
+                "created_at": 1,
+                "updated_at": 1
+              }
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "iam_users",
+              "filter": {
+                "user_id": "$context.user"
+              },
+              "projection": {
+                "role": 1,
+                "groups": 1,
+                "permissions": 1,
+                "email": 1
+              }
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "approval_status_retrieved",
+              "user": "$context.user",
+              "details": {
+                "jira_tickets": "$2.results",
+                "workflow_approvals": "$3.results",
+                "current_iam_profile": "$4.results"
+              }
+            },
+            "depends_on": [
+              2,
+              3,
+              4
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#approval-notifications",
+              "message": "Manager approval status retrieved for user $context.user. Jira tickets: $2.results_count, Workflow approvals: $3.results_count, Current role: $4.results.role"
+            },
+            "depends_on": [
+              5
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "update_permissions",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 900,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 3963,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"user\": \"$context.user\",\n        \"action\": \"modify_iam_role\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"user\": \"$context.user\",\n        \"action\": \"manage_group_membership\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"user\": \"$context.user\",\n        \"action\": \"attach_policy\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"approval_workflows\",\n        \"filter\": {\n          \"user_id\": \"$context.user\",\n          \"type\": \"access_provisioning\",\n          \"status\": \"Approved\"\n        },\n        \"projection\": {\n          \"requested_role\": 1,\n          \"requested_groups\": 1,\n          \"requested_policies\": 1,\n          \"authorization_level\": 1\n        }\n      },\n      \"depends_on\": [1, 2, 3]\n    },\n    {\n      \"tool\": \"iam.grant_role\",\n      \"arguments\": {\n        \"user\": \"$context.user\",\n        \"role\": \"$4.results.requested_role\"\n      },\n      \"depends_on\": [4]\n    },\n    {\n      \"tool\": \"iam.grant_role\",\n      \"arguments\": {\n        \"user\": \"$context.user\",\n        \"groups\": \"$4.results.requested_groups\"\n      },\n      \"depends_on\": [4]\n    },\n    {\n      \"tool\": \"iam.grant_role\",\n      \"arguments\": {\n        \"user\": \"$context.user\",\n        \"policies\": \"$4.results.requested_policies\"\n      },\n      \"depends_on\": [4]\n    },\n    {\n      \"tool\": \"audit.log_action\",\n      \"arguments\": {\n        \"action\": \"iam_permissions_updated\",\n        \"user\": \"$context.user\",\n        \"details\": {\n          \"role_assigned\": \"$5.results\",\n          \"groups_added\": \"$6.results\",\n          \"policies_attached\": \"$7.results\",\n          \"approval_reference\": \"$4.results._id\"\n        }\n      },\n      \"depends_on\": [5, 6, 7]\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"iam_users\",\n        \"filter\": {\n          \"user_id\": \"$context.user\"\n        },\n        \"projection\": {\n          \"email\": 1\n        }\n      },\n      \"depends_on\": [8]\n    },\n    {\n      \"tool\": \"email.send\",\n      \"arguments\": {\n        \"to\": \"$9.results.email\",\n        \"subject\": \"IAM Access Provisioning Completed\",\n        \"body\": \"Your approved access request has been successfully processed. Role assigned: $5.results. Groups added: $6.results_count. Policies attached:"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "confirm_email",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1455,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 4455,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"approval_workflows\",\n        \"filter\": {\n          \"status\": \"Approved\",\n          \"type\": \"access_provisioning\"\n        },\n        \"projection\": {\n          \"user_id\": 1,\n          \"requested_role\": 1,\n          \"requested_groups\": 1,\n          \"requested_policies\": 1,\n          \"effective_date\": 1,\n          \"manager_id\": 1\n        }\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"iam_users\",\n        \"filter\": {\n          \"user_id\": \"$1.results.user_id\"\n        },\n        \"projection\": {\n          \"email\": 1,\n          \"name\": 1\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"iam_users\",\n        \"filter\": {\n          \"user_id\": \"$1.results.manager_id\"\n        },\n        \"projection\": {\n          \"email\": 1,\n          \"name\": 1\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"email.send\",\n      \"arguments\": {\n        \"to\": \"$2.results.email\",\n        \"subject\": \"IAM Access Provisioning Completed - Role Update Confirmation\",\n        \"body\": \"Dear $2.results.name,\\n\\nYour access provisioning request has been successfully processed.\\n\\nUpdated IAM Role: $1.results.requested_role\\nPermissions Granted:\\n- Groups: $1.results.requested_groups\\n- Policies: $1.results.requested_policies\\n\\nEffective Date: $1.results.effective_date\\n\\nPlease contact your manager or IT support if you have any questions.\\n\\nBest regards,\\nIAM Administration\"\n      },\n      \"depends_on\": [2]\n    },\n    {\n      \"tool\": \"email.send\",\n      \"arguments\": {\n        \"to\": \"$3.results.email\",\n        \"subject\": \"IAM Access Provisioning Notification - Employee Role Update\",\n        \"body\": \"Dear $3.results.name,\\n\\nThis is to notify you that access provisioning for your direct report has been completed.\\n\\nEmployee: $2.results.name\\nAssigned Role: $1.results.requested_role\\nPermissions Granted:\\n- Groups: $1.results.requested_groups\\n- Policies: $1.results.requested_policies\\n\\nEffective Date: $1.results.effective_date\\n\\nIf you have any concerns or need further information, please contact IT support.\\n\\nBest regards,\\nIAM Administration\"\n      },\n      \"depends_on\": [3]\n    },\n    {\n      \"tool\": \"audit.log_action\",\n      \"arguments\": {\n        \"action\": \"iam_provisioning_confirmation_sent\",\n        \"user\": \"$1.results.user_id\",\n        \"details\": {"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.028433000000000007,
+  "total_latency_ms": 18098,
+  "cumulative_spend_usd": 6.660587000000007
+}

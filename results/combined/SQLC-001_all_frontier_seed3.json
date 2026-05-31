@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-001",
+  "task_class": "sql_compose",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top_publishers",
+        "description": "Generate SQL query to fetch the top 5 publishers by spend in Q4 2024 (October-December). Return publisher name, total spend, transaction count, and any relevant spend trend indicators.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_risk_assessment",
+        "description": "Reconcile the top 5 publishers' Q4 spend data with historical spending patterns and contract terms to identify at-risk publishers. Classify risk posture (high, medium, low) based on spend volatility, contract status, and renewal timeline, then summarize recommendations for the SAM team.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_top_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks needed: (1) sql_gen to retrieve top 5 publishers with Q4 spend metrics \u2014 assigned mid tier because it requires multi-table joins (likely vendor master, spend transactions, and date filtering) across a potentially large dataset; (2) cross_recon to reconcile current spend against historical patterns and contracts, then classify risk and generate SAM-ready recommendations \u2014 assigned mid tier because it involves multi-signal analysis (spend volatility, contract status, renewals) but does not require frontier-level inference. The classification and risk recommendation are integral to cross_recon output and do not require a separate policy_action step since this is posture analysis, not policy compliance evaluation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 748,
+      "output_tokens": 201,
+      "cached_tokens": 0,
+      "latency_ms": 2559,
+      "output": {
+        "sql": "SELECT publisher, SUM(amount_usd) AS total_spend, COUNT(*) AS transaction_count, AVG(amount_usd) AS avg_transaction_spend, MIN(event_date) AS first_event_date, MAX(event_date) AS last_event_date FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date < '2025-01-01' AND fiscal_year = 2024 AND fiscal_quarter = 4 GROUP BY publisher ORDER BY total_spend DESC LIMIT 5"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_risk_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 690,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 1049,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.012565,
+  "total_latency_ms": 3608,
+  "cumulative_spend_usd": 0.46996599999999994,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

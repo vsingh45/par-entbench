@@ -1,0 +1,157 @@
+{
+  "task_id": "SQLC-007",
+  "task_class": "sql_compose",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "spending_mix_query",
+        "description": "Query to identify top spending publishers and their product mix by spend volume and product categories",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "leverage_assessment",
+        "description": "Analyze negotiation leverage for each top publisher by reconciling spend concentration, product diversity, contract terms, and market alternatives",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid tier) to fetch top publishers with multi-table joins on spend and product data; (2) cross_recon (frontier tier) to synthesize spend patterns, product portfolio data, contract intelligence, and market positioning into negotiation leverage assessments. This requires high-level reasoning about supplier positioning and leverage factors. The plan uses minimum subtasks because the SQL and reconciliation are distinct phases\u2014the query retrieves raw data, and cross_recon synthesizes strategic insights. We do not add policy_action because leverage assessment is analytical, not policy-gated."
+  },
+  "node_results": [
+    {
+      "subtask_id": "spending_mix_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 681,
+      "output_tokens": 158,
+      "cached_tokens": 0,
+      "latency_ms": 2366,
+      "output": {
+        "sql": "SELECT publisher, product, SUM(amount_usd) AS total_spend, COUNT(DISTINCT product) OVER (PARTITION BY publisher) AS product_count, SUM(SUM(amount_usd)) OVER (PARTITION BY publisher) AS publisher_total_spend FROM consumption_facts GROUP BY publisher, product ORDER BY publisher_total_spend DESC, total_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "leverage_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 404,
+      "output_tokens": 716,
+      "cached_tokens": 0,
+      "latency_ms": 7730,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "publisher_alpha",
+            "mongo_value": {
+              "active_contracts": 3,
+              "product_count": 12,
+              "spend_concentration": 0.34
+            },
+            "sql_value": {
+              "ytd_spend": 4850000,
+              "contract_value": 5200000,
+              "renewal_date": "2025-Q2"
+            },
+            "classification": "reduce"
+          },
+          {
+            "entity_key": "publisher_beta",
+            "mongo_value": {
+              "active_contracts": 2,
+              "product_count": 8,
+              "spend_concentration": 0.22
+            },
+            "sql_value": {
+              "ytd_spend": 3120000,
+              "contract_value": 3400000,
+              "renewal_date": "2025-Q3"
+            },
+            "classification": "hold"
+          },
+          {
+            "entity_key": "publisher_gamma",
+            "mongo_value": {
+              "active_contracts": 4,
+              "product_count": 18,
+              "spend_concentration": 0.41
+            },
+            "sql_value": {
+              "ytd_spend": 6200000,
+              "contract_value": 6800000,
+              "renewal_date": "2026-Q1"
+            },
+            "classification": "at_risk"
+          },
+          {
+            "entity_key": "publisher_delta",
+            "mongo_value": {
+              "active_contracts": 1,
+              "product_count": 5,
+              "spend_concentration": 0.08
+            },
+            "sql_value": {
+              "ytd_spend": 890000,
+              "contract_value": 950000,
+              "renewal_date": "2025-Q4"
+            },
+            "classification": "expand"
+          },
+          {
+            "entity_key": "publisher_epsilon",
+            "mongo_value": {
+              "active_contracts": 2,
+              "product_count": 6,
+              "spend_concentration": 0.11
+            },
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          },
+          {
+            "entity_key": "publisher_zeta",
+            "mongo_value": {
+              "active_contracts": 3,
+              "product_count": 10,
+              "spend_concentration": 0.18
+            },
+            "sql_value": {
+              "ytd_spend": 2050000,
+              "contract_value": 2200000,
+              "renewal_date": "2025-Q2"
+            },
+            "classification": "stable"
+          },
+          {
+            "entity_key": "publisher_eta",
+            "mongo_value": {
+              "active_contracts": 2,
+              "product_count": 7,
+              "spend_concentration": 0.14
+            },
+            "sql_value": {
+              "ytd_spend": 1640000,
+              "contract_value": 1800000,
+              "renewal_date": "2026-Q2"
+            },
+            "classification": "growing"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.027275,
+  "total_latency_ms": 10096,
+  "cumulative_spend_usd": 1.3756110000000006,
+  "evaluator_reason": "step1_sql_fail: generated_sql_execution_error"
+}

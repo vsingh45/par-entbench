@@ -1,0 +1,40 @@
+{
+  "task_id": "MGO-002",
+  "task_class": "mongo_gen",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_group_licenses",
+        "description": "Query license database to group licenses by publisher and compute aggregations: total contract value, average cost per seat, and count of licenses per publisher",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single SQL query with GROUP BY and aggregate functions (SUM, AVG, COUNT). No joins to multiple tables are mentioned, no complex window functions, and no cross-source reconciliation needed. This is a straightforward aggregation task suitable for small tier. One subtask is sufficient because all the requested metrics (total contract value, average cost per seat, license count) can be computed in a single GROUP BY query with multiple aggregate columns in one sql_gen call."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_group_licenses",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 704,
+      "output_tokens": 133,
+      "cached_tokens": 0,
+      "latency_ms": 2315,
+      "output": {
+        "sql": "SELECT publisher, SUM(amount_usd) AS total_contract_value, AVG(amount_usd / NULLIF(daily_active_seats, 0)) AS avg_cost_per_seat, COUNT(DISTINCT license_id) AS license_count FROM consumption_facts GROUP BY publisher ORDER BY total_contract_value DESC"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.006845,
+  "total_latency_ms": 2315,
+  "cumulative_spend_usd": 1.544484000000001,
+  "evaluator_reason": "no_pipeline_in_output"
+}

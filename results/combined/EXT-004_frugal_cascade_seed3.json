@@ -1,0 +1,56 @@
+{
+  "task_id": "EXT-004",
+  "task_class": "extract",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_contract_parties",
+        "description": "Extract all party names, their roles (e.g., vendor, customer, service provider), and contact addresses from the multi-party contract document.",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single extract subtask (mid tier) is sufficient. Multi-party contract extraction requires identifying multiple entities with their attributes (name, role, address) in a single pass. Mid tier is appropriate because: (1) the extraction requires parsing multiple related entities rather than simple single-field extraction, (2) it needs to distinguish between different party roles which may require some contextual reasoning, and (3) it must handle variable numbers of parties. This is a single source document, so no cross_recon is needed. One subtask minimizes cost while maintaining reliability for the moderate complexity of multi-party entity extraction."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_contract_parties",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 393,
+      "output_tokens": 162,
+      "cached_tokens": 0,
+      "latency_ms": 1136,
+      "output": {
+        "parties": [
+          {
+            "name": "Acme Corporation",
+            "role": "Service Provider",
+            "contact_address": "123 Business Ave, San Francisco, CA 94105"
+          },
+          {
+            "name": "TechCorp Inc.",
+            "role": "Primary Client",
+            "contact_address": "456 Innovation Drive, San Jose, CA 95110"
+          },
+          {
+            "name": "Global Partners LLC",
+            "role": "Secondary Partner",
+            "contact_address": "789 Enterprise Boulevard, Las Vegas, NV 89101"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.001203,
+  "total_latency_ms": 1136,
+  "cumulative_spend_usd": 5.403653000000005,
+  "evaluator_reason": "f1=0.667_below_0.85"
+}

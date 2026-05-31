@@ -1,0 +1,50 @@
+{
+  "task_id": "PAC-006",
+  "task_class": "policy_action",
+  "router": "sink_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_deployment",
+        "description": "Evaluate the proposed Docker image rollout against deployment governance policies. Assess compliance with change control, staging validation requirements, and production readiness standards. Determine if the direct production deployment violates established policy.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This query explicitly asks for a policy evaluation against governance standards (staging validation, change control, production safety). The policy_action specialist is appropriate. Mid tier is assigned because evaluating deployment policy requires reasoning across multiple policy dimensions (change control process, testing requirements, risk management) and potential exceptions rather than a simple yes/no check against a single rule.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_deployment",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 784,
+      "output_tokens": 181,
+      "cached_tokens": 0,
+      "latency_ms": 3109,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-601": "fail",
+          "POL-602": "fail",
+          "POL-603": "pending_review"
+        },
+        "reason": "Direct production rollout without staging validation violates POL-601 (48-hour staging requirement) and POL-602 (change board approval). POL-603 rollback/monitoring capability not confirmed.",
+        "applied_constraints": [
+          "Require 48-hour staging validation",
+          "Obtain change board approval",
+          "Confirm automated rollback and traffic monitoring before rollout"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.008445000000000001,
+  "total_latency_ms": 3109,
+  "cumulative_spend_usd": 8.570792000000006
+}

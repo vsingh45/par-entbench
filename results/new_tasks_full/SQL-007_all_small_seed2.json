@@ -1,0 +1,39 @@
+{
+  "task_id": "SQL-007",
+  "task_class": "sql_gen",
+  "router": "all_small",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "Identify publishers with declining spend from Q3 to Q4 2024. Show publishers where Q4 spend is less than Q3 spend.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task — Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 477,
+      "output_tokens": 241,
+      "cached_tokens": 0,
+      "latency_ms": 1886,
+      "output": {
+        "sql": "WITH q3_spend AS (SELECT publisher, SUM(amount_usd) as q3_total FROM consumption_facts WHERE event_date >= '2024-07-01' AND event_date < '2024-10-01' AND fiscal_quarter = 3 GROUP BY publisher), q4_spend AS (SELECT publisher, SUM(amount_usd) as q4_total FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date < '2025-01-01' AND fiscal_quarter = 4 GROUP BY publisher) SELECT q3.publisher, q3.q3_total, q4.q4_total, (q4.q4_total - q3.q3_total) as spend_change FROM q3_spend q3 INNER JOIN q4_spend q4 ON q3.publisher = q4.publisher WHERE q4.q4_total < q3.q3_total ORDER BY spend_change ASC"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0016820000000000001,
+  "total_latency_ms": 1886,
+  "cumulative_spend_usd": 0.26245199999999996
+}

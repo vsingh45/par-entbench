@@ -1,0 +1,52 @@
+{
+  "task_id": "PAC-003",
+  "task_class": "policy_action",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_emergency_access",
+        "description": "Evaluate emergency access request for user 'u_9981' (senior-engineer) to 'db-payments-primary' against access control and incident response policies. Verify: (1) user's on-call status and role, (2) P1 incident classification eligibility, (3) temporary emergency access grant conditions and time limits, (4) audit logging requirements.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single policy_action subtask assigned because the query explicitly requests governance evaluation of an access control decision against a policy registry. This is not a data reconciliation task (no cross_recon needed) nor a multi-tool orchestration (no multitool_plan). Tier is 'mid' because the decision requires multi-signal reasoning: validating user role, incident severity classification, emergency access conditions, and audit compliance\u2014more than a single-rule check but not requiring complex cross-domain inference. No additional subtasks are needed; the policy engine itself will render the approval decision and conditions.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_emergency_access",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 836,
+      "output_tokens": 266,
+      "cached_tokens": 0,
+      "latency_ms": 4086,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-501": "pass",
+          "POL-502": "pass",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "Senior engineer u_9981 has active P1 incident ticket INC-20241215-0042, satisfying POL-501. POL-502 dual approval waived under declared P1 incident exception. Emergency access granted contingent on audit logging and 24-hour post-incident review per POL-503.",
+        "applied_constraints": [
+          "Time-limited access tied to incident duration (auto-revoke on INC-20241215-0042 closure or 4h max)",
+          "All read_write operations logged to immutable audit trail",
+          "Mandatory post-incident review within 24 hours",
+          "Access tied to incident ticket INC-20241215-0042"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.010830000000000001,
+  "total_latency_ms": 4086,
+  "cumulative_spend_usd": 5.056592000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

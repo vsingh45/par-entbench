@@ -1,0 +1,94 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_1",
+        "description": "Query SQL warehouse to retrieve all IAM roles with elevated permissions. Extract role names, permission names, grant dates, and any metadata about elevation level or privilege escalation status.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "mongo_1",
+        "description": "Query MongoDB audit/activity logs to retrieve all permission usage events for the last 180 days. Extract role names, permissions exercised, timestamps, and success/failure status. Return aggregated usage by role and permission.",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_1",
+        "description": "Reconcile SQL-sourced granted elevated permissions against MongoDB-sourced exercised permissions. For each role-permission pair, determine: (1) grant status, (2) usage status in last 180 days, (3) revocation candidates (granted but never exercised). Classify each permission as 'active', 'dormant', 'deprecated', or 'candidate_for_revocation'. Output structured report with role, permission, grant date, last used date (if any), and revocation recommendation.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_1",
+          "mongo_1"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) SQL query to fetch granted permissions from IAM/privilege warehouse (mid tier for multi-table join of roles + permissions + elevation metadata), (2) MongoDB aggregation to analyze 180-day activity logs with usage patterns (mid tier for aggregation pipeline with time windowing), (3) Cross-reconciliation with classification logic (frontier tier due to multi-signal reconciliation across two sources, comparison logic, dormancy classification, and revocation recommendation generation requiring complex decision-making). The reconciliation is the core value-add and requires frontier capability to handle statistical dormancy detection, exception handling, and nuanced classification."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 490,
+      "output_tokens": 631,
+      "cached_tokens": 0,
+      "latency_ms": 8414,
+      "output": {
+        "sql": "SELECT\n    al.permission,\n    al.user_id AS iam_role,\n    COUNT(*) FILTER (WHERE al.result = 'ALLOW') AS times_exercised_allowed,\n    COUNT(*) FILTER (WHERE al.result = 'DENY')  AS times_exercised_denied,\n    COUNT(*) AS total_access_attempts,\n    MAX(al.access_time) AS last_used_time,\n    MIN(al.access_time) AS first_used_time,\n    CASE\n        WHEN COUNT(*) FILTER (WHERE al.result = 'ALLOW') = 0 THEN 'CANDIDATE_FOR_REVOCATION'\n        ELSE 'IN_USE'\n    END AS revocation_flag,\n    CASE\n        WHEN al.permission ILIKE '%admin%'\n          OR al.permission ILIKE '%root%'\n          OR al.permission ILIKE '%superuser%'\n          OR al.permission ILIKE '%elevated%'\n          OR al.permission ILIKE '%privilege%'\n          OR al.permission ILIKE '%write%'\n          OR al.permission ILIKE '%delete%'\n          OR al.permission ILIKE '%manage%'\n          OR al.permission ILIKE '%full%'\n        THEN 'ELEVATED'\n        ELSE 'STANDARD'\n    END AS elevation_level\nFROM access_log_facts al\nWHERE al.access_time >= NOW() - INTERVAL '180 days'\n  AND (\n        al.permission ILIKE '%admin%'\n     OR al.permission ILIKE '%root%'\n     OR al.permission ILIKE '%superuser%'\n     OR al.permission ILIKE '%elevated%'\n     OR al.permission ILIKE '%privilege%'\n     OR al.permission ILIKE '%write%'\n     OR al.permission ILIKE '%delete%'\n     OR al.permission ILIKE '%manage%'\n     OR al.permission ILIKE '%full%'\n  )\nGROUP BY\n    al.user_id,\n    al.permission\nHAVING\n    COUNT(*) FILTER (WHERE al.result = 'ALLOW') = 0\n    OR MAX(al.access_time) < NOW() - INTERVAL '90 days'\nORDER BY\n    revocation_flag DESC,\n    elevation_level DESC,\n    last_used_time ASC NULLS FIRST,\n    al.user_id,\n    al.permission"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "mongo_1",
+      "specialist": "mongo_query",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1254,
+      "output_tokens": 78,
+      "cached_tokens": 0,
+      "latency_ms": 1656,
+      "output": {
+        "collection": "iam_roles",
+        "pipeline": [
+          {
+            "$match": {
+              "is_elevated": true
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_1",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1503,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 1085,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.023732,
+  "total_latency_ms": 11155,
+  "cumulative_spend_usd": 3.1776280000000026,
+  "evaluator_reason": "stage1_mongo_fail: doc_bag_mismatch"
+}

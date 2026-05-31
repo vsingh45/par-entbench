@@ -1,0 +1,55 @@
+{
+  "task_id": "PAC-003",
+  "task_class": "policy_action",
+  "router": "par",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_emergency_access",
+        "description": "Evaluate emergency access request against access control policy for P1 incident. Verify requestor role (senior-engineer), urgency level (P1), resource scope (production db-payments-primary), and determine if policy permits immediate grant, requires approval, or denies access.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single subtask required: this is an explicit policy evaluation against the governance/access control registry, matching policy_action scope. Mid-tier assigned because emergency access decisions require multi-signal reasoning: (1) requestor identity and role verification, (2) incident severity classification, (3) resource sensitivity (production payments), (4) policy exception rules for P1 incidents, and (5) audit/compliance implications. This exceeds simple single-rule checks and justifies mid-tier complexity."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_emergency_access",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 564,
+      "output_tokens": 375,
+      "cached_tokens": 0,
+      "latency_ms": 7979,
+      "output": {
+        "selected_action": "allow_with_constraints",
+        "policy_compliance": {
+          "POL-501": "pass",
+          "POL-502": "pass_conditional",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "User u_9981 (senior-engineer) has an active P1 incident ticket INC-20241215-0042, satisfying POL-501's incident ticket requirement. POL-502's dual approval requirement is waived under the declared P1 incident exception. POL-503 permits emergency access but mandates post-access logging and review within 24 hours. All three policies are satisfied under P1 emergency conditions, allowing immediate read_write access with mandatory audit and review constraints.",
+        "applied_constraints": [
+          "Access grant must be logged immediately with incident ticket INC-20241215-0042 as the justification reference.",
+          "Access session must be fully audited (all queries and write operations recorded).",
+          "Access must be reviewed by a DBA or security officer within 24 hours of grant per POL-503.",
+          "Access scope is limited to db-payments-primary for the duration of incident INC-20241215-0042 only.",
+          "Access must be automatically revoked upon P1 incident closure or within a maximum session window of 4 hours, whichever comes first.",
+          "User u_9981 must acknowledge emergency access terms before session initiation.",
+          "Incident commander or on-call manager must be notified of this emergency access grant."
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.007317,
+  "total_latency_ms": 7979,
+  "cumulative_spend_usd": 4.967477000000006,
+  "evaluator_reason": "policy_compliance_mismatch"
+}

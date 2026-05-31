@@ -1,0 +1,61 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "spend_sql",
+        "description": "Generate SQL to compute current month spend and 3-month rolling average spend by category/vendor, with variance percentage and anomaly threshold flags",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "classify_anomalies",
+        "description": "Reconcile the spend variance output with anomaly classification thresholds to classify each anomaly as normal_variance, concerning, or critical based on variance magnitude and business impact signals",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Two subtasks required: (1) sql_gen (mid-tier) to join current and historical spend data, calculate 3-month rolling average, and compute variance—a moderately complex aggregation across multiple months. (2) cross_recon (mid-tier) to classify anomalies using variance thresholds and business context, which is reconciliation of computed metrics against classification rules. Not separate subtasks because classification is part of the anomaly analysis decision, not a distinct data source. Both tasks are mid-tier: the SQL requires joins and window functions, the classification requires multi-signal reasoning across variance magnitude and contextual factors."
+  },
+  "node_results": [
+    {
+      "subtask_id": "spend_sql",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 721,
+      "output_tokens": 564,
+      "cached_tokens": 0,
+      "latency_ms": 6213,
+      "output": {
+        "sql": "WITH monthly_spend AS (SELECT vendor_name, DATE_TRUNC('month', invoice_date)::date AS month, SUM(amount_usd) AS spend FROM invoice_facts GROUP BY vendor_name, DATE_TRUNC('month', invoice_date)), with_avg AS (SELECT vendor_name, month, spend, AVG(spend) OVER (PARTITION BY vendor_name ORDER BY month ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING) AS rolling_3mo_avg FROM monthly_spend), variance_calc AS (SELECT vendor_name, month, spend AS current_month_spend, rolling_3mo_avg, CASE WHEN rolling_3mo_avg IS NULL OR rolling_3mo_avg = 0 THEN NULL ELSE ((spend - rolling_3mo_avg) / rolling_3mo_avg) * 100 END AS variance_pct FROM with_avg) SELECT vendor_name, month, current_month_spend, rolling_3mo_avg, variance_pct, CASE WHEN variance_pct IS NULL THEN 'insufficient_history' WHEN ABS(variance_pct) <= 20 THEN 'normal_variance' WHEN ABS(variance_pct) <= 50 THEN 'concerning' ELSE 'critical' END AS anomaly_flag FROM variance_calc WHERE month = DATE_TRUNC('month', CURRENT_DATE)::date ORDER BY ABS(COALESCE(variance_pct, 0)) DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "classify_anomalies",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 436,
+      "output_tokens": 14,
+      "cached_tokens": 0,
+      "latency_ms": 760,
+      "output": {
+        "reconciled": []
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.020235000000000003,
+  "total_latency_ms": 6973,
+  "cumulative_spend_usd": 1.0375400000000001
+}

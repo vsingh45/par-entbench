@@ -1,0 +1,378 @@
+{
+  "task_id": "MTP-005",
+  "task_class": "multitool_plan",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "check_iam_role",
+        "description": "Retrieve user's current IAM role and existing permissions from identity management system",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_manager_approval",
+        "description": "Retrieve manager approval status and authorization decision from workflow system",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "update_iam_permissions",
+        "description": "Apply IAM permission updates based on approval decision and orchestrate role assignment through identity management tooling",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "send_confirmation_email",
+        "description": "Generate and send confirmation email to user and relevant stakeholders with updated permission details",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "update_iam_permissions"
+        ]
+      }
+    ],
+    "cost_rationale": "This workflow requires multi-tool orchestration across 4 distinct enterprise systems (IAM, workflow management, identity provisioning, and email). Each step is assigned to multitool_plan because the query explicitly requests a multi-step tool invocation process involving the enterprise tool registry. Tiers: check_iam_role and fetch_manager_approval are small (simple single-tool lookups); update_iam_permissions is mid (requires validation logic and potential error handling for role application); send_confirmation_email is small (straightforward email generation) and depends on successful IAM update. No policy_action is needed—approval has already been fetched from workflow; this plan executes approved decisions. Total: 4 minimal subtasks, each routed to the correct specialist with appropriate tier."
+  },
+  "node_results": [
+    {
+      "subtask_id": "check_iam_role",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 617,
+      "output_tokens": 496,
+      "cached_tokens": 0,
+      "latency_ms": 6088,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "user_id": "<user_id>",
+              "resource": "*",
+              "action": "list_roles"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "iam_users",
+              "filter": {
+                "user_id": "<user_id>"
+              },
+              "projection": {
+                "user_id": 1,
+                "current_role": 1,
+                "permissions": 1,
+                "manager_id": 1
+              }
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "approval_workflows",
+              "filter": {
+                "user_id": "<user_id>",
+                "status": "approved",
+                "type": "access_provisioning"
+              }
+            },
+            "depends_on": [
+              2
+            ]
+          },
+          {
+            "tool": "iam.grant_role",
+            "arguments": {
+              "user_id": "<user_id>",
+              "role": "$3.results.requested_role",
+              "approved_by": "$3.results.manager_id"
+            },
+            "depends_on": [
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "iam.grant_role",
+              "user_id": "<user_id>",
+              "previous_role": "$2.results.current_role",
+              "new_role": "$3.results.requested_role",
+              "approval_id": "$3.results._id"
+            },
+            "depends_on": [
+              4
+            ]
+          },
+          {
+            "tool": "email.send",
+            "arguments": {
+              "to": "$2.results.email",
+              "cc": "$2.results.manager_email",
+              "subject": "Access Provisioning Confirmation",
+              "body": "Your IAM role has been updated to $3.results.requested_role per approval $3.results._id."
+            },
+            "depends_on": [
+              5
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_manager_approval",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 615,
+      "output_tokens": 489,
+      "cached_tokens": 0,
+      "latency_ms": 8348,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "user": "{{user}}",
+              "action": "read_current_role"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "workflow_approvals",
+              "filter": {
+                "user": "{{user}}",
+                "status": "approved",
+                "type": "access_provisioning"
+              }
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "sql.postgres.query",
+            "arguments": {
+              "query": "SELECT manager_id, approval_status, decision_timestamp, justification FROM access_workflow WHERE requester = $1 AND status = 'approved' ORDER BY decision_timestamp DESC LIMIT 1",
+              "params": [
+                "{{user}}"
+              ]
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "iam.grant_role",
+            "arguments": {
+              "user": "{{user}}",
+              "role": "$2.results.requested_role",
+              "approval_ref": "$3.results"
+            },
+            "depends_on": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "iam.grant_role",
+              "target_user": "{{user}}",
+              "approval": "$2.results",
+              "decision": "$3.results",
+              "result": "$4"
+            },
+            "depends_on": [
+              4
+            ]
+          },
+          {
+            "tool": "email.send",
+            "arguments": {
+              "to": "{{user}}",
+              "subject": "Access Provisioning Confirmation",
+              "body": "Your access request has been approved by your manager and provisioned. Approval details: $3.results. Grant result: $4"
+            },
+            "depends_on": [
+              4,
+              5
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "update_iam_permissions",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 627,
+      "output_tokens": 365,
+      "cached_tokens": 0,
+      "latency_ms": 5044,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "user": "$input.user",
+              "permission": "current_role"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "approval_workflows",
+              "filter": {
+                "user": "$input.user",
+                "status": "approved"
+              }
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "iam.grant_role",
+            "arguments": {
+              "user": "$input.user",
+              "role": "$2.results.requested_role",
+              "approved_by": "$2.results.manager"
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "iam_role_granted",
+              "user": "$input.user",
+              "previous_role": "$1.permission",
+              "new_role": "$2.results.requested_role",
+              "approver": "$2.results.manager",
+              "result": "$3.result"
+            },
+            "depends_on": [
+              3
+            ]
+          },
+          {
+            "tool": "email.send",
+            "arguments": {
+              "to": "$input.user",
+              "subject": "Access Provisioning Complete",
+              "body": "Your role has been updated to $2.results.requested_role, approved by $2.results.manager."
+            },
+            "depends_on": [
+              3,
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "send_confirmation_email",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1018,
+      "output_tokens": 534,
+      "cached_tokens": 0,
+      "latency_ms": 6719,
+      "output": {
+        "plan": [
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "users",
+              "filter": {
+                "email": "$input.user"
+              }
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "mongo.find",
+            "arguments": {
+              "collection": "approval_workflows",
+              "filter": {
+                "user": "$input.user",
+                "status": "approved"
+              }
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "email.send",
+            "arguments": {
+              "to": "$input.user",
+              "cc": [
+                "$2.results.manager",
+                "iam-team@company.com"
+              ],
+              "subject": "Access Provisioning Confirmation - Role Updated",
+              "body": "Hello $1.results.name,\n\nYour access permissions have been successfully updated.\n\nDetails:\n- User: $input.user\n- New Role: $2.results.requested_role\n- Approved By: $2.results.manager\n- Effective: Immediately\n\nIf you did not request this change, please contact the IAM team immediately.\n\nRegards,\nIAM Provisioning"
+            },
+            "depends_on": [
+              1,
+              2
+            ]
+          },
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#iam-provisioning",
+              "message": "Access provisioning completed for $input.user. New role: $2.results.requested_role (approved by $2.results.manager). Confirmation email sent."
+            },
+            "depends_on": [
+              3
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "provisioning_confirmation_sent",
+              "user": "$input.user",
+              "new_role": "$2.results.requested_role",
+              "approver": "$2.results.manager",
+              "notification_channels": [
+                "email",
+                "slack"
+              ],
+              "result": "$3.result"
+            },
+            "depends_on": [
+              3,
+              4
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.061485,
+  "total_latency_ms": 26199,
+  "cumulative_spend_usd": 6.4558530000000065
+}

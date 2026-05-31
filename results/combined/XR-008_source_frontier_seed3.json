@@ -1,0 +1,163 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "router": "source_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "datadog_usage_sql",
+        "description": "Query usage metrics warehouse for Datadog: aggregate actual usage (hosts, containers, custom metrics, logs volume), license allocations, and growth trends (month-over-month, quarter-over-quarter). Include utilization rates and peak usage periods.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "datadog_contracts_mongo",
+        "description": "Query MongoDB contracts collection to retrieve Datadog license agreements: current allocations (host licenses, custom metric limits, log retention tiers), contract dates, and any amendment history or tier changes.",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "datadog_reconcile_analysis",
+        "description": "Reconcile actual usage metrics from SQL with contractual license allocations from MongoDB. Calculate utilization rates, identify over/under-provisioning, detect growth trends, and classify usage posture (healthy, at-risk, over-allocated). Generate insights on capacity planning and renewal optimization.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "datadog_usage_sql",
+          "datadog_contracts_mongo"
+        ]
+      }
+    ],
+    "cost_rationale": "Three-subtask plan: (1) sql_gen at mid tier to aggregate multiple usage dimensions (hosts, containers, metrics, logs) with growth calculations across time periods\u2014moderate complexity but single-source. (2) mongo_query at small tier for straightforward contract retrieval with simple filtering. (3) cross_recon at mid tier to reconcile two sources, calculate utilization gaps, classify posture, and generate capacity/renewal insights\u2014this naturally includes comparative analysis and classification without needing a separate policy_action step. No multitool_plan needed as this is a standard data analysis flow, not enterprise tool orchestration."
+  },
+  "node_results": [
+    {
+      "subtask_id": "datadog_usage_sql",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 750,
+      "output_tokens": 699,
+      "cached_tokens": 0,
+      "latency_ms": 6888,
+      "output": {
+        "sql": "WITH monthly_usage AS (SELECT DATE_TRUNC('month', event_date) AS usage_month, SUM(amount_usd) AS total_spend, SUM(daily_active_seats) AS total_seats, AVG(daily_active_seats) AS avg_daily_seats, MAX(daily_active_seats) AS peak_seats, COUNT(DISTINCT license_id) AS active_licenses, COUNT(DISTINCT user_id) AS active_users FROM consumption_facts WHERE publisher = 'Datadog' AND event_date >= '2024-01-01' GROUP BY DATE_TRUNC('month', event_date)), with_growth AS (SELECT usage_month, total_spend, total_seats, avg_daily_seats, peak_seats, active_licenses, active_users, LAG(total_spend) OVER (ORDER BY usage_month) AS prev_month_spend, LAG(total_spend, 3) OVER (ORDER BY usage_month) AS prev_quarter_spend, LAG(avg_daily_seats) OVER (ORDER BY usage_month) AS prev_month_seats FROM monthly_usage) SELECT usage_month, total_spend, total_seats, avg_daily_seats, peak_seats, active_licenses, active_users, ROUND((avg_daily_seats::numeric / NULLIF(active_licenses, 0)) * 100, 2) AS utilization_rate_pct, ROUND(((total_spend - prev_month_spend) / NULLIF(prev_month_spend, 0)) * 100, 2) AS mom_growth_pct, ROUND(((total_spend - prev_quarter_spend) / NULLIF(prev_quarter_spend, 0)) * 100, 2) AS qoq_growth_pct, ROUND(((avg_daily_seats - prev_month_seats) / NULLIF(prev_month_seats, 0)) * 100, 2) AS seat_growth_mom_pct FROM with_growth ORDER BY usage_month"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "datadog_contracts_mongo",
+      "specialist": "mongo_query",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1759,
+      "output_tokens": 90,
+      "cached_tokens": 0,
+      "latency_ms": 1464,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Datadog"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "datadog_reconcile_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 808,
+      "output_tokens": 738,
+      "cached_tokens": 0,
+      "latency_ms": 4809,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "datadog_2024_01",
+            "mongo_value": null,
+            "sql_value": {
+              "usage_month": "2024-01-01",
+              "total_spend": null,
+              "total_seats": null,
+              "avg_daily_seats": null,
+              "peak_seats": null,
+              "active_licenses": null,
+              "active_users": null,
+              "utilization_rate_pct": null,
+              "mom_growth_pct": null,
+              "qoq_growth_pct": null,
+              "seat_growth_mom_pct": null
+            },
+            "classification": "insufficient_data"
+          },
+          {
+            "entity_key": "datadog_2024_02",
+            "mongo_value": null,
+            "sql_value": {
+              "usage_month": "2024-02-01",
+              "total_spend": null,
+              "total_seats": null,
+              "avg_daily_seats": null,
+              "peak_seats": null,
+              "active_licenses": null,
+              "active_users": null,
+              "utilization_rate_pct": null,
+              "mom_growth_pct": null,
+              "qoq_growth_pct": null,
+              "seat_growth_mom_pct": null
+            },
+            "classification": "insufficient_data"
+          },
+          {
+            "entity_key": "datadog_2024_03",
+            "mongo_value": null,
+            "sql_value": {
+              "usage_month": "2024-03-01",
+              "total_spend": null,
+              "total_seats": null,
+              "avg_daily_seats": null,
+              "peak_seats": null,
+              "active_licenses": null,
+              "active_users": null,
+              "utilization_rate_pct": null,
+              "mom_growth_pct": null,
+              "qoq_growth_pct": null,
+              "seat_growth_mom_pct": null
+            },
+            "classification": "insufficient_data"
+          }
+        ],
+        "summary": {
+          "total_entities": 3,
+          "mongo_only": 0,
+          "sql_only": 3,
+          "reconciled": 0,
+          "missing_data_reason": "No actual SQL execution results provided. MongoDB collection query returned no results or was not executed. Unable to perform utilization rate analysis, growth trend detection, or capacity planning assessment without concrete data values.",
+          "recommendations": [
+            "Execute both queries against live databases to obtain actual metrics",
+            "Ensure consumption_facts table contains Datadog publisher records for 2024",
+            "Verify sam_licenses MongoDB collection has Datadog contract records",
+            "Validate that license_id and user_id columns exist in consumption_facts",
+            "Confirm event_date range covers the desired analysis period"
+          ]
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.036768,
+  "total_latency_ms": 13161,
+  "cumulative_spend_usd": 5.041423000000002,
+  "evaluator_reason": "stage2_sql_fail: result_bag_mismatch"
+}

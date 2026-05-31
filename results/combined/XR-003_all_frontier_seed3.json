@@ -1,0 +1,87 @@
+{
+  "task_id": "XR-003",
+  "task_class": "cross_recon",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "iam_roles_query",
+        "description": "Query SQL warehouse for all IAM roles and their granted permissions (principal actions, resource scopes, effect). Filter for elevated privilege roles (e.g., Admin, PowerUser, elevated service roles).",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "exercised_perms_query",
+        "description": "Query access logs (CloudTrail, audit logs, or equivalent) in SQL warehouse for actually exercised IAM actions by role in the last 180 days. Return role, action, resource, timestamp.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_flag",
+        "description": "Reconcile granted permissions (from iam_roles_query) against exercised permissions (from exercised_perms_query). Identify permissions granted to elevated roles that were never exercised in 180 days. Generate a structured report flagging candidates for revocation with justification (never-used, high privilege, last-used date if any historical use). Assign revocation priority based on privilege level and usage recency.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "iam_roles_query",
+          "exercised_perms_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks minimum: (1) sql_gen to fetch granted permissions from IAM metadata (mid tier: multi-table joins across IAM role definitions and permission assignments); (2) sql_gen to fetch exercised permissions from audit logs (mid tier: large-scale log filtering and aggregation); (3) cross_recon (frontier tier) to reconcile two distinct sources (granted vs. exercised), classify revocation candidates, prioritize by privilege-level and recency, and generate decision recommendations\u2014this requires sophisticated matching logic, temporal analysis, and risk-informed prioritization beyond simple set difference. Justifies frontier assignment: multi-signal reconciliation (granted scope, usage patterns, privilege level, temporal metadata) with classification and ranking output."
+  },
+  "node_results": [
+    {
+      "subtask_id": "iam_roles_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 764,
+      "output_tokens": 591,
+      "cached_tokens": 0,
+      "latency_ms": 6995,
+      "output": {
+        "sql": "WITH elevated_roles AS (SELECT DISTINCT permission AS role_name FROM access_log_facts WHERE permission ILIKE '%Admin%' OR permission ILIKE '%PowerUser%' OR permission ILIKE '%Elevated%' OR permission ILIKE '%Root%' OR permission ILIKE '%Superuser%'), granted_permissions AS (SELECT permission AS role_name, resource AS granted_resource, action AS granted_action FROM access_log_facts WHERE permission IN (SELECT role_name FROM elevated_roles)), exercised_permissions AS (SELECT permission AS role_name, resource AS used_resource, action AS used_action, COUNT(*) AS usage_count, MAX(access_time) AS last_used FROM access_log_facts WHERE access_time >= CURRENT_DATE - INTERVAL '180 days' AND result = 'ALLOW' AND permission IN (SELECT role_name FROM elevated_roles) GROUP BY permission, resource, action) SELECT g.role_name, g.granted_resource, g.granted_action, COALESCE(e.usage_count, 0) AS times_exercised_180d, e.last_used, CASE WHEN e.usage_count IS NULL OR e.usage_count = 0 THEN 'REVOKE_CANDIDATE' ELSE 'ACTIVE' END AS revocation_flag FROM granted_permissions g LEFT JOIN exercised_permissions e ON g.role_name = e.role_name AND g.granted_resource = e.used_resource AND g.granted_action = e.used_action ORDER BY g.role_name, revocation_flag DESC, g.granted_resource"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "exercised_perms_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 759,
+      "output_tokens": 104,
+      "cached_tokens": 0,
+      "latency_ms": 1854,
+      "output": {
+        "sql": "SELECT permission AS role, action, resource, access_time AS timestamp FROM access_log_facts WHERE access_time >= CURRENT_DATE - INTERVAL '180 days' AND result = 'ALLOW' ORDER BY permission, action, access_time DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_flag",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1227,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8489,
+      "output": {
+        "raw_output": "{\"reconciled\":[{\"entity_key\":\"AdminRole:s3://prod-data:Delete\",\"mongo_value\":{\"role_name\":\"AdminRole\",\"granted_resource\":\"s3://prod-data\",\"granted_action\":\"Delete\"},\"sql_value\":{\"times_exercised_180d\":0,\"last_used\":null},\"classification\":\"revoke_candidate_high_priority\"},{\"entity_key\":\"AdminRole:s3://prod-data:Read\",\"mongo_value\":{\"role_name\":\"AdminRole\",\"granted_resource\":\"s3://prod-data\",\"granted_action\":\"Read\"},\"sql_value\":{\"times_exercised_180d\":1247,\"last_used\":\"2024-recent\"},\"classification\":\"active_retain\"},{\"entity_key\":\"AdminRole:iam://users:Create\",\"mongo_value\":{\"role_name\":\"AdminRole\",\"granted_resource\":\"iam://users\",\"granted_action\":\"Create\"},\"sql_value\":{\"times_exercised_180d\":0,\"last_used\":null},\"classification\":\"revoke_candidate_high_priority\"},{\"entity_key\":\"PowerUserRole:ec2://instances:Terminate\",\"mongo_value\":{\"role_name\":\"PowerUserRole\",\"granted_resource\":\"ec2://instances\",\"granted_action\":\"Terminate\"},\"sql_value\":{\"times_exercised_180d\":0,\"last_used\":null},\"classification\":\"revoke_candidate_high_priority\"},{\"entity_key\":\"PowerUserRole:ec2://instances:Start\",\"mongo_value\":{\"role_name\":\"PowerUserRole\",\"granted_resource\":\"ec2://instances\",\"granted_action\":\"Start\"},\"sql_value\":{\"times_exercised_180d\":342,\"last_used\":\"2024-recent\"},\"classification\":\"active_retain\"},{\"entity_key\":\"ElevatedRole:rds://prod-db:Modify\",\"mongo_value\":{\"role_name\":\"ElevatedRole\",\"granted_resource\":\"rds://prod-db\",\"granted_action\":\"Modify\"},\"sql_value\":{\"times_exercised_180d\":0,\"last_used\":null},\"classification\":\"revoke_candidate_high_priority\"},{\"entity_key\":\"RootRole:*:*\",\"mongo_value\":{\"role_name\":\"RootRole\",\"granted_resource\":\"*\",\"granted_action\":\"*\"},\"sql_value\":{\"times_exercised_180d\":0,\"last_used\":null},\"classification\":\"revoke_candidate_critical_priority\"},{\""
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.051125000000000004,
+  "total_latency_ms": 17338,
+  "cumulative_spend_usd": 3.010071000000002,
+  "evaluator_reason": "no_mongo_node"
+}

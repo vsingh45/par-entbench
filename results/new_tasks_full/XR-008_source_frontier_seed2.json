@@ -1,0 +1,161 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "router": "source_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_datadog_license",
+        "description": "Extract Datadog license allocation details (license type, quantity, cost, contract terms, expiration dates) from license agreement documents or configuration records",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_datadog_usage",
+        "description": "Query Datadog usage metrics from the warehouse including host count, custom metrics, logs ingested, user seats, active vs allocated licenses, and usage by time period to establish baseline and trends",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_analyze",
+        "description": "Reconcile extracted license allocations with SQL usage metrics, calculate utilization rates, identify growth trends (MoM/YoY), forecast capacity needs, and generate optimization recommendations",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "extract_datadog_license",
+          "query_datadog_usage"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) Extract to get contract/allocation baseline (small tier—straightforward document field extraction); (2) SQL query to fetch usage metrics and trends from warehouse (mid tier—multi-table join across usage, time dimensions, and license tracking; may require window functions for trend calculation); (3) Cross-recon to reconcile allocation vs. actual usage, compute utilization rates, classify posture (over/under-provisioned), and generate growth forecasts and optimization recommendations (frontier tier—multi-signal analysis requiring inference on spending efficiency, capacity planning, and strategic recommendations). The plan is minimal: no separate policy_action since compliance/governance is not explicitly requested; no multitool_plan since the query doesn't ask for tool orchestration. Classification and recommendations emerge naturally from reconciliation analysis."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_datadog_license",
+      "specialist": "extract",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 351,
+      "output_tokens": 43,
+      "cached_tokens": 0,
+      "latency_ms": 1218,
+      "output": {
+        "license_type": null,
+        "quantity": null,
+        "cost": null,
+        "contract_terms": null,
+        "expiration_date": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_datadog_usage",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 726,
+      "output_tokens": 228,
+      "cached_tokens": 0,
+      "latency_ms": 2916,
+      "output": {
+        "sql": "SELECT fiscal_year, fiscal_quarter, product, COUNT(DISTINCT license_id) AS allocated_licenses, COUNT(DISTINCT user_id) AS active_users, SUM(daily_active_seats) AS total_active_seats, SUM(amount_usd) AS total_usage_cost, AVG(daily_active_seats) AS avg_daily_seats FROM consumption_facts WHERE publisher = 'Datadog' AND event_date >= '2024-01-01' GROUP BY fiscal_year, fiscal_quarter, product ORDER BY fiscal_year, fiscal_quarter, product"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_analyze",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 452,
+      "output_tokens": 794,
+      "cached_tokens": 0,
+      "latency_ms": 5997,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "datadog_license_allocation",
+            "mongo_value": {
+              "license_type": null,
+              "quantity": null,
+              "cost": null,
+              "contract_terms": null,
+              "expiration_date": null
+            },
+            "sql_value": null,
+            "classification": "no_recent_activity",
+            "notes": "MongoDB extraction returned null values; unable to establish baseline allocation"
+          },
+          {
+            "entity_key": "datadog_usage_metrics_2024",
+            "mongo_value": null,
+            "sql_value": {
+              "fiscal_year": "2024",
+              "fiscal_quarter": "Q1-Q4",
+              "product": "multiple",
+              "allocated_licenses": "pending_query_execution",
+              "active_users": "pending_query_execution",
+              "total_active_seats": "pending_query_execution",
+              "total_usage_cost": "pending_query_execution",
+              "avg_daily_seats": "pending_query_execution"
+            },
+            "classification": "at_risk",
+            "notes": "SQL query defined but requires execution; MongoDB allocation data missing prevents utilization rate calculation"
+          },
+          {
+            "entity_key": "datadog_utilization_analysis",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity",
+            "notes": "Cannot calculate utilization rates without both allocation (MongoDB) and usage (SQL) data"
+          },
+          {
+            "entity_key": "growth_trend_mom_yoy",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity",
+            "notes": "Insufficient data for MoM/YoY comparison; requires execution of SQL query and baseline allocation metrics"
+          },
+          {
+            "entity_key": "capacity_forecast",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity",
+            "notes": "Forecasting blocked; requires active metrics and growth trend establishment"
+          }
+        ],
+        "summary": {
+          "total_entities": 5,
+          "matched_pairs": 0,
+          "unmatched_mongo": 1,
+          "unmatched_sql": 1,
+          "critical_issues": [
+            "MongoDB extract_datadog_license returned all null values",
+            "SQL query not yet executed; results pending",
+            "Cannot perform reconciliation without baseline allocation data",
+            "Utilization rate calculation impossible with current dataset"
+          ],
+          "recommendations": [
+            "Execute SQL consumption_facts query to retrieve 2024 usage metrics",
+            "Re-run MongoDB extraction with valid query/credentials for license allocation data",
+            "Establish baseline: match license_id between sources",
+            "Calculate utilization_rate = (total_active_seats / allocated_licenses) * 100 for each quarter",
+            "Once data populated, classify as: 'expand' (>80% util), 'hold' (60-80%), 'reduce' (<60%)",
+            "Generate growth trends post-execution"
+          ]
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.016582,
+  "total_latency_ms": 10131,
+  "cumulative_spend_usd": 5.004655000000001
+}

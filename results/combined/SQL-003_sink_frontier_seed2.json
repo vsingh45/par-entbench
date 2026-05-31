@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-003",
+  "task_class": "sql_gen",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_analysis",
+        "description": "Query SQL warehouse for 2024 quarterly spend by publisher (Adobe, Microsoft) and product. Compute quarter-over-quarter change for each product by publisher, and rank products within each publisher by Q4 2024 spend.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single sql_gen subtask (mid tier) suffices. The query requires multi-table joins (likely spend fact table with product/publisher dimension tables), GROUP BY on publisher and product, window functions (ROW_NUMBER for ranking, LAG for QoQ comparison), and CASE logic to compute QoQ changes\u2014moderately complex but within a single SQL statement. No reconciliation or extraction needed. Mid tier (Sonnet 4.6) can reliably handle the multi-window function aggregation and QoQ logic. Minimal decomposition: this is one analytical query, not multiple separate queries."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 764,
+      "output_tokens": 352,
+      "cached_tokens": 0,
+      "latency_ms": 4196,
+      "output": {
+        "sql": "WITH quarterly AS (SELECT publisher, product, fiscal_quarter, SUM(amount_usd) AS spend FROM consumption_facts WHERE event_date >= '2024-01-01' AND event_date < '2025-01-01' AND publisher IN ('Adobe','Microsoft') GROUP BY publisher, product, fiscal_quarter), with_qoq AS (SELECT publisher, product, fiscal_quarter, spend, spend - LAG(spend) OVER (PARTITION BY publisher, product ORDER BY fiscal_quarter) AS qoq_change FROM quarterly) SELECT publisher, product, fiscal_quarter, spend, qoq_change, RANK() OVER (PARTITION BY publisher ORDER BY CASE WHEN fiscal_quarter = 4 THEN spend ELSE NULL END DESC NULLS LAST) AS q4_rank FROM with_qoq ORDER BY publisher, product, fiscal_quarter"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.012620000000000001,
+  "total_latency_ms": 4196,
+  "cumulative_spend_usd": 0.251181,
+  "evaluator_reason": "result_bag_mismatch"
+}

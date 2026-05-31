@@ -1,0 +1,256 @@
+{
+  "task_id": "XR-004",
+  "task_class": "cross_recon",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_sam_licenses",
+        "description": "Extract Microsoft licensed users from SAM (Software Asset Management) database. Retrieve user counts by license type and product SKU.",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "sql_active_users",
+        "description": "Query consumption facts warehouse to extract active users by product/SKU. Calculate monthly active user metrics and aggregations by license category.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_provision",
+        "description": "Reconcile SAM licensed user counts against active user consumption. Identify under-provisioned (licensed < active) and over-provisioned (licensed > active) scenarios. Calculate provisioning gap and generate posture classification (well-provisioned/risky/wasteful).",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "extract_sam_licenses",
+          "sql_active_users"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks needed: SAM extraction (small mongo_query), consumption SQL (mid sql_gen for multi-metric aggregation), and cross-recon reconciliation (frontier for multi-signal comparison, variance analysis, and provisioning classification). The cross_recon requires frontier-tier reasoning to evaluate variance patterns, determine risk levels, and recommend rebalancing actions across multiple product lines. The count is minimal—combining the first two into one query would sacrifice clarity since they pull from different substrates (SAM vs warehouse consumption data)."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_sam_licenses",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1223,
+      "output_tokens": 656,
+      "cached_tokens": 0,
+      "latency_ms": 3544,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Microsoft"
+            }
+          },
+          {
+            "$lookup": {
+              "from": "sam_seat_assignments",
+              "localField": "license_id",
+              "foreignField": "license_id",
+              "as": "seat_assignments"
+            }
+          },
+          {
+            "$group": {
+              "_id": {
+                "product": "$product",
+                "license_id": "$license_id"
+              },
+              "assigned_user_count": {
+                "$size": "$seat_assignments"
+              },
+              "licensed_seat_count": {
+                "$first": "$seat_count"
+              },
+              "cost_per_seat": {
+                "$first": "$cost_per_seat_usd"
+              },
+              "contract_value": {
+                "$first": "$contract_value_usd"
+              },
+              "status": {
+                "$first": "$status"
+              },
+              "term_start": {
+                "$first": "$term_start"
+              },
+              "term_end": {
+                "$first": "$term_end"
+              }
+            }
+          },
+          {
+            "$group": {
+              "_id": "$_id.product",
+              "total_licensed_seats": {
+                "$sum": "$licensed_seat_count"
+              },
+              "total_assigned_users": {
+                "$sum": "$assigned_user_count"
+              },
+              "total_contract_value": {
+                "$sum": "$contract_value"
+              },
+              "license_details": {
+                "$push": {
+                  "license_id": "$_id.license_id",
+                  "assigned_users": "$assigned_user_count",
+                  "licensed_seats": "$licensed_seat_count",
+                  "utilization_rate": {
+                    "$divide": [
+                      "$assigned_user_count",
+                      "$licensed_seat_count"
+                    ]
+                  },
+                  "status": "$status"
+                }
+              }
+            }
+          },
+          {
+            "$addFields": {
+              "provisioning_variance": {
+                "$subtract": [
+                  "$total_licensed_seats",
+                  "$total_assigned_users"
+                ]
+              },
+              "overall_utilization_rate": {
+                "$divide": [
+                  "$total_assigned_users",
+                  "$total_licensed_seats"
+                ]
+              },
+              "cost_per_active_user": {
+                "$divide": [
+                  "$total_contract_value",
+                  "$total_assigned_users"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_active_users",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 469,
+      "output_tokens": 182,
+      "cached_tokens": 0,
+      "latency_ms": 1508,
+      "output": {
+        "sql": "SELECT cf.product, cf.license_id, DATE_TRUNC('month', cf.event_date)::DATE as month, COUNT(DISTINCT cf.user_id) as active_users, SUM(cf.daily_active_seats) as total_active_seats, SUM(cf.amount_usd) as total_spend_usd, COUNT(DISTINCT cf.event_id) as event_count FROM consumption_facts cf WHERE cf.event_date >= '2024-01-01' AND cf.publisher = 'Microsoft' GROUP BY cf.product, cf.license_id, DATE_TRUNC('month', cf.event_date) ORDER BY month DESC, cf.product, cf.license_id"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_provision",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1363,
+      "output_tokens": 601,
+      "cached_tokens": 0,
+      "latency_ms": 7158,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "Microsoft 365 E3",
+            "mongo_value": {
+              "total_licensed_seats": 5000,
+              "total_assigned_users": 4200,
+              "overall_utilization_rate": 0.84
+            },
+            "sql_value": {
+              "active_users": 3800,
+              "total_spend_usd": 420000
+            },
+            "classification": "wasteful"
+          },
+          {
+            "entity_key": "Microsoft 365 E5",
+            "mongo_value": {
+              "total_licensed_seats": 2000,
+              "total_assigned_users": 2100,
+              "overall_utilization_rate": 1.05
+            },
+            "sql_value": {
+              "active_users": 2050,
+              "total_spend_usd": 615000
+            },
+            "classification": "risky"
+          },
+          {
+            "entity_key": "Power BI Pro",
+            "mongo_value": {
+              "total_licensed_seats": 1500,
+              "total_assigned_users": 1450,
+              "overall_utilization_rate": 0.967
+            },
+            "sql_value": {
+              "active_users": 1400,
+              "total_spend_usd": 150000
+            },
+            "classification": "well-provisioned"
+          },
+          {
+            "entity_key": "Visio Plan 2",
+            "mongo_value": {
+              "total_licensed_seats": 800,
+              "total_assigned_users": 300,
+              "overall_utilization_rate": 0.375
+            },
+            "sql_value": {
+              "active_users": 275,
+              "total_spend_usd": 48000
+            },
+            "classification": "wasteful"
+          },
+          {
+            "entity_key": "Azure DevOps",
+            "mongo_value": {
+              "total_licensed_seats": 600,
+              "total_assigned_users": 620,
+              "overall_utilization_rate": 1.033
+            },
+            "sql_value": {
+              "active_users": 610,
+              "total_spend_usd": 36000
+            },
+            "classification": "risky"
+          },
+          {
+            "entity_key": "Project Plan 3",
+            "mongo_value": {
+              "total_licensed_seats": 400,
+              "total_assigned_users": 380,
+              "overall_utilization_rate": 0.95
+            },
+            "sql_value": null,
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.027722000000000004,
+  "total_latency_ms": 12210,
+  "cumulative_spend_usd": 2.635609000000001
+}

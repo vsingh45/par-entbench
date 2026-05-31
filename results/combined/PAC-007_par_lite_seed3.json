@@ -1,0 +1,55 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "par_lite",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_eval_1",
+        "description": "Evaluate whether a contractor with temporary access is permitted to download full customer database backups under access control and data governance policies. Assess compliance with least privilege, data classification, and contractor access restrictions.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This query explicitly requires policy evaluation and access control decision-making. A single policy_action subtask (mid tier) is sufficient because: (1) the decision involves reasoning across multiple policy dimensions (contractor status, access scope, data sensitivity, least privilege), but (2) the core logic is straightforward\u2014evaluating one access request against the policy registry. Mid tier (Sonnet) provides multi-policy reasoning capability without the extra cost of frontier; a simple small-tier agent would lack the nuance to weigh competing policy principles. The plan has ONE subtask because no data retrieval, reconciliation, or multi-tool orchestration is required\u2014this is a pure governance decision gate."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_eval_1",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 511,
+      "output_tokens": 473,
+      "cached_tokens": 0,
+      "latency_ms": 11906,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "pending_review"
+        },
+        "reason": "contractor-dave is attempting to download a full production database backup (production_backup.tar.gz), which is explicitly prohibited under multiple active policies. POL-701 restricts database backup access exclusively to full-time employees holding the DBA role \u2014 contractor-dave satisfies neither condition. POL-702 further restricts contractors to de-identified query results only, prohibiting raw data exports of any kind; a full backup inherently contains raw, identifiable customer data and violates this policy outright. POL-703 could theoretically provide a conditional approval pathway, but no evidence of prior project manager approval or the required 7-day advance notice exists in the request context, rendering this path non-viable at this time. Least-privilege principles are also violated, as downloading an entire production backup far exceeds any reasonable scope for contractor-level local analysis. The action must be denied. The contractor should be redirected to request de-identified query results through approved channels, and if broader access is genuinely required, a formal approval request with 7-day notice must be submitted to the project manager before any access can be granted.",
+        "applied_constraints": [
+          "Access to production_backup.tar.gz is restricted to full-time DBA employees only (POL-701)",
+          "Contractors are prohibited from downloading raw data exports; only de-identified query results are permitted (POL-702)",
+          "No project manager approval on record for contractor data access (POL-703)",
+          "7-day advance notice requirement not satisfied (POL-703)",
+          "Least-privilege principle violated: full backup download exceeds contractor access scope",
+          "Audit log entry generated for this access attempt by contractor-dave",
+          "Contractor may be redirected to submit a formal data access request through proper approval channels"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.008628,
+  "total_latency_ms": 11906,
+  "cumulative_spend_usd": 8.834439000000005,
+  "evaluator_reason": "selected_action_mismatch"
+}

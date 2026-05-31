@@ -1,0 +1,71 @@
+{
+  "task_id": "SQLC-007",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_1",
+        "description": "Query SQL warehouse to retrieve top spending publishers (by total spend), their spend amounts, and product mix (breakdown of spend across product categories). Include publisher name, total spend, and product category spend distribution.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_1",
+        "description": "Reconcile SQL spending data with contract terms, pricing agreements, and historical performance metrics. Assess negotiation leverage for each publisher based on: spend concentration, contract renewal dates, competitive alternatives, volume commitments, and payment terms. Generate leverage assessment and negotiation recommendations per publisher.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_1"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen at mid tier to aggregate multi-table publisher spend and product mix data across potentially multiple dimension tables; (2) cross_recon at frontier tier to conduct multi-signal leverage assessment combining SQL output with contract metadata, historical performance, and market context to generate strategic negotiation insights. Single-source SQL query does not warrant cross_recon, but the leverage assessment requires synthesizing spend data with contract intelligence and competitive positioning—cross_recon is the appropriate specialist for this reconciliation and recommendation task. No separate policy_action needed as compliance/governance is implicit in contract terms already available to cross_recon."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 472,
+      "output_tokens": 126,
+      "cached_tokens": 0,
+      "latency_ms": 2633,
+      "output": {
+        "sql": "SELECT publisher, product, SUM(amount_usd) AS product_spend, SUM(SUM(amount_usd)) OVER (PARTITION BY publisher) AS total_publisher_spend, ROUND(100.0 * SUM(amount_usd) / SUM(SUM(amount_usd)) OVER (PARTITION BY publisher), 2) AS product_pct_of_publisher_spend FROM consumption_facts GROUP BY publisher, product ORDER BY total_publisher_spend DESC, publisher, product_spend DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_1",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 668,
+      "output_tokens": 107,
+      "cached_tokens": 0,
+      "latency_ms": 2360,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "unknown_publisher",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "insufficient_data"
+          }
+        ],
+        "note": "No MongoDB upstream output provided; only SQL query definition supplied without result rows. Reconciliation requires actual data from both sources."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.009321,
+  "total_latency_ms": 4993,
+  "cumulative_spend_usd": 1.1747930000000002
+}

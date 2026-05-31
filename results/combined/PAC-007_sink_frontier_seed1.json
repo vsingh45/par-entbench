@@ -1,0 +1,51 @@
+{
+  "task_id": "PAC-007",
+  "task_class": "policy_action",
+  "router": "sink_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "access_check",
+        "description": "Evaluate whether the contractor's current access level and session permits downloading a full customer database backup. Verify against access control policies, data sensitivity classifications, and contractor permission scope.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single subtask: This is a straightforward policy evaluation requiring one governance decision. The contractor's request triggers an access control check against the policy registry. No data reconciliation, SQL execution, or multi-tool orchestration is needed\u2014only a policy-based approval/denial determination. Mid tier assigned because the evaluation requires reasoning about multiple policy dimensions (temporary access status, data sensitivity, contractor scope, and backup download permissions) rather than a single simple rule check."
+  },
+  "node_results": [
+    {
+      "subtask_id": "access_check",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 744,
+      "output_tokens": 198,
+      "cached_tokens": 0,
+      "latency_ms": 3207,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-701": "fail",
+          "POL-702": "fail",
+          "POL-703": "fail"
+        },
+        "reason": "Contractor role is not permitted to download full production database backups. POL-701 restricts backup access to full-time DBAs; POL-702 limits contractors to de-identified query results; POL-703 requires prior PM approval with 7-day notice, which is absent.",
+        "applied_constraints": [
+          "Redirect contractor to de-identified query interface",
+          "Require PM approval and 7-day notice before any data access",
+          "Log denial event for audit"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.00867,
+  "total_latency_ms": 3207,
+  "cumulative_spend_usd": 8.748222000000005,
+  "evaluator_reason": "selected_action_mismatch"
+}

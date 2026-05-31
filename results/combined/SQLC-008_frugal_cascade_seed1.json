@@ -1,0 +1,88 @@
+{
+  "task_id": "SQLC-008",
+  "task_class": "sql_compose",
+  "router": "frugal_cascade",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_budget_analysis",
+        "description": "Query budget allocation by product category, calculate current spend distribution, compute cost trends over time (e.g., month-over-month or year-over-year variance), and identify categories with significant growth or decline.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_strategy",
+        "description": "Reconcile budget analysis results with business priorities and constraints. Classify categories by spend efficiency and growth trajectory. Generate reallocation recommendations based on trend analysis, identify high-ROI categories vs. underperforming allocations, and provide actionable reallocation strategy with rationale.",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "sql_budget_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks, minimal and focused: (1) sql_gen (mid tier) performs the core analytical work\u2014multi-table joins across budget and category tables with aggregation, window functions for trend calculation, and cost variance metrics. This is moderate complexity but well-defined. (2) cross_recon (frontier tier) takes the quantitative output and performs the strategic synthesis: reconciles cost trends with business context, classifies categories by performance signals, and generates nuanced reallocation recommendations that balance multiple factors (growth, efficiency, risk). Frontier tier is justified because this step requires multi-signal reasoning and generation of a coherent strategic recommendation. No separate policy_action is needed because recommendation generation is intrinsic to cross_recon in this context. No multitool_plan is required as the query does not explicitly demand multi-tool orchestration."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_budget_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 475,
+      "output_tokens": 465,
+      "cached_tokens": 0,
+      "latency_ms": 3506,
+      "output": {
+        "sql": "WITH monthly_spend AS (SELECT cf.product, DATE_TRUNC('month', cf.event_date)::DATE AS month, SUM(cf.amount_usd) AS monthly_amount FROM consumption_facts cf WHERE cf.event_date >= '2023-01-01' GROUP BY cf.product, DATE_TRUNC('month', cf.event_date)), product_totals AS (SELECT cf.product, SUM(cf.amount_usd) AS total_spend, COUNT(DISTINCT cf.event_date) AS active_days FROM consumption_facts cf WHERE cf.event_date >= '2023-01-01' GROUP BY cf.product), trend_analysis AS (SELECT ms.product, ms.month, ms.monthly_amount, LAG(ms.monthly_amount) OVER (PARTITION BY ms.product ORDER BY ms.month) AS prev_month_amount, ROUND(((ms.monthly_amount - LAG(ms.monthly_amount) OVER (PARTITION BY ms.product ORDER BY ms.month)) / LAG(ms.monthly_amount) OVER (PARTITION BY ms.product ORDER BY ms.month) * 100)::NUMERIC, 2) AS mom_variance_pct, ROUND((ms.monthly_amount / SUM(ms.monthly_amount) OVER (PARTITION BY ms.month) * 100)::NUMERIC, 2) AS spend_distribution_pct FROM monthly_spend ms) SELECT ta.product, pt.total_spend, pt.active_days, ROUND((pt.total_spend / SUM(pt.total_spend) OVER () * 100)::NUMERIC, 2) AS overall_distribution_pct, ta.month, ta.monthly_amount, ta.mom_variance_pct, ta.spend_distribution_pct FROM trend_analysis ta JOIN product_totals pt ON ta.product = pt.product ORDER BY pt.total_spend DESC, ta.month DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_strategy",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 746,
+      "output_tokens": 247,
+      "cached_tokens": 0,
+      "latency_ms": 2251,
+      "output": {
+        "error": "Insufficient data provided",
+        "details": "MongoDB operational state results missing. Cannot perform LEFT JOIN reconciliation without MongoDB query output. Please provide: 1) MongoDB current budget allocation results, 2) SQL historical analysis results with actual values",
+        "expected_input_format": {
+          "mongodb_results": [
+            {
+              "product": "string",
+              "current_allocation": "number",
+              "budget_status": "string",
+              "last_updated": "timestamp"
+            }
+          ],
+          "sql_results": [
+            {
+              "product": "string",
+              "total_spend": "number",
+              "active_days": "number",
+              "overall_distribution_pct": "number",
+              "month": "date",
+              "monthly_amount": "number",
+              "mom_variance_pct": "number",
+              "spend_distribution_pct": "number"
+            }
+          ]
+        },
+        "reconciliation_ready": false
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0047810000000000005,
+  "total_latency_ms": 5757,
+  "cumulative_spend_usd": 1.7099810000000009,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

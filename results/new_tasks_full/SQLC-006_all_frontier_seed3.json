@@ -1,0 +1,84 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_analysis",
+        "description": "Generate SQL query to compute current month spend, 3-month rolling average, variance percentage, and flag anomalies. Return all rows with spend, 3-month average, variance %, and preliminary anomaly flag.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_classify",
+        "description": "Reconcile SQL spend results with business thresholds and classification rules to classify each anomaly as normal_variance (<10%), concerning (10-25%), or critical (>25%). Include anomaly severity scoring and recommendation context.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_spend_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen at mid tier to compute current vs. 3-month average with window functions (LAG/AVG OVER) across monthly granularity—moderately complex aggregation; (2) cross_recon at mid tier to apply classification thresholds and produce severity labels without needing external source reconciliation (the thresholds act as the second signal). Not frontier-level because the SQL doesn't require multi-CTE chaining and the classification is threshold-based, not inference-heavy. Not a policy_action because this is anomaly classification (posture/severity), not governance compliance. Minimum 2 subtasks because the output of spend computation must feed classification logic."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 743,
+      "output_tokens": 418,
+      "cached_tokens": 0,
+      "latency_ms": 4775,
+      "output": {
+        "sql": "WITH monthly_spend AS (SELECT date_trunc('month', event_date)::date AS month, SUM(amount_usd) AS spend FROM consumption_facts GROUP BY 1), rolling AS (SELECT month, spend, AVG(spend) OVER (ORDER BY month ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING) AS avg_3mo FROM monthly_spend) SELECT month, spend, avg_3mo, CASE WHEN avg_3mo IS NULL OR avg_3mo = 0 THEN NULL ELSE ROUND(((spend - avg_3mo) / avg_3mo) * 100, 2) END AS variance_pct, CASE WHEN avg_3mo IS NULL OR avg_3mo = 0 THEN 'insufficient_data' WHEN ABS((spend - avg_3mo) / avg_3mo) * 100 < 20 THEN 'normal_variance' WHEN ABS((spend - avg_3mo) / avg_3mo) * 100 < 50 THEN 'concerning' ELSE 'critical' END AS anomaly_flag FROM rolling ORDER BY month"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_classify",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 879,
+      "output_tokens": 146,
+      "cached_tokens": 0,
+      "latency_ms": 2188,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "2024-01",
+            "mongo_value": null,
+            "sql_value": {
+              "spend": null,
+              "avg_3mo": null,
+              "variance_pct": null
+            },
+            "classification": "insufficient_data"
+          },
+          {
+            "entity_key": "2024-02",
+            "mongo_value": null,
+            "sql_value": {
+              "spend": null,
+              "avg_3mo": null,
+              "variance_pct": null
+            },
+            "classification": "insufficient_data"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.02221,
+  "total_latency_ms": 6963,
+  "cumulative_spend_usd": 0.9753269999999999
+}

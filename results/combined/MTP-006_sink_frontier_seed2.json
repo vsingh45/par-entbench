@@ -1,0 +1,119 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "task_1_extract_sam",
+        "description": "Extract contract renewal dates and license details from SAM system documents",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "task_2_consumption_query",
+        "description": "Query consumption trends from usage warehouse: license utilization rates, trend slope over last 90 days, and current vs. historical usage patterns",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "task_3_risk_assessment",
+        "description": "Reconcile SAM renewal dates with consumption trends to assess renewal risk (urgency, utilization mismatch, budget impact). Classify licenses as high/medium/low risk and generate renewal recommendations",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "task_1_extract_sam",
+          "task_2_consumption_query"
+        ]
+      },
+      {
+        "id": "task_4_notification_plan",
+        "description": "Generate multi-step notification workflow: compose escalation alerts for high-risk renewals, route to procurement team with risk classifications and recommendations, trigger approval workflow if needed",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "task_3_risk_assessment"
+        ]
+      }
+    ],
+    "cost_rationale": "4 subtasks: (1) Extract renewal dates from SAM docs (small\u2014straightforward field extraction). (2) Single SQL query for consumption trends across the warehouse (mid\u2014multi-table join with time-window aggregation). (3) Cross-reconciliation of SAM dates + consumption data to classify risk and generate recommendations (mid\u2014two-source reconciliation with classification logic, not a separate policy_action since renewal assessment is part of reconciliation). (4) Multi-tool notification plan to invoke email, ticketing, and approval systems from the tool registry (mid\u2014tool orchestration requiring multiple enterprise system calls). No separate policy_action subtask: risk classification and recommendations are outputs of the cross_recon agent. This plan avoids unnecessary splitting while covering all workflow stages: data gathering \u2192 analysis \u2192 decision \u2192 action."
+  },
+  "node_results": [
+    {
+      "subtask_id": "task_1_extract_sam",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 233,
+      "output_tokens": 70,
+      "cached_tokens": 0,
+      "latency_ms": 958,
+      "output": {
+        "contract_renewal_dates": null,
+        "license_details": null,
+        "sam_system_documents": null,
+        "consumption_trends": null,
+        "risk_assessment": null,
+        "procurement_team_notification": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_2_consumption_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 469,
+      "output_tokens": 474,
+      "cached_tokens": 0,
+      "latency_ms": 3177,
+      "output": {
+        "sql": "SELECT l.license_id, l.publisher, l.product, COUNT(DISTINCT l.event_date) as active_days, SUM(l.daily_active_seats) as total_seats, AVG(l.daily_active_seats) as avg_daily_seats, MAX(l.daily_active_seats) as peak_seats, ROUND(100.0 * COUNT(DISTINCT l.event_date) / 90, 2) as utilization_rate, ROUND((MAX(CASE WHEN l.event_date >= CURRENT_DATE - INTERVAL '30 days' THEN l.daily_active_seats END) - MAX(CASE WHEN l.event_date >= CURRENT_DATE - INTERVAL '90 days' AND l.event_date < CURRENT_DATE - INTERVAL '60 days' THEN l.daily_active_seats END)) / NULLIF(MAX(CASE WHEN l.event_date >= CURRENT_DATE - INTERVAL '90 days' AND l.event_date < CURRENT_DATE - INTERVAL '60 days' THEN l.daily_active_seats END), 0), 4) as trend_slope_30_vs_60, ROUND(AVG(CASE WHEN l.event_date >= CURRENT_DATE - INTERVAL '30 days' THEN l.daily_active_seats END), 2) as current_avg_seats, ROUND(AVG(CASE WHEN l.event_date >= CURRENT_DATE - INTERVAL '90 days' AND l.event_date < CURRENT_DATE - INTERVAL '60 days' THEN l.daily_active_seats END), 2) as historical_avg_seats, MAX(l.event_date) as last_activity_date FROM consumption_facts l WHERE l.event_date >= CURRENT_DATE - INTERVAL '90 days' GROUP BY l.license_id, l.publisher, l.product ORDER BY l.license_id"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_3_risk_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 806,
+      "output_tokens": 138,
+      "cached_tokens": 0,
+      "latency_ms": 3129,
+      "output": {
+        "reconciled": [],
+        "status": "no_data_available",
+        "reason": "upstream_task_1_extract_sam returned null values for all required SAM fields (contract_renewal_dates, license_details, sam_system_documents, consumption_trends, risk_assessment). MongoDB/SAM source contains no entities to reconcile against SQL consumption data.",
+        "recommendation": "Execute task_1_extract_sam with valid SAM system connection parameters before reconciliation can proceed. SQL consumption query is ready but requires MongoDB license baseline for LEFT JOIN reconciliation."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_4_notification_plan",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 858,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10505,
+      "output": {
+        "raw_output": "{\"plan\":[{\"tool\":\"slack.post_message\",\"arguments\":{\"channel\":\"#procurement-team\",\"message\":\"\u26a0\ufe0f License Renewal Workflow Alert: Risk assessment could not be completed. Reason: SAM system returned null values for all required fields (contract_renewal_dates, license_details, sam_system_documents, consumption_trends, risk_assessment). No entities available for reconciliation against SQL consumption data. Action required: Validate SAM system connection parameters and re-run extraction.\"},\"depends_on\":[]},{\"tool\":\"jira.create_ticket\",\"arguments\":{\"project\":\"PROC\",\"issue_type\":\"Task\",\"priority\":\"High\",\"summary\":\"License Renewal Workflow Blocked - SAM Data Unavailable\",\"description\":\"The license renewal alert workflow could not complete risk classification or generate escalation alerts because upstream SAM extraction returned null values for all required fields.\\n\\nMissing data:\\n- contract_renewal_dates\\n- license_details\\n- sam_system_documents\\n- consumption_trends\\n- risk_assessment\\n\\nRecommendation: Execute task_1_extract_sam with valid SAM system connection parameters. SQL consumption query is ready and waiting for MongoDB license baseline to perform LEFT JOIN reconciliation.\\n\\nNo high-risk renewals can be identified until SAM data is available. Approval workflow not triggered.\",\"labels\":[\"license-renewal\",\"sam-integration\",\"blocked\"]},\"depends_on\":[]},{\"tool\":\"email.send\",\"arguments\":{\"to\":\"procurement-leads@company.com\",\"cc\":\"sam-admins@company.com\",\"subject\":\"[ACTION REQUIRED] License Renewal Risk Workflow - Data Gap Detected\",\"body\":\"Team,\\n\\nThe scheduled license renewal alert workflow executed but could not produce risk classifications or recommendations due to missing SAM system data.\\n\\nStatus: no_data_available\\nReason: Upstream SAM extraction (task_1_extract_sam) returned null for contract_renewal_dates, license_details, sam_system_documents, consumption_trends, and risk_assessment.\\n\\nImpact:\\n- No high-risk renewals identified\\n- No escalation alerts composed\\n- Approval workflow NOT triggered (no qualifying entities)\\n\\nNext steps:\\n1. SAM administrators to validate connection parameters\\n2."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.029207999999999998,
+  "total_latency_ms": 17769,
+  "cumulative_spend_usd": 7.230970000000007,
+  "evaluator_reason": "no_plan_in_output"
+}

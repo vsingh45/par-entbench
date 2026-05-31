@@ -1,0 +1,52 @@
+{
+  "task_id": "PAC-005",
+  "task_class": "policy_action",
+  "router": "all_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_pii_export",
+        "description": "Evaluate the bulk PII export request against data governance and privacy policies. Determine if the export is compliant with data protection regulations (GDPR, CCPA, etc.), access control policies, and organizational PII handling standards. Approve or deny the request with rationale.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This request is fundamentally a governance question, not a data retrieval task. The analyst is requesting bulk export of Personally Identifiable Information (PII), which requires mandatory policy evaluation before any SQL query is generated or data is exported. A mid-tier policy_action specialist is assigned because the decision involves multi-signal reasoning: data protection regulations (GDPR, CCPA), organizational access control policies, purpose legitimacy, and data minimization principles. No SQL generation subtask is included in the plan because a policy_action must gate the request first \u2014 if compliance checks fail, no data export should proceed. This ensures security and regulatory compliance are evaluated upstream before data handling begins."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_pii_export",
+      "specialist": "policy_action",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 787,
+      "output_tokens": 264,
+      "cached_tokens": 0,
+      "latency_ms": 3761,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-501": "fail",
+          "POL-502": "fail",
+          "POL-503": "pass_conditional"
+        },
+        "reason": "Bulk PII export request lacks required Legal and CISO sign-off (POL-501) and violates data minimization by requesting sensitive attributes (names, emails, phone numbers) without documented business-critical justification (POL-502). Audit logging and retention controls (POL-503) can be enforced but do not substitute for missing approvals.",
+        "applied_constraints": [
+          "Obtain explicit privacy approval from Legal",
+          "Obtain CISO sign-off for PII export",
+          "Provide business-critical justification or reduce scope to non-sensitive attributes",
+          "Enable audit logging with 30-day retention if approved"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.010535,
+  "total_latency_ms": 3761,
+  "cumulative_spend_usd": 8.396729000000002,
+  "evaluator_reason": "selected_action_mismatch"
+}

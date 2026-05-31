@@ -1,0 +1,247 @@
+{
+  "task_id": "XR-006",
+  "task_class": "cross_recon",
+  "router": "par_no_rationale",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "task_1",
+        "description": "Query SAM database to extract Slack contract renewal dates, terms, and historical renewal patterns",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "task_2",
+        "description": "Query consumption/usage database to retrieve Slack usage trends over time (active users, login frequency, data consumption)",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "task_3",
+        "description": "Extract and normalize SAM contract renewal data into structured format for analysis",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": [
+          "task_1"
+        ]
+      },
+      {
+        "id": "task_4",
+        "description": "Extract and normalize consumption usage data into comparable time-series format",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": [
+          "task_2"
+        ]
+      },
+      {
+        "id": "task_5",
+        "description": "Perform cross-reconciliation between contract renewals and usage trends to identify correlations and trajectory patterns",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "task_3",
+          "task_4"
+        ]
+      },
+      {
+        "id": "task_6",
+        "description": "Develop recommendations and action plan based on license renewal trajectory analysis and usage forecast",
+        "specialist": "multitool_plan",
+        "tier": "frontier",
+        "depends_on": [
+          "task_5"
+        ]
+      }
+    ],
+    "cost_rationale": "Sequential workflow: Data retrieval (sql_gen + mongo_query in parallel), extraction (extract tasks in parallel), reconciliation (cross_recon), and strategic planning (multitool_plan). Frontier tier needed for complex trajectory forecasting and recommendation synthesis."
+  },
+  "node_results": [
+    {
+      "subtask_id": "task_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 454,
+      "output_tokens": 325,
+      "cached_tokens": 0,
+      "latency_ms": 5167,
+      "output": {
+        "sql": "SELECT cf.publisher, cf.product, cf.license_id, MIN(cf.event_date) AS first_event_date, MAX(cf.event_date) AS last_event_date, COUNT(DISTINCT cf.fiscal_year) AS years_active, COUNT(DISTINCT CASE WHEN cf.event_type ILIKE '%renew%' THEN cf.event_id END) AS renewal_events, SUM(CASE WHEN cf.event_type ILIKE '%renew%' THEN cf.amount_usd ELSE 0 END) AS total_renewal_spend_usd, AVG(cf.daily_active_seats) AS avg_daily_active_seats, MAX(cf.daily_active_seats) AS peak_daily_active_seats, MIN(cf.daily_active_seats) AS min_daily_active_seats, SUM(cf.amount_usd) AS total_spend_usd, COUNT(cf.event_id) AS total_events, STRING_AGG(DISTINCT cf.event_type, ', ' ORDER BY cf.event_type) AS event_types_observed FROM consumption_facts cf WHERE cf.publisher ILIKE '%Slack%' OR cf.product ILIKE '%Slack%' GROUP BY cf.publisher, cf.product, cf.license_id ORDER BY cf.publisher, cf.product, cf.license_id"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_2",
+      "specialist": "mongo_query",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1212,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9800,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Slack",
+              "status": {
+                "$in": [
+                  "active",
+                  "expired",
+                  "renewed"
+                ]
+              }
+            }
+          },
+          {
+            "$sort": {
+              "term_start": 1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_3",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 554,
+      "output_tokens": 158,
+      "cached_tokens": 0,
+      "latency_ms": 1137,
+      "output": {
+        "publisher": null,
+        "product": null,
+        "license_id": null,
+        "first_event_date": null,
+        "last_event_date": null,
+        "years_active": null,
+        "renewal_events": null,
+        "total_renewal_spend_usd": null,
+        "avg_daily_active_seats": null,
+        "peak_daily_active_seats": null,
+        "min_daily_active_seats": null,
+        "total_spend_usd": null,
+        "total_events": null,
+        "event_types_observed": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_4",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 285,
+      "output_tokens": 188,
+      "cached_tokens": 0,
+      "latency_ms": 1809,
+      "output": {
+        "extraction_result": null,
+        "error": "No document provided for extraction",
+        "expected_schema": {
+          "time_period": "string (YYYY-MM-DD to YYYY-MM-DD)",
+          "publisher": "string",
+          "license_status": "string (active|expired|renewed)",
+          "term_start": "string (YYYY-MM-DD)",
+          "term_end": "string (YYYY-MM-DD)",
+          "renewal_count": "integer",
+          "consumption_units": "float",
+          "contract_value_usd": "float"
+        },
+        "note": "Task requires document input. Provide the consumption/SAM license data document to extract and normalize time-series metrics."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_5",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 534,
+      "output_tokens": 414,
+      "cached_tokens": 0,
+      "latency_ms": 7766,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "Slack_license_reconciliation",
+            "mongo_value": {
+              "publisher": null,
+              "product": null,
+              "license_id": null,
+              "first_event_date": null,
+              "last_event_date": null,
+              "years_active": null,
+              "renewal_events": null,
+              "total_renewal_spend_usd": null,
+              "avg_daily_active_seats": null,
+              "peak_daily_active_seats": null,
+              "min_daily_active_seats": null,
+              "total_spend_usd": null,
+              "total_events": null,
+              "event_types_observed": null
+            },
+            "sql_value": {
+              "time_period": null,
+              "publisher": null,
+              "license_status": null,
+              "term_start": null,
+              "term_end": null,
+              "renewal_count": null,
+              "consumption_units": null,
+              "contract_value_usd": null
+            },
+            "classification": "no_recent_activity",
+            "reconciliation_notes": {
+              "status": "both_sources_null",
+              "mongo_error": "No operational state data returned from task_3; all fields null indicating query returned no documents",
+              "sql_error": "No historical data extracted from task_4; document input was not provided for SAM license extraction",
+              "trajectory_assessment": "indeterminate",
+              "correlation_signal": "insufficient_data",
+              "recommended_action": "Provide SAM license document to task_4 and verify MongoDB collection contains Slack license records before rerunning reconciliation",
+              "blocking_conditions": [
+                "task_3 returned null entity \u2014 verify publisher filter matches 'Slack' or 'Salesforce Slack' in MongoDB",
+                "task_4 requires explicit document input (consumption/SAM license PDF, CSV, or structured record)",
+                "Without both sources populated, renewal trajectory and usage correlation cannot be computed"
+              ]
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_6",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1176,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9644,
+      "output": {
+        "raw_output": "{\"plan\":[{\"tool\":\"jira.create_ticket\",\"arguments\":{\"project\":\"SAM\",\"summary\":\"Slack license renewal trajectory analysis - data gap remediation required\",\"description\":\"Reconciliation task_5 returned classification 'no_recent_activity' with both MongoDB and SQL sources null. Blocking conditions: (1) task_3 returned null entity - verify publisher filter matches 'Slack' or 'Salesforce Slack' in MongoDB; (2) task_4 requires explicit SAM license document input (PDF/CSV/structured record); (3) Without both sources populated, renewal trajectory and usage correlation cannot be computed. Recommended action: Provide SAM license document to task_4 and verify MongoDB collection contains Slack license records before rerunning reconciliation.\",\"priority\":\"High\",\"labels\":[\"sam\",\"slack\",\"license-renewal\",\"data-quality\"]},\"depends_on\":[]},{\"tool\":\"confluence.create_page\",\"arguments\":{\"space\":\"SAM\",\"title\":\"Slack License Renewal Trajectory - Recommendations & Action Plan\",\"content\":\"## Executive Summary\\nReconciliation of Slack license renewal trajectory against usage forecast is currently INDETERMINATE due to insufficient data from both sources.\\n\\n## Findings (from task_5)\\n- Classification: no_recent_activity\\n- Mongo operational state: all fields null\\n- SQL historical SAM data: all fields null\\n- Trajectory assessment: indeterminate\\n- Correlation signal: insufficient_data\\n\\n## Recommendations\\n1. **Data Remediation (Immediate)**: Validate MongoDB publisher filter accepts both 'Slack' and 'Salesforce Slack' naming conventions.\\n2. **Document Ingestion**: Supply SAM license contract document (PDF/CSV) to task_4 extraction pipeline.\\n3. **Rerun Pipeline**: Once both sources populated, rerun tasks 3-5 to establish baseline trajectory.\\n4. **Forecast Modeling (Deferred)**: Cannot generate usage forecast until at least 2 renewal cycles + 90 days of consumption telemetry are available.\\n5. **Governance**: Tag Slack as 'data-gap' in SAM registry until reconciliation succeeds.\\n\\n## Action Plan\\n| # | Owner | Action | Due"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.058134000000000005,
+  "total_latency_ms": 35323,
+  "cumulative_spend_usd": 0.3542469999999999,
+  "evaluator_reason": "stage2_sql_fail: result_bag_mismatch"
+}

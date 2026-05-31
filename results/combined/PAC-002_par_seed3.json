@@ -1,0 +1,52 @@
+{
+  "task_id": "PAC-002",
+  "task_class": "policy_action",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_1",
+        "description": "Evaluate deployment request against change management and maintenance window policies. Check if engineer u_7732 has authorization to deploy to prod-us-east-1, verify whether current timestamp (2:15 AM UTC Tuesday) falls within approved maintenance windows, and assess hotfix exception criteria.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single subtask assigned to policy_action because the query explicitly requests governance/compliance evaluation: determining whether the deployment is permitted under policy. Tier is mid because the evaluation requires multi-signal reasoning (engineer authorization, timestamp comparison against maintenance windows, hotfix exception criteria) across potentially multiple policy rules, rather than a simple single-rule lookup."
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_1",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 553,
+      "output_tokens": 395,
+      "cached_tokens": 0,
+      "latency_ms": 8114,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-401": "fail",
+          "POL-402": "fail",
+          "POL-403": "fail"
+        },
+        "reason": "Deployment denied for three compounding violations: (1) POL-401: User u_7732 holds role 'engineer', which does not meet the minimum required role of 'senior-engineer' for production deployments. (2) POL-403: Current time Tuesday 02:15 UTC falls outside the only approved maintenance window (Saturday 22:00 \u2013 Sunday 06:00 UTC). (3) POL-402: Because this deployment is outside the approved maintenance window, CAB approval is mandatory \u2014 no evidence of CAB approval was provided. Although a hotfix exception was referenced in the request, no hotfix exception policy exists in the registry to override these requirements. All three policy violations must be resolved before deployment can proceed.",
+        "applied_constraints": [
+          "User role 'engineer' must be elevated to at minimum 'senior-engineer' to authorize production deployments (POL-401).",
+          "Deployment must either be rescheduled to the approved maintenance window (Saturday 22:00 \u2013 Sunday 06:00 UTC) or obtain documented CAB approval prior to proceeding (POL-402, POL-403).",
+          "If a hotfix exception process exists outside the current policy registry, it must be formally invoked and approved by the Change Advisory Board before this action can be re-evaluated.",
+          "All approvals and role verifications must be logged and attached to the change record before re-submission."
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0075840000000000005,
+  "total_latency_ms": 8114,
+  "cumulative_spend_usd": 4.854123000000006,
+  "evaluator_reason": "selected_action_mismatch"
+}

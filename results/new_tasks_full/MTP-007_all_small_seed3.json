@@ -1,0 +1,210 @@
+{
+  "task_id": "MTP-007",
+  "task_class": "multitool_plan",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "scan_iam_policies",
+        "description": "Scan and extract all IAM policies from the policy registry; retrieve principal names, action permissions, resource restrictions, and effect statements to establish baseline policy state",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "audit_cloudtrail_logs",
+        "description": "Query CloudTrail logs to retrieve all API calls, principals, actions, resources, timestamps, and outcomes; aggregate by principal and action for audit trail analysis",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "check_policy_violations",
+        "description": "Reconcile extracted IAM policies against CloudTrail audit trail; identify unauthorized actions, permission drift, overprivileged principals, and policy boundary violations; classify findings by severity",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "scan_iam_policies",
+          "audit_cloudtrail_logs"
+        ]
+      },
+      {
+        "id": "generate_compliance_report",
+        "description": "Evaluate policy violations against compliance framework (least privilege, separation of duties, access control standards); generate structured compliance report with findings, remediation actions, and risk rating",
+        "specialist": "policy_action",
+        "tier": "frontier",
+        "depends_on": [
+          "check_policy_violations"
+        ]
+      }
+    ],
+    "cost_rationale": "This 4-subtask plan is minimal and necessary. (1) scan_iam_policies extracts policy documents once (small tier: straightforward document field extraction). (2) audit_cloudtrail_logs queries the audit log warehouse with aggregation (mid tier: multi-table join and grouping logic). (3) check_policy_violations reconciles two sources (IAM state + CloudTrail history) with classification of drift and violations (frontier tier: multi-signal reconciliation requiring inference and severity assessment). (4) generate_compliance_report evaluates violations against governance policy registry and produces compliance decision (frontier tier: multi-rule policy reasoning with remediation logic). No multitool_plan needed because the workflow is primarily query-and-reconcile, not enterprise tool orchestration. Each subtask is necessary and cannot be consolidated further without losing required functionality."
+  },
+  "node_results": [
+    {
+      "subtask_id": "scan_iam_policies",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 252,
+      "output_tokens": 144,
+      "cached_tokens": 0,
+      "latency_ms": 1839,
+      "output": {
+        "error": "no_document_provided",
+        "message": "No document content was provided to extract IAM policies from. The task describes an operation to scan IAM policies, but no actual policy registry document, configuration file, or audit report was supplied for extraction.",
+        "expected_input": "IAM policy document, policy registry file, JSON configuration, or audit report containing policy definitions",
+        "required_fields": [
+          "principal_names",
+          "action_permissions",
+          "resource_restrictions",
+          "effect_statements"
+        ],
+        "extracted_data": null
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "audit_cloudtrail_logs",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 472,
+      "output_tokens": 124,
+      "cached_tokens": 0,
+      "latency_ms": 1371,
+      "output": {
+        "sql": "SELECT user_id AS principal, action, COUNT(*) AS call_count, MIN(access_time) AS first_access, MAX(access_time) AS last_access, COUNT(CASE WHEN result = 'success' THEN 1 END) AS successful_calls, COUNT(CASE WHEN result != 'success' THEN 1 END) AS failed_calls FROM access_log_facts GROUP BY user_id, action ORDER BY call_count DESC, user_id, action"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "check_policy_violations",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 520,
+      "output_tokens": 409,
+      "cached_tokens": 0,
+      "latency_ms": 3751,
+      "output": {
+        "reconciled": [],
+        "audit_status": "INCOMPLETE",
+        "errors": [
+          {
+            "component": "scan_iam_policies",
+            "status": "FAILED",
+            "reason": "no_document_provided",
+            "severity": "CRITICAL",
+            "details": "Cannot extract IAM policies - no policy document, registry, configuration file, or audit report provided"
+          },
+          {
+            "component": "reconciliation",
+            "status": "BLOCKED",
+            "reason": "missing_primary_source",
+            "severity": "CRITICAL",
+            "details": "MongoDB/operational source (IAM policies) is null; cannot perform LEFT JOIN reconciliation without primary dataset"
+          }
+        ],
+        "required_inputs": {
+          "iam_policies_source": {
+            "type": "document",
+            "formats": [
+              "JSON",
+              "YAML",
+              "AWS IAM Policy JSON"
+            ],
+            "required_fields": [
+              "principal_names",
+              "action_permissions",
+              "resource_restrictions",
+              "effect_statements"
+            ],
+            "examples": [
+              "IAM policy registry",
+              "policy audit report",
+              "configuration management database export"
+            ]
+          },
+          "cloudtrail_logs_source": {
+            "type": "sql_query_ready",
+            "status": "AVAILABLE",
+            "table": "access_log_facts",
+            "ready": true
+          }
+        },
+        "next_steps": [
+          "Provide IAM policy document or registry as input",
+          "Rerun scan_iam_policies task",
+          "Execute reconciliation with both MongoDB (policies) and SQL (audit trail) sources",
+          "Classify findings by severity"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "generate_compliance_report",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 702,
+      "output_tokens": 597,
+      "cached_tokens": 0,
+      "latency_ms": 5137,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-001-LEAST-PRIVILEGE": "fail",
+          "POL-002-SEPARATION-OF-DUTIES": "not_applicable",
+          "POL-003-ACCESS-CONTROL": "fail",
+          "POL-004-DATA-INTEGRITY": "fail",
+          "POL-005-AUDIT-COMPLETENESS": "fail",
+          "POL-006-COMPLIANCE-REPORTING": "pending_review"
+        },
+        "reason": "Cannot execute compliance evaluation task. Critical prerequisite data missing: IAM policy document/registry required as primary source for policy violation scanning. Upstream scan_iam_policies component failed with CRITICAL severity due to absent policy documentation. Reconciliation blocked without primary dataset. Task cannot proceed to compliance assessment without mandatory input.",
+        "applied_constraints": [
+          "BLOCK: No IAM policy document provided (required formats: JSON, YAML, AWS IAM Policy JSON)",
+          "BLOCK: Missing required policy fields: principal_names, action_permissions, resource_restrictions, effect_statements",
+          "BLOCK: Cannot perform least privilege audit without policy registry",
+          "BLOCK: Cannot reconcile policies against CloudTrail logs without primary source",
+          "BLOCK: Compliance report generation requires completed policy violation analysis",
+          "ACTION BLOCKED: Escalate to information security team with data collection request"
+        ],
+        "required_remediation": {
+          "immediate_action": "Provide IAM policy source document (policy registry, audit report, or CMDB export)",
+          "blocking_issues": [
+            {
+              "component": "scan_iam_policies",
+              "severity": "CRITICAL",
+              "issue": "no_document_provided",
+              "required_input": "iam_policies_source (JSON/YAML format with principal, action, resource, effect)"
+            },
+            {
+              "component": "reconciliation",
+              "severity": "CRITICAL",
+              "issue": "missing_primary_source",
+              "required_input": "MongoDB/operational IAM policies dataset"
+            }
+          ],
+          "next_steps": [
+            "Obtain IAM policy document from source system",
+            "Validate policy document contains required fields",
+            "Rerun scan_iam_policies with complete documentation",
+            "Execute reconciliation against CloudTrail logs (source available)",
+            "Generate compliance report with findings classification"
+          ]
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.008316,
+  "total_latency_ms": 12098,
+  "cumulative_spend_usd": 7.694712000000004
+}

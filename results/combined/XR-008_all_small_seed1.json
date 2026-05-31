@@ -1,0 +1,118 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "router": "all_small",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "datadog_license_query",
+        "description": "Query SQL warehouse to retrieve Datadog license allocation data (seats allocated, license type, renewal dates, cost basis) and actual usage metrics (DAU, API calls, data ingestion volume, compute units) with growth rates over the past 12 months",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "datadog_reconcile_analysis",
+        "description": "Reconcile license allocation data with actual usage metrics to identify utilization gaps, overprovisioning, underutilization patterns, and growth trends. Classify usage posture (under-leveraged, optimized, over-provisioned) and generate consumption growth analysis and optimization recommendations",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "datadog_license_query"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid tier) to aggregate license allocation and usage metrics from the warehouse in a single query with multi-table joins and monthly aggregations, which is straightforward but requires careful schema navigation; (2) cross_recon (frontier tier) to reconcile the two data streams, compute utilization ratios, identify variance patterns, segment usage by product/team, and generate classification + recommendations. Frontier tier is justified because cross_recon must perform statistical analysis on growth trends, identify anomalies, and produce intelligent posture classification across multiple dimensions. No additional subtasks needed: policy_action is unnecessary (no compliance query), and the analysis is from a single data source (SQL warehouse), so no external source reconciliation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "datadog_license_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 487,
+      "output_tokens": 591,
+      "cached_tokens": 0,
+      "latency_ms": 3335,
+      "output": {
+        "sql": "SELECT cf.license_id, cf.publisher, cf.product, cf.event_type, cf.fiscal_year, cf.fiscal_quarter, DATE_TRUNC('month', cf.event_date)::DATE as month, COUNT(DISTINCT cf.user_id) as daily_active_users, SUM(cf.daily_active_seats) as seats_allocated, SUM(cf.amount_usd) as cost_basis_usd, COUNT(*) as api_call_events, LAG(SUM(cf.daily_active_seats)) OVER (PARTITION BY cf.license_id ORDER BY DATE_TRUNC('month', cf.event_date)) as prior_month_seats, LAG(COUNT(DISTINCT cf.user_id)) OVER (PARTITION BY cf.license_id ORDER BY DATE_TRUNC('month', cf.event_date)) as prior_month_dau, ROUND(((SUM(cf.daily_active_seats) - LAG(SUM(cf.daily_active_seats)) OVER (PARTITION BY cf.license_id ORDER BY DATE_TRUNC('month', cf.event_date))) / NULLIF(LAG(SUM(cf.daily_active_seats)) OVER (PARTITION BY cf.license_id ORDER BY DATE_TRUNC('month', cf.event_date)), 0) * 100)::NUMERIC, 2) as seats_growth_pct, ROUND(((COUNT(DISTINCT cf.user_id) - LAG(COUNT(DISTINCT cf.user_id)) OVER (PARTITION BY cf.license_id ORDER BY DATE_TRUNC('month', cf.event_date))) / NULLIF(LAG(COUNT(DISTINCT cf.user_id)) OVER (PARTITION BY cf.license_id ORDER BY DATE_TRUNC('month', cf.event_date)), 0) * 100)::NUMERIC, 2) as dau_growth_pct FROM consumption_facts cf WHERE cf.publisher = 'Datadog' AND cf.event_date >= '2023-01-01' AND cf.event_date < '2024-01-01' GROUP BY cf.license_id, cf.publisher, cf.product, cf.event_type, cf.fiscal_year, cf.fiscal_quarter, DATE_TRUNC('month', cf.event_date) ORDER BY cf.license_id, DATE_TRUNC('month', cf.event_date) DESC;"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "datadog_reconcile_analysis",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 876,
+      "output_tokens": 799,
+      "cached_tokens": 0,
+      "latency_ms": 6720,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "datadog_license_allocation_vs_usage",
+            "mongo_value": null,
+            "sql_value": {
+              "query_type": "license_consumption_analysis",
+              "publisher": "Datadog",
+              "period": "2023-01-01 to 2023-12-31",
+              "metrics_available": [
+                "daily_active_users",
+                "seats_allocated",
+                "cost_basis_usd",
+                "api_call_events",
+                "seats_growth_pct",
+                "dau_growth_pct"
+              ],
+              "aggregation_level": "license_id, product, event_type, fiscal_period, month",
+              "growth_indicators": "month_over_month with LAG analysis"
+            },
+            "classification": "data_structure_mismatch",
+            "utilization_analysis": {
+              "gap_detection": "Cannot determine without baseline seat allocation vs actual DAU ratio",
+              "overprovisioning_risk": "Identifiable where seats_allocated >> daily_active_users",
+              "underutilization_pattern": "Identifiable where dau_growth_pct negative or flat for 2+ months",
+              "growth_trend": "Measurable via seats_growth_pct and dau_growth_pct month-over-month"
+            },
+            "recommendations": [
+              {
+                "analysis_type": "utilization_gap",
+                "method": "Calculate utilization_ratio = daily_active_users / seats_allocated per license_id per month",
+                "threshold_under_leveraged": "ratio < 0.3 (30% utilization)",
+                "threshold_optimized": "ratio 0.7-0.9 (70-90% utilization)",
+                "threshold_overprovisioned": "ratio > 0.95 (95%+ utilization or allocation exceeds needs)"
+              },
+              {
+                "analysis_type": "consumption_growth",
+                "method": "Trend seats_growth_pct and dau_growth_pct across fiscal quarters",
+                "high_growth": "seats_growth_pct or dau_growth_pct > 15% QoQ",
+                "stagnant": "both metrics between -5% and +5% for 2+ consecutive periods",
+                "declining": "consistent negative growth indicating sunset candidates"
+              },
+              {
+                "analysis_type": "cost_optimization",
+                "method": "Cost per DAU = cost_basis_usd / daily_active_users by license_id and product",
+                "action": "Identify licenses with highest cost_per_dau and evaluate consolidation"
+              },
+              {
+                "analysis_type": "allocation_rightsizing",
+                "method": "Flag licenses where seats_allocated > peak_daily_active_users by >40%",
+                "recommendation": "Reduce seat allocation by 20-30% for over-provisioned licenses showing stable or declining DAU"
+              }
+            ],
+            "data_quality_notes": "SQL query available; MongoDB source not provided. Analysis requires JOIN of allocation_facts (baseline seats) with consumption_facts (actual usage) on license_id and fiscal period for complete gap analysis."
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.008313000000000001,
+  "total_latency_ms": 10055,
+  "cumulative_spend_usd": 4.8687190000000005,
+  "evaluator_reason": "no_mongo_node"
+}

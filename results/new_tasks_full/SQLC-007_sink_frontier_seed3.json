@@ -1,0 +1,68 @@
+{
+  "task_id": "SQLC-007",
+  "task_class": "sql_compose",
+  "router": "sink_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_publishers_spend",
+        "description": "Query SQL warehouse to get top spending publishers with detailed breakdown: publisher name, total spend (YTD/LTM), spend trend, and product portfolio (count of products by category). Use window functions to rank publishers by spend and calculate their share of total spend.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_leverage",
+        "description": "Reconcile publisher spend data with contract terms (MongoDB) and spend concentration metrics. Assess negotiation leverage for each publisher based on: (1) spend concentration (% of budget), (2) contract renewal timing, (3) product switching costs (number and criticality of products), (4) available alternatives in market. Generate leverage score and negotiation recommendations for each publisher.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Two subtasks because the query requires: (1) extraction and aggregation of spend + product mix from SQL (sql_gen, mid-tier for multi-table joins and window functions to rank and segment), and (2) reconciliation of that output with contract state from MongoDB plus leverage assessment (cross_recon, mid-tier for multi-signal analysis combining spend, contract terms, and product criticality into actionable leverage scores). The leverage assessment is part of the cross_recon reconciliation workflow, not a separate policy_action, since it's analytical posturing rather than compliance evaluation. Both subtasks are mid-tier: sql_gen needs joins across spend and product tables; cross_recon needs to synthesize multiple signals (spend concentration, contract state, switching cost) into a recommendation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_publishers_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 742,
+      "output_tokens": 713,
+      "cached_tokens": 0,
+      "latency_ms": 7275,
+      "output": {
+        "sql": "WITH publisher_spend AS (SELECT publisher, SUM(amount_usd) AS total_spend_ltm, SUM(CASE WHEN event_date >= DATE_TRUNC('year', CURRENT_DATE) THEN amount_usd ELSE 0 END) AS spend_ytd, SUM(CASE WHEN event_date >= CURRENT_DATE - INTERVAL '90 days' THEN amount_usd ELSE 0 END) AS spend_last_90d, SUM(CASE WHEN event_date >= CURRENT_DATE - INTERVAL '180 days' AND event_date < CURRENT_DATE - INTERVAL '90 days' THEN amount_usd ELSE 0 END) AS spend_prior_90d, COUNT(DISTINCT product) AS product_count, COUNT(DISTINCT license_id) AS license_count, SUM(daily_active_seats) AS total_seats FROM consumption_facts WHERE event_date >= CURRENT_DATE - INTERVAL '365 days' GROUP BY publisher) SELECT publisher, total_spend_ltm, spend_ytd, product_count, license_count, total_seats, CASE WHEN spend_prior_90d > 0 THEN ROUND(((spend_last_90d - spend_prior_90d) / spend_prior_90d * 100)::NUMERIC, 2) ELSE NULL END AS spend_trend_pct, RANK() OVER (ORDER BY total_spend_ltm DESC) AS spend_rank, ROUND((total_spend_ltm / SUM(total_spend_ltm) OVER () * 100)::NUMERIC, 2) AS share_of_total_pct, ROUND((SUM(total_spend_ltm) OVER (ORDER BY total_spend_ltm DESC) / SUM(total_spend_ltm) OVER () * 100)::NUMERIC, 2) AS cumulative_share_pct FROM publisher_spend ORDER BY total_spend_ltm DESC LIMIT 20"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_leverage",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 486,
+      "output_tokens": 55,
+      "cached_tokens": 0,
+      "latency_ms": 1241,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "unknown",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "insufficient_data"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.02534,
+  "total_latency_ms": 8516,
+  "cumulative_spend_usd": 1.3213640000000006
+}

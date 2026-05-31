@@ -1,0 +1,142 @@
+{
+  "task_id": "MTP-007",
+  "task_class": "multitool_plan",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "scan_iam",
+        "description": "Scan IAM policies from AWS—extract principal ARNs, policy statements, permissions, and identify overly permissive grants (e.g., wildcards, root actions). Return structured policy inventory.",
+        "specialist": "extract",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "audit_cloudtrail",
+        "description": "Query CloudTrail logs from SQL warehouse—aggregate API calls by principal, action, resource, and timestamp. Identify suspicious activity patterns (failed auth, privilege escalation attempts, unusual access times). Return audit event summary.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "policy_violations",
+        "description": "Reconcile IAM policy inventory (from scan_iam) with CloudTrail audit events (from audit_cloudtrail). Cross-reference actual API usage against allowed policies. Detect violations (e.g., actions taken outside permitted scope) and classify risk (critical/high/medium/low).",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "scan_iam",
+          "audit_cloudtrail"
+        ]
+      },
+      {
+        "id": "compliance_report",
+        "description": "Evaluate policy violations and IAM posture against compliance frameworks (CIS, SOC2, PCI-DSS as applicable). Generate executive summary with violation counts, risk distribution, remediation recommendations, and compliance status per framework.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": [
+          "policy_violations"
+        ]
+      }
+    ],
+    "cost_rationale": "Four subtasks (minimum for end-to-end audit): (1) extract for IAM policy inventory (mid-tier due to multi-field structure and permission categorization); (2) sql_gen for CloudTrail log aggregation (mid-tier for multi-table join and pattern detection); (3) cross_recon at frontier tier to reconcile policies against logs, detect cross-signal violations, and classify risk severity—requires high reasoning; (4) policy_action at mid tier to map violations to compliance frameworks and generate governance assessment. No additional subtasks needed; classification and recommendations are embedded in cross_recon and policy_action outputs, not separate calls."
+  },
+  "node_results": [
+    {
+      "subtask_id": "scan_iam",
+      "specialist": "extract",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 383,
+      "output_tokens": 11,
+      "cached_tokens": 0,
+      "latency_ms": 957,
+      "output": {
+        "policies": []
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "audit_cloudtrail",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 760,
+      "output_tokens": 568,
+      "cached_tokens": 0,
+      "latency_ms": 6145,
+      "output": {
+        "sql": "SELECT user_id AS principal, action, resource, DATE_TRUNC('hour', access_time) AS event_hour, COUNT(*) AS event_count, SUM(CASE WHEN result = 'denied' OR result = 'failed' THEN 1 ELSE 0 END) AS failed_attempts, SUM(CASE WHEN permission ILIKE '%admin%' OR permission ILIKE '%root%' OR action ILIKE '%escalat%' THEN 1 ELSE 0 END) AS privilege_escalation_attempts, SUM(CASE WHEN EXTRACT(HOUR FROM access_time) < 6 OR EXTRACT(HOUR FROM access_time) > 22 THEN 1 ELSE 0 END) AS unusual_hour_access FROM access_log_facts GROUP BY user_id, action, resource, DATE_TRUNC('hour', access_time) HAVING SUM(CASE WHEN result = 'denied' OR result = 'failed' THEN 1 ELSE 0 END) > 0 OR SUM(CASE WHEN permission ILIKE '%admin%' OR permission ILIKE '%root%' OR action ILIKE '%escalat%' THEN 1 ELSE 0 END) > 0 OR SUM(CASE WHEN EXTRACT(HOUR FROM access_time) < 6 OR EXTRACT(HOUR FROM access_time) > 22 THEN 1 ELSE 0 END) > 0 ORDER BY failed_attempts DESC, privilege_escalation_attempts DESC, event_count DESC LIMIT 500"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "policy_violations",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 699,
+      "output_tokens": 145,
+      "cached_tokens": 0,
+      "latency_ms": 1890,
+      "output": {
+        "reconciled": [],
+        "audit_summary": {
+          "status": "incomplete_data",
+          "reason": "scan_iam returned empty policies array; cannot perform cross-reference analysis",
+          "details": {
+            "iam_policies_found": 0,
+            "cloudtrail_query": "defined",
+            "cloudtrail_results": "not_executed",
+            "reconciliation_possible": false
+          },
+          "recommendation": "Ensure scan_iam completes successfully and returns policy definitions before attempting violation detection and risk classification"
+        }
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "compliance_report",
+      "specialist": "policy_action",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 507,
+      "output_tokens": 374,
+      "cached_tokens": 0,
+      "latency_ms": 4046,
+      "output": {
+        "selected_action": "deny_pending_approvals",
+        "policy_compliance": {
+          "POL-COMPLIANCE-AUDIT": "fail",
+          "POL-DATA-INTEGRITY": "fail",
+          "POL-RISK-ASSESSMENT": "fail",
+          "POL-AUDIT-LOGGING": "pass",
+          "POL-ESCALATION": "pending_review"
+        },
+        "reason": "Task cannot proceed due to incomplete upstream data. IAM policy scan returned empty results (0 policies found), preventing reconciliation analysis, violation detection, and compliance framework mapping (CIS, SOC2, PCI-DSS). CloudTrail audit not executed. Executive summary generation requires valid input data.",
+        "applied_constraints": [
+          "Block compliance report generation until scan_iam returns policy definitions",
+          "Require successful IAM policy enumeration before CloudTrail analysis",
+          "Mandate data validation: minimum 1 policy definition required for compliance evaluation",
+          "Log this denial attempt and flag for infrastructure troubleshooting",
+          "Escalate to DevOps/Cloud team to diagnose scan_iam failure"
+        ],
+        "required_remediations_before_approval": [
+          "Execute scan_iam with valid IAM role/credentials and verify non-empty policy array return",
+          "Confirm CloudTrail logs are accessible and queryable",
+          "Validate data pipeline: upstream_outputs.policy_violations.reconciled must contain policy data",
+          "Resubmit task only after prerequisites satisfied"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.023991000000000002,
+  "total_latency_ms": 13038,
+  "cumulative_spend_usd": 7.763176000000003
+}

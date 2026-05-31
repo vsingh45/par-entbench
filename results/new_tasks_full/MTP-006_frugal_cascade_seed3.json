@@ -1,0 +1,164 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sam_extract",
+        "description": "Extract contract renewal dates and license terms from SAM system documents/records",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "consumption_query",
+        "description": "Query consumption trends from SQL warehouse: monthly/quarterly usage patterns, peak usage periods, and trend trajectory for licenses",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "risk_assessment",
+        "description": "Reconcile SAM renewal dates with consumption trends to assess risk: identify critical renewals, gap risks, cost optimization opportunities, and generate renewal priority recommendations",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sam_extract",
+          "consumption_query"
+        ]
+      },
+      {
+        "id": "notify_workflow",
+        "description": "Generate multi-tool orchestration plan to send renewal alerts to procurement team via email/ticketing system and log workflow events",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "risk_assessment"
+        ]
+      }
+    ],
+    "cost_rationale": "4 subtasks minimize overhead: (1) SAM extraction is straightforward field-level work (small tier); (2) consumption query is a single SQL with aggregation and trends (mid tier for time-series analysis); (3) cross_recon reconciles these two sources and produces risk classification + recommendations in one pass (mid tier); (4) multitool_plan is simple notification orchestration (small tier). No policy_action needed—risk assessment is reconciliation output, not governance approval. Plan is minimal and sequential to preserve dependency flow."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sam_extract",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 235,
+      "output_tokens": 187,
+      "cached_tokens": 0,
+      "latency_ms": 1783,
+      "output": {
+        "task": "Extract contract renewal dates and license terms from SAM system documents/records",
+        "contract_renewal_date": null,
+        "license_expiration_date": null,
+        "license_start_date": null,
+        "license_terms": null,
+        "contract_value_usd": null,
+        "vendor_name": null,
+        "license_type": null,
+        "renewal_notice_period_days": null,
+        "auto_renewal_enabled": null,
+        "consumption_data_available": false,
+        "risk_assessment_required": true,
+        "procurement_notification_required": true,
+        "note": "No SAM system document was provided. Please supply the actual contract/license document for extraction."
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "consumption_query",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 463,
+      "output_tokens": 311,
+      "cached_tokens": 0,
+      "latency_ms": 2509,
+      "output": {
+        "sql": "SELECT cf.license_id, cf.publisher, cf.product, DATE_TRUNC('month', cf.event_date)::DATE AS month, DATE_TRUNC('quarter', cf.event_date)::DATE AS quarter, cf.fiscal_year, cf.fiscal_quarter, COUNT(*) AS event_count, SUM(cf.amount_usd) AS total_usage_usd, AVG(cf.daily_active_seats) AS avg_active_seats, MAX(cf.daily_active_seats) AS peak_active_seats, COUNT(DISTINCT cf.user_id) AS unique_users, LAG(SUM(cf.amount_usd)) OVER (PARTITION BY cf.license_id, cf.publisher, cf.product ORDER BY DATE_TRUNC('month', cf.event_date)) AS prev_month_usage FROM consumption_facts cf WHERE cf.event_date >= '2024-01-01' GROUP BY cf.license_id, cf.publisher, cf.product, DATE_TRUNC('month', cf.event_date), DATE_TRUNC('quarter', cf.event_date), cf.fiscal_year, cf.fiscal_quarter ORDER BY cf.license_id, DATE_TRUNC('month', cf.event_date) DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "risk_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 726,
+      "output_tokens": 489,
+      "cached_tokens": 0,
+      "latency_ms": 4009,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sam_extraction_status",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_recent_activity",
+            "details": "SAM system document not provided - extraction cannot proceed"
+          },
+          {
+            "entity_key": "consumption_data_availability",
+            "mongo_value": false,
+            "sql_value": null,
+            "classification": "at_risk",
+            "details": "No consumption data available from SAM extract; SQL query ready but no source data to execute against"
+          },
+          {
+            "entity_key": "renewal_risk_assessment",
+            "mongo_value": true,
+            "sql_value": null,
+            "classification": "at_risk",
+            "details": "Risk assessment required but cannot be completed without SAM contract data (renewal dates, license terms, vendor info, contract values)"
+          },
+          {
+            "entity_key": "procurement_notification_requirement",
+            "mongo_value": true,
+            "sql_value": null,
+            "classification": "expand",
+            "details": "Procurement notification flagged as required; workflow blocked pending SAM document submission"
+          }
+        ],
+        "workflow_status": "blocked",
+        "blocking_issues": [
+          "SAM system document/contract data not provided",
+          "Cannot extract: contract_renewal_date, license_expiration_date, license_start_date, license_terms, contract_value_usd, vendor_name, license_type, renewal_notice_period_days, auto_renewal_enabled",
+          "Consumption query prepared but execution deferred (no database context)"
+        ],
+        "next_actions": [
+          "Supply SAM system contract/license document for extraction",
+          "Execute consumption_query against target SQL database once SAM data extracted",
+          "Correlate renewal dates with consumption trends for risk classification",
+          "Generate procurement alerts for critical renewals based on gap analysis"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "notify_workflow",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 835,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 4881,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"resource\": \"procurement_alerts\",\n        \"action\": \"send_notification\",\n        \"user_context\": \"workflow_service\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"contracts\",\n        \"filter\": {\n          \"renewal_risk_assessment\": true,\n          \"status\": \"at_risk\"\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"procurement_alerts\",\n        \"filter\": {\n          \"entity_key\": \"procurement_notification_requirement\",\n          \"classification\": \"expand\"\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"audit.log_action\",\n      \"arguments\": {\n        \"action\": \"workflow_initiated\",\n        \"workflow_name\": \"license_renewal_alert\",\n        \"status\": \"blocked\",\n        \"reason\": \"SAM system document not provided\",\n        \"blocking_issues\": [\n          \"SAM system document/contract data not provided\",\n          \"Cannot extract: contract_renewal_date, license_expiration_date, license_start_date, license_terms, contract_value_usd, vendor_name, license_type, renewal_notice_period_days, auto_renewal_enabled\",\n          \"Consumption query prepared but execution deferred (no database context)\"\n        ]\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"email.send\",\n      \"arguments\": {\n        \"to\": \"procurement@company.com\",\n        \"subject\": \"ACTION REQUIRED: License Renewal Alert Workflow - Missing SAM Contract Data\",\n        \"body\": \"The license renewal alert workflow has been initiated but is currently blocked. To proceed with renewal alerts and risk assessment, please provide:\\n\\n1. SAM system contract/license document with the following required data:\\n   - Contract renewal dates\\n   - License expiration dates\\n   - License start dates\\n   - License terms\\n   - Contract value (USD)\\n   - Vendor name\\n   - License type\\n   - Renewal notice period (days)\\n   - Auto-renewal status\\n\\n2. Once provided, the system will:\\n   - Query consumption trends from SQL database\\n   - Correlate renewal dates with consumption patterns\\n   - Assess renewal risk classification\\n   - Generate procurement alerts for critical renewals\\n\\nExpected at-risk contracts requiring attention: $2.results\\n\\nProcurement notification requirements: $3.results\"\n      },\n      \"depends_on\": [2, 3]\n    },\n    {\n      \"tool\": \"jira.create_ticket\",\n      \"arguments\": {\n        \"project\": \"PROC\",\n        \"issue_type\": \"Task\",\n        \"summary\": \"License Renewal Alert Workflow - Awaiting SAM Contract Data\",\n        \"description\": \"Workflow blocked: License renewal alert orchestration requires SAM system contract/license document submission.\\n\\nBlocking Issues:\\n- SAM system document/contract data not provided\\n- Cannot extract required contract fields\\n- Consumption query"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.011193999999999999,
+  "total_latency_ms": 13182,
+  "cumulative_spend_usd": 7.3841760000000045
+}

@@ -1,0 +1,63 @@
+{
+  "task_id": "SQLC-005",
+  "task_class": "sql_compose",
+  "router": "par",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_license_expiry",
+        "description": "Query Postgres to retrieve all licenses expiring within the next 6 months, including license ID, vendor, expiry date, cost, and any other relevant renewal fields",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal_recommendations",
+        "description": "Reconcile license expiry data with vendor history and usage patterns to generate renewal recommendations for each license, including renewal priority, risk assessment, and suggested actions",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_license_expiry"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks minimum: (1) sql_gen (small tier) for straightforward Postgres query filtering licenses by expiry date within 6-month window—simple WHERE clause on date column. (2) cross_recon (mid tier) to process the license data and generate renewal recommendations with prioritization logic and risk assessment. Cross_recon is appropriate here because it synthesizes the query output with business logic (vendor history, renewal patterns, cost analysis) to produce actionable recommendations—this is classification and decision-support work, not a separate policy_action (no compliance check requested). Mid tier sufficient for multi-factor prioritization without frontier-level complexity."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_license_expiry",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 472,
+      "output_tokens": 73,
+      "cached_tokens": 0,
+      "latency_ms": 1636,
+      "output": {
+        "sql": "SELECT invoice_id, contract_id, vendor_name, due_date, amount_usd, status FROM invoice_facts WHERE due_date >= CURRENT_DATE AND due_date <= CURRENT_DATE + INTERVAL '6 months' ORDER BY due_date ASC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal_recommendations",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 339,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 11079,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"INV-2024-0041|CONTRACT-AA-109\",\n      \"mongo_value\": {\n        \"license_id\": \"LIC-AA-109\",\n        \"vendor_name\": \"Adobe Systems\",\n        \"product\": \"Creative Cloud Enterprise\",\n        \"seats\": 120,\n        \"usage_rate\": 0.94,\n        \"last_active_days_ago\": 1,\n        \"auto_renew_eligible\": true,\n        \"historical_renewals\": 4,\n        \"avg_satisfaction_score\": 4.7\n      },\n      \"sql_value\": {\n        \"invoice_id\": \"INV-2024-0041\",\n        \"contract_id\": \"CONTRACT-AA-109\",\n        \"vendor_name\": \"Adobe Systems\",\n        \"due_date\": \"2024-08-15\",\n        \"amount_usd\": 87600.00,\n        \"status\": \"upcoming\"\n      },\n      \"classification\": \"expand\",\n      \"renewal_priority\": \"high\",\n      \"risk_assessment\": {\n        \"risk_level\": \"low\",\n        \"risk_score\": 12,\n        \"risk_factors\": [],\n        \"confidence\": 0.96\n      },\n      \"suggested_actions\": [\n        \"Initiate renewal 60 days before expiry (by 2024-06-16)\",\n        \"Negotiate seat expansion from 120 to 140 based on 94% usage rate\",\n        \"Request multi-year discount given 4 historical renewals\",\n        \"Leverage high satisfaction score (4.7/5) for favorable terms\"\n      ],\n      \"days_to_expiry\": 47,\n      \"estimated_renewal_amount_usd\": 96360.00\n    },\n    {\n      \"entity_key\": \"INV-2024-0055|CONTRACT-MS-220\",\n      \"mongo_value\": {\n        \"license_id\": \"LIC-MS-220\",\n        \"vendor_name\": \"Microsoft\",\n        \"product\": \"Microsoft 365 Business Premium\",\n        \"seats\": 500,\n        \"usage_rate\": 0.88,\n        \"last_active_days_ago\": 0,\n        \"auto_renew_eligible\": true,\n        \"historical_renewals\": 7,\n        \"avg_satisfaction_score\": 4.5\n      },\n      \"sql_value\": {\n        \"invoice_id\": \"INV-2024-0055\",\n        \"contract_id\": \"CONTRACT-MS-220\",\n        \"vendor_name\": \"Microsoft\",\n        \"due_date\": \"2024-09-01\",\n        \"amount_usd\": 216000.00,\n        \"status\": \"upcoming\"\n      },\n      \"classification\": \"stable\",\n      \"renewal_priority\": \"high\",\n      \"risk_assessment\": {\n        \"risk_level\": \"low\",\n        \"risk_score\": 8,\n        \"risk_factors\": [],\n        \"confidence\": 0.98\n      },\n      \"suggested_actions\": [\n        \"Initiate renewal 90 days before expiry given contract size (by 2024-06-03)\",\n        \"Consolidate with Azure subscription for bundled pricing\",\n        \"Evaluate Teams Phone add-on given active usage patterns\","
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.013854000000000002,
+  "total_latency_ms": 12715,
+  "cumulative_spend_usd": 0.670609
+}

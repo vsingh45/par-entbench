@@ -1,0 +1,111 @@
+{
+  "task_id": "MTP-006",
+  "task_class": "multitool_plan",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sam_contract_dates",
+        "description": "Retrieve contract renewal dates and license details from SAM system (contract start/end dates, renewal thresholds, vendor info)",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "consumption_trends",
+        "description": "Query consumption metrics from warehouse to analyze license usage trends (daily/monthly consumption, seat utilization, growth rate)",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "risk_assessment",
+        "description": "Reconcile SAM renewal dates with consumption trends to assess renewal risk (overdue alerts, underutilized licenses, budget impact, renewal urgency classification)",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sam_contract_dates",
+          "consumption_trends"
+        ]
+      },
+      {
+        "id": "notify_procurement",
+        "description": "Generate and send renewal alert notifications to procurement team with risk classification, recommended actions, and renewal deadlines",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "risk_assessment"
+        ]
+      }
+    ],
+    "cost_rationale": "Four subtasks required: (1) SAM system retrieval via multitool_plan (mid tier) to orchestrate SAM API call for renewal dates; (2) consumption SQL query (mid tier) for multi-table join and aggregation of usage metrics; (3) cross_recon (mid tier) to reconcile two sources (SAM dates + consumption data), classify risk levels, and generate recommendations\u2014this consolidates the risk assessment and avoids a separate policy/classification step; (4) notification orchestration via multitool_plan (small tier) to execute alert delivery using available notification tools. No policy_action needed as this is operational alerting, not governance/compliance approval. Dependencies flow: SAM and consumption queries run in parallel, feed into risk assessment, which triggers notification workflow."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sam_contract_dates",
+      "specialist": "multitool_plan",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 447,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 10128,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"user\": \"current_user\",\n        \"resource\": \"sam_system\",\n        \"action\": \"read\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"contracts\",\n        \"filter\": {\n          \"status\": \"active\",\n          \"renewal_date\": {\n            \"$lte\": { \"$dateAdd\": { \"startDate\": \"$$NOW\", \"unit\": \"day\", \"amount\": 90 } }\n          }\n        },\n        \"projection\": {\n          \"contract_id\": 1,\n          \"vendor_name\": 1,\n          \"vendor_contact\": 1,\n          \"contract_start_date\": 1,\n          \"contract_end_date\": 1,\n          \"renewal_date\": 1,\n          \"renewal_threshold_days\": 1,\n          \"license_count\": 1,\n          \"license_type\": 1,\n          \"annual_value\": 1,\n          \"auto_renewal\": 1,\n          \"owner\": 1\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT contract_id, license_sku, allocated_seats, consumed_seats, ROUND((consumed_seats / NULLIF(allocated_seats, 0)) * 100, 2) AS utilization_pct, AVG(consumed_seats) OVER (PARTITION BY contract_id ORDER BY snapshot_date ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS avg_30d_consumption, MAX(snapshot_date) AS last_snapshot_date FROM sam.license_consumption WHERE contract_id IN ($2.results[*].contract_id) AND snapshot_date >= DATEADD('day', -90, CURRENT_DATE()) ORDER BY utilization_pct DESC\"\n      },\n      \"depends_on\": [2]\n    },\n    {\n      \"tool\": \"mongo.aggregate\",\n      \"arguments\": {\n        \"collection\": \"contracts\",\n        \"pipeline\": [\n          {\n            \"$match\": {\n              \"contract_id\": { \"$in\": \"$2.results[*].contract_id\" }\n            }\n          },\n          {\n            \"$lookup\": {\n              \"from\": \"renewal_history\",\n              \"localField\": \"contract_id\",\n              \"foreignField\": \"contract_id\",\n              \"as\": \"renewal_history\"\n            }\n          },\n          {\n            \"$project\": {\n              \"contract_id\": 1,\n              \"vendor_name\": 1,\n              \"previous_renewal_count\": { \"$size\": \"$renewal_history\" },\n              \"avg_renewal_increase_pct\": { \"$avg\": \"$renewal_history.price_increase_pct\" },\n              \"last_renewal_date\": { \"$max\": \"$renewal_history.renewal_date\" },\n              \"negotiation_notes\": 1\n            }\n          }\n        ]\n      },\n      \"depends_on\": [2]\n    },\n    {\n      \"tool\": \"datadog.query_metric\",\n      \"arguments\": {"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "consumption_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 464,
+      "output_tokens": 393,
+      "cached_tokens": 0,
+      "latency_ms": 5408,
+      "output": {
+        "sql": "SELECT license_id, publisher, product, fiscal_year, fiscal_quarter, SUM(amount_usd) AS total_amount_usd, AVG(amount_usd) AS avg_amount_usd, SUM(daily_active_seats) AS total_active_seats, AVG(daily_active_seats) AS avg_daily_active_seats, COUNT(event_id) AS event_count, MIN(event_date) AS first_event_date, MAX(event_date) AS last_event_date, SUM(amount_usd) - LAG(SUM(amount_usd)) OVER (PARTITION BY license_id, publisher, product ORDER BY fiscal_year, fiscal_quarter) AS qoq_amount_change, AVG(daily_active_seats) - LAG(AVG(daily_active_seats)) OVER (PARTITION BY license_id, publisher, product ORDER BY fiscal_year, fiscal_quarter) AS qoq_seat_change, ROUND(100.0 * (SUM(amount_usd) - LAG(SUM(amount_usd)) OVER (PARTITION BY license_id, publisher, product ORDER BY fiscal_year, fiscal_quarter)) / NULLIF(LAG(SUM(amount_usd)) OVER (PARTITION BY license_id, publisher, product ORDER BY fiscal_year, fiscal_quarter), 0), 2) AS qoq_growth_rate_pct FROM consumption_facts WHERE event_date >= '2023-01-01' GROUP BY license_id, publisher, product, fiscal_year, fiscal_quarter ORDER BY license_id, publisher, product, fiscal_year, fiscal_quarter"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "risk_assessment",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 1639,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 11574,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"CONTRACT-001\",\n      \"mongo_value\": {\n        \"contract_id\": \"CONTRACT-001\",\n        \"vendor_name\": \"Microsoft\",\n        \"vendor_contact\": \"ms-renewal@microsoft.com\",\n        \"contract_start_date\": \"2023-01-15\",\n        \"contract_end_date\": \"2024-01-14\",\n        \"renewal_date\": \"2023-10-16\",\n        \"renewal_threshold_days\": 90,\n        \"license_count\": 500,\n        \"license_type\": \"Enterprise\",\n        \"annual_value\": 250000,\n        \"auto_renewal\": false,\n        \"owner\": \"procurement@company.com\",\n        \"previous_renewal_count\": 3,\n        \"avg_renewal_increase_pct\": 8.5,\n        \"last_renewal_date\": \"2023-01-15\",\n        \"negotiation_notes\": \"Volume discount negotiated last cycle; eligible for EA expansion\"\n      },\n      \"sql_value\": {\n        \"license_id\": \"CONTRACT-001\",\n        \"publisher\": \"Microsoft\",\n        \"product\": \"Microsoft 365 E3\",\n        \"fiscal_year\": 2023,\n        \"fiscal_quarter\": \"Q3\",\n        \"total_amount_usd\": 62500,\n        \"avg_amount_usd\": 125.0,\n        \"total_active_seats\": 387500,\n        \"avg_daily_active_seats\": 425,\n        \"event_count\": 91,\n        \"first_event_date\": \"2023-07-01\",\n        \"last_event_date\": \"2023-09-30\",\n        \"utilization_pct\": 85.0,\n        \"avg_30d_consumption\": 432,\n        \"qoq_amount_change\": 2500,\n        \"qoq_seat_change\": 15,\n        \"qoq_growth_rate_pct\": 4.17\n      },\n      \"classification\": \"renew_priority_high\",\n      \"renewal_risk_score\": 72,\n      \"days_until_renewal\": 12,\n      \"overdue_alert\": true,\n      \"underutilized\": false,\n      \"budget_impact_usd\": 270000,\n      \"estimated_renewal_increase_usd\": 21250,\n      \"renewal_urgency\": \"critical\",\n      \"recommended_action\": \"Immediate procurement engagement required. Contract renewal overdue threshold breached. Utilization at 85% with positive growth trend justifies full seat renewal. Negotiate against 8.5% avg increase \u2014 target 5% cap given stable consumption.\",\n      \"notification_targets\": [\"procurement@company.com\", \"sam-alerts@company.com\"]\n    },\n    {\n      \"entity_key\": \"CONTRACT-002\",\n      \"mongo_value\": {\n        \"contract_id\": \"CONTRACT-002\",\n        \"vendor_name\": \"Salesforce\",\n        \"vendor_contact\": \"renewals@salesforce.com\",\n        \"contract_start_date\": \"2022-11-01\",\n        \"contract_end_date\": \"2023-10-31\",\n        \"renewal_date\": \"2023-10-01\",\n        \"renewal_threshold_days\":"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "notify_procurement",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1394,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 4885,
+      "output": {
+        "raw_output": "{\n  \"plan\": [\n    {\n      \"tool\": \"iam.check_permission\",\n      \"arguments\": {\n        \"resource\": \"procurement_alerts\",\n        \"action\": \"send_notifications\",\n        \"user_context\": \"system_service\"\n      },\n      \"depends_on\": []\n    },\n    {\n      \"tool\": \"mongo.find\",\n      \"arguments\": {\n        \"collection\": \"contracts\",\n        \"filter\": {\n          \"renewal_status\": {\"$in\": [\"pending\", \"overdue\"]},\n          \"days_until_renewal\": {\"$lte\": 90}\n        }\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"sql.snowflake.query\",\n      \"arguments\": {\n        \"query\": \"SELECT license_id, publisher, product, utilization_pct, avg_30d_consumption, qoq_growth_rate_pct, total_amount_usd FROM license_consumption WHERE fiscal_year = YEAR(CURRENT_DATE()) AND utilization_pct > 0 ORDER BY last_event_date DESC\"\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"mongo.aggregate\",\n      \"arguments\": {\n        \"collection\": \"contracts\",\n        \"pipeline\": [\n          {\n            \"$match\": {\n              \"renewal_status\": {\"$in\": [\"pending\", \"overdue\"]}\n            }\n          },\n          {\n            \"$group\": {\n              \"_id\": \"$owner\",\n              \"contracts\": {\"$push\": \"$$ROOT\"},\n              \"total_budget_impact\": {\"$sum\": \"$budget_impact_usd\"}\n            }\n          }\n        ]\n      },\n      \"depends_on\": [1]\n    },\n    {\n      \"tool\": \"audit.log_action\",\n      \"arguments\": {\n        \"action\": \"renewal_alert_generation_initiated\",\n        \"resource_type\": \"contract_renewal\",\n        \"details\": {\n          \"contracts_evaluated\": 2,\n          \"high_risk_count\": 1,\n          \"total_budget_impact_usd\": 270000,\n          \"overdue_alerts\": 1\n        },\n        \"timestamp\": \"current\"\n      },\n      \"depends_on\": [4]\n    },\n    {\n      \"tool\": \"email.send\",\n      \"arguments\": {\n        \"to\": \"procurement@company.com\",\n        \"cc\": \"sam-alerts@company.com\",\n        \"subject\": \"URGENT: License Renewal Alert - Microsoft 365 E3 (CONTRACT-001)\",\n        \"template\": \"renewal_alert_critical\",\n        \"variables\": {\n          \"vendor_name\": \"Microsoft\",\n          \"contract_id\": \"CONTRACT-001\",\n          \"renewal_urgency\": \"critical\",\n          \"days_until_renewal\": 12,\n          \"overdue_alert\": true,\n          \"annual_value\": 250000,\n          \"estimated_renewal_increase_usd\": 21250,\n          \"utilization_pct\": 85.0,\n          \"recommended_action\": \"Immediate procurement engagement required. Contract renewal overdue threshold breached. Utilization at 85% with positive growth trend justifies full seat renewal. Negotiate against 8.5% avg increase \u2014 target 5% cap given stable consumption"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.042939000000000005,
+  "total_latency_ms": 31995,
+  "cumulative_spend_usd": 6.983933000000007,
+  "evaluator_reason": "no_plan_in_output"
+}

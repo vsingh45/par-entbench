@@ -1,0 +1,62 @@
+{
+  "task_id": "MGO-004",
+  "task_class": "mongo_gen",
+  "router": "frugal_cascade",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "Find all licenses with cost per seat exceeding $500, grouped by publisher.",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task — Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1206,
+      "output_tokens": 140,
+      "cached_tokens": 0,
+      "latency_ms": 1155,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "cost_per_seat_usd": {
+                "$gt": 500
+              }
+            }
+          },
+          {
+            "$group": {
+              "_id": "$publisher",
+              "count": {
+                "$sum": 1
+              },
+              "total_contract_value": {
+                "$sum": "$contract_value_usd"
+              },
+              "avg_cost_per_seat": {
+                "$avg": "$cost_per_seat_usd"
+              }
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0019060000000000001,
+  "total_latency_ms": 1155,
+  "cumulative_spend_usd": 1.9061320000000006
+}

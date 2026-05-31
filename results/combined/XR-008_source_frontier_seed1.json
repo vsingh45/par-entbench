@@ -1,0 +1,261 @@
+{
+  "task_id": "XR-008",
+  "task_class": "cross_recon",
+  "router": "source_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "datadog_allocations",
+        "description": "Query SQL warehouse to retrieve Datadog license allocations (seat counts, license types, contract terms) and historical allocation changes",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "datadog_usage_metrics",
+        "description": "Query MongoDB to retrieve Datadog actual usage metrics (active users, daily active users, feature consumption, API call counts) and growth patterns over time",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "trend_analysis_reconciliation",
+        "description": "Reconcile license allocations against actual usage metrics, compute utilization rates, growth trends, and identify gaps or overages. Classify usage posture (under-utilized, optimized, over-utilized) and generate recommendations for license optimization",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "datadog_allocations",
+          "datadog_usage_metrics"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks represent the minimum decomposition: (1) SQL query for allocation data (mid tier \u2014 multi-table join across license, contract, and historical tables), (2) MongoDB query for usage metrics (mid tier \u2014 aggregation across usage events with time-series windowing), (3) Cross-reconciliation (frontier tier \u2014 requires comparing two sources, computing utilization rates, identifying temporal mismatches, classifying posture across multiple signals, and generating optimization recommendations). The frontier tier for reconciliation is justified because it must synthesize allocation vs. usage patterns, handle growth analysis across dimensions, and produce actionable classification. All three subtasks are necessary to fully answer the query; no further splitting is appropriate."
+  },
+  "node_results": [
+    {
+      "subtask_id": "datadog_allocations",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 708,
+      "output_tokens": 177,
+      "cached_tokens": 0,
+      "latency_ms": 2638,
+      "output": {
+        "sql": "SELECT publisher, product, event_date, fiscal_year, fiscal_quarter, SUM(daily_active_seats) AS total_seats, SUM(amount_usd) AS total_spend, COUNT(DISTINCT user_id) AS active_users FROM consumption_facts WHERE publisher = 'Datadog' AND event_date >= '2024-01-01' GROUP BY publisher, product, event_date, fiscal_year, fiscal_quarter ORDER BY event_date"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "datadog_usage_metrics",
+      "specialist": "mongo_query",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1743,
+      "output_tokens": 615,
+      "cached_tokens": 0,
+      "latency_ms": 6449,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Datadog"
+            }
+          },
+          {
+            "$lookup": {
+              "from": "sam_seat_assignments",
+              "localField": "license_id",
+              "foreignField": "license_id",
+              "as": "assignments"
+            }
+          },
+          {
+            "$addFields": {
+              "total_assigned": {
+                "$size": "$assignments"
+              },
+              "active_users": {
+                "$size": {
+                  "$filter": {
+                    "input": "$assignments",
+                    "as": "a",
+                    "cond": {
+                      "$eq": [
+                        "$$a.status",
+                        "active"
+                      ]
+                    }
+                  }
+                }
+              },
+              "inactive_users": {
+                "$size": {
+                  "$filter": {
+                    "input": "$assignments",
+                    "as": "a",
+                    "cond": {
+                      "$ne": [
+                        "$$a.status",
+                        "active"
+                      ]
+                    }
+                  }
+                }
+              },
+              "users_with_recent_activity": {
+                "$size": {
+                  "$filter": {
+                    "input": "$assignments",
+                    "as": "a",
+                    "cond": {
+                      "$and": [
+                        {
+                          "$ne": [
+                            "$$a.last_active_date",
+                            null
+                          ]
+                        },
+                        {
+                          "$gte": [
+                            "$$a.last_active_date",
+                            {
+                              "$dateSubtract": {
+                                "startDate": "$$NOW",
+                                "unit": "day",
+                                "amount": 30
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "utilization_rate": {
+                "$cond": [
+                  {
+                    "$gt": [
+                      "$seat_count",
+                      0
+                    ]
+                  },
+                  {
+                    "$divide": [
+                      {
+                        "$size": {
+                          "$filter": {
+                            "input": "$assignments",
+                            "as": "a",
+                            "cond": {
+                              "$eq": [
+                                "$$a.status",
+                                "active"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "$seat_count"
+                    ]
+                  },
+                  0
+                ]
+              },
+              "unused_seats": {
+                "$subtract": [
+                  "$seat_count",
+                  {
+                    "$size": {
+                      "$filter": {
+                        "input": "$assignments",
+                        "as": "a",
+                        "cond": {
+                          "$eq": [
+                            "$$a.status",
+                            "active"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "trend_analysis_reconciliation",
+      "specialist": "cross_recon",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 816,
+      "output_tokens": 651,
+      "cached_tokens": 0,
+      "latency_ms": 5438,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "Datadog_aggregate_metrics",
+            "mongo_value": {
+              "total_assigned_seats": null,
+              "active_users": null,
+              "inactive_users": null,
+              "users_with_recent_activity": null,
+              "utilization_rate": null,
+              "unused_seats": null,
+              "status": "data_pending"
+            },
+            "sql_value": {
+              "total_seats": null,
+              "total_spend": null,
+              "active_users": null,
+              "event_date_range": "2024-01-01_to_present",
+              "status": "query_defined"
+            },
+            "classification": "awaiting_execution",
+            "analysis": {
+              "allocation_vs_usage_gap": "unmeasured",
+              "utilization_posture": "unknown",
+              "growth_trend": "unknown",
+              "recommendations": [
+                "Execute MongoDB pipeline to retrieve seat assignments and activity status",
+                "Execute SQL query to obtain historical consumption facts and spending patterns",
+                "Calculate utilization_rate as: (active_users / total_seats)",
+                "Identify unused_seats: total_seats - active_users",
+                "Compute 30-day activity rate: users_with_recent_activity / total_assigned",
+                "Calculate spend_per_active_user: total_spend / active_users",
+                "Trend analysis: compare fiscal_quarter over fiscal_quarter growth"
+              ]
+            },
+            "expected_output_structure": {
+              "under_utilized": "utilization_rate < 0.60 AND unused_seats > 0",
+              "optimized": "utilization_rate >= 0.60 AND utilization_rate <= 0.90",
+              "over_utilized": "utilization_rate > 0.90",
+              "at_risk": "inactive_users > (active_users * 0.20) OR users_with_recent_activity < (active_users * 0.50)",
+              "growing": "quarter_over_quarter_growth > 0.15",
+              "stable": "quarter_over_quarter_growth between -0.05 and 0.15"
+            }
+          }
+        ],
+        "reconciliation_status": "queries_require_execution",
+        "note": "Both data sources are defined but not yet executed. Once executed, reconciliation will apply LEFT JOIN semantics with MongoDB (sam_licenses + sam_seat_assignments) as primary source, matching against SQL consumption_facts on (publisher, product, event_date). Output will classify each product by utilization posture and generate optimization recommendations based on gap analysis."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.036126,
+  "total_latency_ms": 14525,
+  "cumulative_spend_usd": 4.988073000000001,
+  "evaluator_reason": "stage2_sql_fail: result_bag_mismatch"
+}

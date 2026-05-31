@@ -1,0 +1,64 @@
+{
+  "task_id": "SQLC-001",
+  "task_class": "sql_compose",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top_publishers",
+        "description": "Generate SQL query to fetch top 5 publishers by spend in Q4 2024 (Oct-Dec 2024), including total spend, transaction count, and any variance metrics",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "analyze_at_risk",
+        "description": "Analyze the top 5 publishers spend data and summarize for SAM team which publishers are at-risk based on spend patterns, volatility, concentration risk, or other SaaS health indicators. Provide recommendations.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_top_publishers"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (small) for straightforward quarterly spend aggregation by publisher\u2014no complex CTEs or window functions needed for a top-5 ranking. (2) cross_recon (mid) to reconcile the SQL results with risk heuristics (spend concentration, trends, historical patterns) and classify at-risk status with recommendations for the SAM team. The mid tier handles multi-signal reasoning (spend levels, volatility, strategic importance) without need for frontier-level inference. We avoid a separate policy_action because risk classification is a reconciliation output, not a formal policy decision."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 492,
+      "output_tokens": 130,
+      "cached_tokens": 0,
+      "latency_ms": 1314,
+      "output": {
+        "sql": "SELECT publisher, SUM(amount_usd) AS total_spend, COUNT(*) AS transaction_count, STDDEV(amount_usd) AS spend_variance, AVG(amount_usd) AS avg_transaction_value FROM consumption_facts WHERE event_date >= '2024-10-01' AND event_date <= '2024-12-31' AND fiscal_quarter = 4 AND fiscal_year = 2024 GROUP BY publisher ORDER BY total_spend DESC LIMIT 5"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "analyze_at_risk",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 421,
+      "output_tokens": 799,
+      "cached_tokens": 0,
+      "latency_ms": 12461,
+      "output": {
+        "raw_output": "I notice the upstream output contains only the SQL query definition but no actual result data, and there's no MongoDB operational data provided. I'll reconcile what's available and classify based on structural signals, flagging all entities as requiring data hydration.\n\nSince no actual row data was returned from either source, I'll return a reconciled scaffold with null SQL metrics and a classification reflecting the missing-data state, while preserving the task intent for the SAM team.\n\n```json\n{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"publisher_rank_1\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"publisher\": null,\n        \"total_spend\": null,\n        \"transaction_count\": null,\n        \"spend_variance\": null,\n        \"avg_transaction_value\": null\n      },\n      \"classification\": \"data_pending\",\n      \"sam_risk_flags\": [],\n      \"recommendation\": \"Awaiting query execution. Once hydrated, evaluate concentration risk if this publisher represents >40% of total Q4 spend.\"\n    },\n    {\n      \"entity_key\": \"publisher_rank_2\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"publisher\": null,\n        \"total_spend\": null,\n        \"transaction_count\": null,\n        \"spend_variance\": null,\n        \"avg_transaction_value\": null\n      },\n      \"classification\": \"data_pending\",\n      \"sam_risk_flags\": [],\n      \"recommendation\": \"Awaiting query execution. Flag if spend_variance/avg_transaction_value ratio exceeds 1.5, indicating high volatility.\"\n    },\n    {\n      \"entity_key\": \"publisher_rank_3\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"publisher\": null,\n        \"total_spend\": null,\n        \"transaction_count\": null,\n        \"spend_variance\": null,\n        \"avg_transaction_value\": null\n      },\n      \"classification\": \"data_pending\",\n      \"sam_risk_flags\": [],\n      \"recommendation\": \"Awaiting query execution. Compare against Q3 2024 baseline to detect spend decline patterns signaling churn risk.\"\n    },\n    {\n      \"entity_key\": \"publisher_rank_4\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"publisher\": null,\n        \"total_spend\": null,\n        \"transaction_count\": null,\n        \"spend_variance\": null,\n        \"avg_transaction_value\": null\n      },\n      \"classification\": \"data_pending\",\n      \"sam_risk_flags\": [],\n      \"recommendation\": \"Awaiting query execution. Low transaction_count with high total_spend may indicate single large deals \u2014 assess renewal risk.\"\n    },\n    {\n      \"entity_key\": \"publisher_rank_5\",\n      \"mongo_value\": null,\n      \"sql_value\": {\n        \"publisher\": null,\n        \"total_spend\": null,\n        \"transaction_count\": null,\n        \"spend_variance\": null,\n        \"avg_transaction_value\": null\n      },\n      \"classification\": \"data_pending\",\n      \"sam_risk_flags\": [],\n      \"recommendation\": \"Awaiting query execution. Rank 5 publishers with declining avg_transaction_value QoQ are prime at-risk candidates for SAM outreach.\"\n    }"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.014390000000000002,
+  "total_latency_ms": 13775,
+  "cumulative_spend_usd": 0.5848139999999998,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

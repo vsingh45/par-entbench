@@ -1,0 +1,95 @@
+{
+  "task_id": "XR-001",
+  "task_class": "cross_recon",
+  "router": "all_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "task_1_adobe_contracts",
+        "description": "Query sam_licenses for all active Adobe contracts, extracting product line, current contract value, seat count, renewal date, and contract terms",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "task_2_adobe_spend_usage",
+        "description": "Query consumption_facts for Q4 2024 Adobe spend and 90-day usage trend by product line, aggregating monthly spend and usage metrics",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "task_3_reconcile_and_recommend",
+        "description": "Reconcile contracted state (sam_licenses) with Q4 spend and 90-day usage trend (consumption_facts). Classify each product line as expand, hold, or reduce based on: usage growth trend, spend efficiency (spend vs. seat utilization), contract headroom, and renewal proximity. Generate renewal trajectory recommendations with rationale.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "task_1_adobe_contracts",
+          "task_2_adobe_spend_usage"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks, minimum for the query scope: (1) contract state retrieval is straightforward single-table SQL (small tier); (2) spend/usage aggregation is multi-column aggregation on one fact table (small tier); (3) cross_recon at mid tier reconciles two data sources and performs multi-signal classification (usage trend + spend efficiency + renewal timing + utilization), generating posture recommendations\u2014this is the core value-add and requires reasoning capability beyond simple aggregation. No policy_action is needed because the query asks for strategic recommendations, not governance approval. No multitool_plan is needed because the data sources are already identified."
+  },
+  "node_results": [
+    {
+      "subtask_id": "task_1_adobe_contracts",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 751,
+      "output_tokens": 690,
+      "cached_tokens": 0,
+      "latency_ms": 7089,
+      "output": {
+        "sql": "WITH q4_spend AS (SELECT product, SUM(amount_usd) AS q4_2024_spend, SUM(daily_active_seats) AS q4_2024_seats FROM consumption_facts WHERE publisher = 'Adobe' AND event_date >= '2024-10-01' AND event_date <= '2024-12-31' GROUP BY product), recent_usage AS (SELECT product, AVG(daily_active_seats) AS avg_daily_seats_90d, SUM(amount_usd) AS spend_90d, COUNT(DISTINCT user_id) AS active_users_90d FROM consumption_facts WHERE publisher = 'Adobe' AND event_date >= CURRENT_DATE - INTERVAL '90 days' GROUP BY product), earlier_usage AS (SELECT product, AVG(daily_active_seats) AS avg_daily_seats_prior FROM consumption_facts WHERE publisher = 'Adobe' AND event_date >= CURRENT_DATE - INTERVAL '180 days' AND event_date < CURRENT_DATE - INTERVAL '90 days' GROUP BY product) SELECT COALESCE(q.product, r.product) AS product_line, q.q4_2024_spend, q.q4_2024_seats, r.avg_daily_seats_90d, r.spend_90d, r.active_users_90d, e.avg_daily_seats_prior, CASE WHEN e.avg_daily_seats_prior > 0 THEN ROUND(((r.avg_daily_seats_90d - e.avg_daily_seats_prior) / e.avg_daily_seats_prior) * 100, 2) ELSE NULL END AS seat_trend_pct FROM q4_spend q FULL OUTER JOIN recent_usage r ON q.product = r.product LEFT JOIN earlier_usage e ON COALESCE(q.product, r.product) = e.product ORDER BY q.q4_2024_spend DESC NULLS LAST"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_2_adobe_spend_usage",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 757,
+      "output_tokens": 259,
+      "cached_tokens": 0,
+      "latency_ms": 3102,
+      "output": {
+        "sql": "SELECT product, DATE_TRUNC('month', event_date) AS month, SUM(amount_usd) AS monthly_spend, AVG(daily_active_seats) AS avg_daily_active_seats, SUM(daily_active_seats) AS total_seat_days, COUNT(DISTINCT user_id) AS unique_users, COUNT(DISTINCT event_date) AS active_days FROM consumption_facts WHERE publisher = 'Adobe' AND event_date >= '2024-10-01' AND event_date <= '2024-12-31' AND fiscal_year = 2024 AND fiscal_quarter = 4 GROUP BY product, DATE_TRUNC('month', event_date) ORDER BY product, month"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "task_3_reconcile_and_recommend",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1500,
+      "output_tokens": 129,
+      "cached_tokens": 0,
+      "latency_ms": 2867,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "Adobe Creative Cloud",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "hold"
+          }
+        ],
+        "note_for_pipeline": "upstream_outputs did not contain MongoDB sam_licenses result rows or SQL result rows (only query definitions were provided); reconciliation cannot be performed without actual row data"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.04199,
+  "total_latency_ms": 13058,
+  "cumulative_spend_usd": 1.8007690000000012,
+  "evaluator_reason": "no_mongo_node"
+}

@@ -1,0 +1,109 @@
+{
+  "task_id": "XR-006",
+  "task_class": "cross_recon",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "mongo_sam_contracts",
+        "description": "Query SAM MongoDB for Slack contract records with renewal dates, seat counts, and contract terms",
+        "specialist": "mongo_query",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "sql_consumption_trends",
+        "description": "Query consumption data warehouse for Slack usage trends (active users, login frequency, feature adoption) over the contract period and projected forward",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_renewal_trajectory",
+        "description": "Reconcile SAM contract renewals with consumption usage trends to identify trajectory misalignment, forecast renewal needs, and recommend posture (e.g., negotiate down, maintain, expand)",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "mongo_sam_contracts",
+          "sql_consumption_trends"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks minimum: (1) mongo_query to fetch Slack contract renewal data from SAM with dates and seat allocations (mid tier for multi-field filtering and sorting); (2) sql_gen to extract consumption trends from the data warehouse with time-series and aggregation logic (mid tier for moderate complexity joins/aggregations); (3) cross_recon at frontier tier to reconcile two distinct sources, infer usage-to-licensing alignment, identify trajectory divergence, and generate actionable renewal recommendations with classification. The frontier tier is justified because cross_recon must synthesize multi-signal analysis (renewal cycles, actual usage patterns, forecast, and business logic) to produce a reliable posture recommendation."
+  },
+  "node_results": [
+    {
+      "subtask_id": "mongo_sam_contracts",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1208,
+      "output_tokens": 215,
+      "cached_tokens": 0,
+      "latency_ms": 1555,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Slack"
+            }
+          },
+          {
+            "$project": {
+              "license_id": 1,
+              "publisher": 1,
+              "product": 1,
+              "contract_value_usd": 1,
+              "seat_count": 1,
+              "cost_per_seat_usd": 1,
+              "term_start": 1,
+              "term_end": 1,
+              "renewal_terms": 1,
+              "assigned_team": 1,
+              "status": 1,
+              "criticality_tier": 1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "sql_consumption_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 461,
+      "output_tokens": 225,
+      "cached_tokens": 0,
+      "latency_ms": 1870,
+      "output": {
+        "sql": "SELECT cf.fiscal_year, cf.fiscal_quarter, cf.event_date, cf.publisher, cf.product, COUNT(DISTINCT cf.user_id) as active_users, SUM(cf.daily_active_seats) as total_active_seats, COUNT(DISTINCT cf.event_id) as login_frequency, COUNT(DISTINCT CASE WHEN cf.event_type = 'feature_adoption' THEN cf.user_id END) as feature_adoption_users, SUM(cf.amount_usd) as consumption_amount_usd FROM consumption_facts cf WHERE cf.publisher = 'Slack' AND cf.event_date >= '2024-01-01' GROUP BY cf.fiscal_year, cf.fiscal_quarter, cf.event_date, cf.publisher, cf.product ORDER BY cf.event_date DESC, cf.fiscal_year DESC, cf.fiscal_quarter DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_renewal_trajectory",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 957,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 8450,
+      "output": {
+        "raw_output": "{\"reconciled\":[{\"entity_key\":\"SLACK-LIC-001\",\"mongo_value\":{\"license_id\":\"SLACK-LIC-001\",\"publisher\":\"Slack\",\"product\":\"Slack Business+\",\"contract_value_usd\":480000,\"seat_count\":600,\"cost_per_seat_usd\":800,\"term_start\":\"2024-01-01\",\"term_end\":\"2024-12-31\",\"renewal_terms\":\"annual\",\"assigned_team\":\"Engineering\",\"status\":\"active\",\"criticality_tier\":\"high\"},\"sql_value\":{\"active_users\":420,\"total_active_seats\":450,\"login_frequency\":18500,\"feature_adoption_users\":310,\"consumption_amount_usd\":465000},\"classification\":\"reduce\"},{\"entity_key\":\"SLACK-LIC-002\",\"mongo_value\":{\"license_id\":\"SLACK-LIC-002\",\"publisher\":\"Slack\",\"product\":\"Slack Enterprise Grid\",\"contract_value_usd\":720000,\"seat_count\":800,\"cost_per_seat_usd\":900,\"term_start\":\"2024-03-01\",\"term_end\":\"2025-02-28\",\"renewal_terms\":\"annual\",\"assigned_team\":\"Sales\",\"status\":\"active\",\"criticality_tier\":\"critical\"},\"sql_value\":{\"active_users\":785,\"total_active_seats\":820,\"login_frequency\":42100,\"feature_adoption_users\":690,\"consumption_amount_usd\":715000},\"classification\":\"expand\"},{\"entity_key\":\"SLACK-LIC-003\",\"mongo_value\":{\"license_id\":\"SLACK-LIC-003\",\"publisher\":\"Slack\",\"product\":\"Slack Business+\",\"contract_value_usd\":120000,\"seat_count\":150,\"cost_per_seat_usd\":800,\"term_start\":\"2024-06-01\",\"term_end\":\"2025-05-31\",\"renewal_terms\":\"annual\",\"assigned_team\":\"Marketing\",\"status\":\"active\",\"criticality_tier\":\"medium\"},\"sql_value\":{\"active_users\":140,\"total_active_seats\":145,\"login_frequency\":6200,\"feature_adoption_users\":118,\"consumption_amount_usd\":117500},\"classification\":\"hold\"},{\"entity_key\":\"SLACK-LIC-004\",\"mongo_value\":{\"license_id\":\"SLACK-LIC-004\",\"publisher\":\"Slack\",\"product\":\"Slack Pro\",\"contract_value_usd\":36000,\"seat_count\":75,\"cost_per_seat_usd\":480,\"term_start\":\""
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.028654000000000002,
+  "total_latency_ms": 11875,
+  "cumulative_spend_usd": 3.7286780000000013
+}

@@ -1,0 +1,218 @@
+{
+  "task_id": "XR-001",
+  "task_class": "cross_recon",
+  "router": "par_no_rationale",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_sam_licenses",
+        "description": "Extract current contracted Adobe product licenses, quantities, terms, and renewal dates from sam_licenses table",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_consumption_q4",
+        "description": "Query consumption_facts for Q4 2024 actual spend and usage metrics across Adobe product lines",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "query_usage_trend_90day",
+        "description": "Query consumption_facts for 90-day rolling usage trend and per-unit consumption patterns by Adobe product",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": [
+          "query_consumption_q4"
+        ]
+      },
+      {
+        "id": "analyze_renewal_trajectory",
+        "description": "Analyze contracted state vs. actual spend and usage trends to identify renewal trajectory for each Adobe product line; calculate variance between contract and consumption",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "extract_sam_licenses",
+          "query_consumption_q4",
+          "query_usage_trend_90day"
+        ]
+      },
+      {
+        "id": "strategic_recommendations",
+        "description": "Generate expand/hold/reduce recommendations per product line with business rationale, projected savings, and implementation timeline",
+        "specialist": "multitool_plan",
+        "tier": "frontier",
+        "depends_on": [
+          "analyze_renewal_trajectory"
+        ]
+      }
+    ],
+    "cost_rationale": "Multi-stage approach: extract baseline contracts (small), dual consumption queries for Q4 and trend analysis (small), reconcile contract vs. actual (mid), and synthesize strategic recommendations (frontier) for high-stakes renewal decisions"
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_sam_licenses",
+      "specialist": "extract",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 263,
+      "output_tokens": 189,
+      "cached_tokens": 0,
+      "latency_ms": 2454,
+      "output": {
+        "raw_output": "{\n  \"error\": \"No document provided\",\n  \"details\": \"The task requires extraction from a 'sam_licenses table' but no actual document, table data, or file content was supplied in the request. Please provide the source document or table data to extract Adobe product licenses, quantities, terms, and renewal dates.\"\n}\n```\n\nTo complete this extraction, please provide:\n1. The actual sam_licenses table data\n2. The consumption_facts table data (for Q4 2024 spend and 90-day usage trends)\n3. Or the document/file containing this information\n\nOnce provided, I will extract and return structured JSON with fields such as:\n- product_name\n- quantities\n- contract_terms\n- renewal_dates\n- current_spend\n- usage_trends\n- recommendations (expand/hold/reduce)"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_consumption_q4",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1238,
+      "output_tokens": 225,
+      "cached_tokens": 0,
+      "latency_ms": 1823,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Adobe"
+            }
+          },
+          {
+            "$group": {
+              "_id": "$product",
+              "total_contract_value_usd": {
+                "$sum": "$contract_value_usd"
+              },
+              "total_seat_count": {
+                "$sum": "$seat_count"
+              },
+              "avg_cost_per_seat": {
+                "$avg": "$cost_per_seat_usd"
+              },
+              "count": {
+                "$sum": 1
+              },
+              "status_list": {
+                "$push": "$status"
+              },
+              "term_start": {
+                "$min": "$term_start"
+              },
+              "term_end": {
+                "$max": "$term_end"
+              },
+              "renewal_terms": {
+                "$push": "$renewal_terms"
+              }
+            }
+          },
+          {
+            "$sort": {
+              "total_contract_value_usd": -1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "query_usage_trend_90day",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1431,
+      "output_tokens": 225,
+      "cached_tokens": 0,
+      "latency_ms": 1351,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Adobe"
+            }
+          },
+          {
+            "$group": {
+              "_id": "$product",
+              "total_contract_value_usd": {
+                "$sum": "$contract_value_usd"
+              },
+              "total_seat_count": {
+                "$sum": "$seat_count"
+              },
+              "avg_cost_per_seat": {
+                "$avg": "$cost_per_seat_usd"
+              },
+              "count": {
+                "$sum": 1
+              },
+              "status_list": {
+                "$push": "$status"
+              },
+              "term_start": {
+                "$min": "$term_start"
+              },
+              "term_end": {
+                "$max": "$term_end"
+              },
+              "renewal_terms": {
+                "$push": "$renewal_terms"
+              }
+            }
+          },
+          {
+            "$sort": {
+              "total_contract_value_usd": -1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "analyze_renewal_trajectory",
+      "specialist": "cross_recon",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 894,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 15301,
+      "output": {
+        "raw_output": "{\n  \"reconciled\": [\n    {\n      \"entity_key\": \"Adobe_pipeline_error\",\n      \"mongo_value\": {\n        \"source\": \"query_consumption_q4 + query_usage_trend_90day\",\n        \"status\": \"pipeline_defined_no_execution_results\",\n        \"collection\": \"sam_licenses\",\n        \"match_filter\": {\"publisher\": \"Adobe\"},\n        \"grouped_by\": \"product\",\n        \"aggregated_fields\": [\n          \"total_contract_value_usd\",\n          \"total_seat_count\",\n          \"avg_cost_per_seat\",\n          \"count\",\n          \"status_list\",\n          \"term_start\",\n          \"term_end\",\n          \"renewal_terms\"\n        ],\n        \"note\": \"MongoDB aggregation pipelines were defined but no execution output (actual documents/rows) was returned. No Adobe product records were materialized from sam_licenses.\"\n      },\n      \"sql_value\": null,\n      \"classification\": \"no_data_available\",\n      \"variance\": null,\n      \"renewal_trajectory\": null,\n      \"recommendation\": null,\n      \"reconciliation_notes\": \"Both upstream tasks failed to return executable data. extract_sam_licenses returned an explicit error citing missing source documents. query_consumption_q4 and query_usage_trend_90day returned pipeline definitions only \u2014 no result sets were produced. SQL source (consumption_facts Q4 2024 actual spend + 90-day usage trend) was never queried. LEFT JOIN cannot be performed without at least a primary MongoDB result set.\"\n    },\n    {\n      \"entity_key\": \"RECONCILIATION_SUMMARY\",\n      \"mongo_value\": {\n        \"records_received\": 0,\n        \"pipelines_defined\": 2,\n        \"pipelines_executed\": 0,\n        \"adobe_products_found\": null\n      },\n      \"sql_value\": {\n        \"records_received\": 0,\n        \"consumption_facts_q4_queried\": false,\n        \"usage_trend_90day_queried\": false,\n        \"reason\": \"SQL query was never issued due to upstream failure\"\n      },\n      \"classification\": \"pipeline_failure\",\n      \"variance\": {\n        \"contract_vs_consumption\": null,\n        \"seat_utilization_rate\": null,\n        \"spend_variance_usd\": null\n      },\n      \"renewal_trajectory\": {\n        \"expand\": [],\n        \"hold\": [],\n        \"reduce\": [],\n        \"at_risk\": [],\n        \"no_recent_activity\": []\n      },\n      \"recommendation\": \"To complete Adobe renewal trajectory analysis, provide: (1) Actual documents or rows from sam_licenses filtered by publisher=Adobe \u2014 including product, contract_value_usd, seat_count, cost_per_seat_usd, status, term_start, term_end, renewal_terms. (2) Q4 2024 actual spend records from consumption_facts \u2014 including product, actual_spend_usd, billing_period. (3) 90-day usage trend data from consumption_facts \u2014 including product, active_users or usage_count, trend_direction. Once provided, reconciliation will compute seat utilization rate = active_seats / contracted_seats, spend variance = actual_spend - contract_value, and classify each product line as expand / hold / reduce / at_risk.\",\n      \"reconciliation_notes\": \"LEFT JOIN"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "strategic_recommendations",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1967,
+      "output_tokens": 800,
+      "cached_tokens": 0,
+      "latency_ms": 9480,
+      "output": {
+        "raw_output": "{\"plan\":[{\"tool\":\"mongo.find\",\"arguments\":{\"collection\":\"sam_licenses\",\"filter\":{\"publisher\":\"Adobe\"},\"projection\":{\"product\":1,\"contract_value_usd\":1,\"seat_count\":1,\"cost_per_seat_usd\":1,\"status\":1,\"term_start\":1,\"term_end\":1,\"renewal_terms\":1}},\"depends_on\":[]},{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT product, SUM(actual_spend_usd) AS q4_actual_spend, billing_period FROM consumption_facts WHERE publisher = 'Adobe' AND billing_period BETWEEN '2024-10-01' AND '2024-12-31' GROUP BY product, billing_period\"},\"depends_on\":[]},{\"tool\":\"sql.snowflake.query\",\"arguments\":{\"query\":\"SELECT product, AVG(active_users) AS avg_active_users, MAX(usage_count) AS peak_usage, CASE WHEN AVG(active_users) > LAG(AVG(active_users)) OVER (PARTITION BY product ORDER BY MIN(usage_date)) THEN 'up' ELSE 'down' END AS trend_direction FROM consumption_facts WHERE publisher = 'Adobe' AND usage_date >= DATEADD(day, -90, CURRENT_DATE) GROUP BY product\"},\"depends_on\":[]},{\"tool\":\"mongo.aggregate\",\"arguments\":{\"collection\":\"sam_licenses\",\"pipeline\":[{\"$match\":{\"publisher\":\"Adobe\"}},{\"$group\":{\"_id\":\"$product\",\"total_contract_value_usd\":{\"$sum\":\"$contract_value_usd\"},\"total_seat_count\":{\"$sum\":\"$seat_count\"},\"avg_cost_per_seat\":{\"$avg\":\"$cost_per_seat_usd\"},\"count\":{\"$sum\":1},\"earliest_term_end\":{\"$min\":\"$term_end\"}}}]},\"depends_on\":[]},{\"tool\":\"confluence.create_page\",\"arguments\":{\"space\":\"SAM\",\"title\":\"Adobe Renewal Trajectory: Expand/Hold/Reduce Recommendations by Product Line\",\"content\":\"# Adobe Renewal Trajectory Analysis\\n\\n## Source Data\\n- Contracted state (sam_licenses): $1.results\\"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.050644,
+  "total_latency_ms": 30409,
+  "cumulative_spend_usd": 2.340658000000001,
+  "evaluator_reason": "stage1_mongo_fail: doc_bag_mismatch"
+}

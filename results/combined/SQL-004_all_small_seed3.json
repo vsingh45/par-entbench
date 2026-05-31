@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-004",
+  "task_class": "sql_gen",
+  "router": "all_small",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_top_publishers",
+        "description": "Query the spend database to identify the top 3 publishers by total spend in fiscal year 2024, ordered by spend descending with publisher name and total amount",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "This is a straightforward single-table aggregation query requiring a GROUP BY publisher, filtering on fiscal year 2024, and sorting by total spend. No joins, cross-source reconciliation, or complex logic required. Small tier is sufficient for this basic aggregation task.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_top_publishers",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 465,
+      "output_tokens": 68,
+      "cached_tokens": 0,
+      "latency_ms": 1270,
+      "output": {
+        "sql": "SELECT cf.publisher, SUM(cf.amount_usd) as total_spend FROM consumption_facts cf WHERE cf.fiscal_year = 2024 GROUP BY cf.publisher ORDER BY total_spend DESC LIMIT 3"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.0008049999999999999,
+  "total_latency_ms": 1270,
+  "cumulative_spend_usd": 0.022789999999999998,
+  "evaluator_reason": "ok"
+}

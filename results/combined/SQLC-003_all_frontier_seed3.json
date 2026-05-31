@@ -1,0 +1,71 @@
+{
+  "task_id": "SQLC-003",
+  "task_class": "sql_compose",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_fetch_trends",
+        "description": "Query SQL warehouse to fetch all publishers with their quarterly revenue/usage data for 2024, calculate quarter-over-quarter trends, and identify those with declining patterns across multiple quarters.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_recommendations",
+        "description": "For each publisher with declining quarterly trends, reconcile trend data with contract state (if available from MongoDB) and current spend patterns, then classify renewal posture and generate recommendations (hold, expand, reduce) based on trend severity, contract terms, and business value signals.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_fetch_trends"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) SQL query to fetch and compute quarterly trends is moderate complexity (requires multi-quarter aggregation, trend calculation, likely window functions) \u2192 mid tier. (2) Cross-recon combines trend output with optional contract state and generates classification/recommendations in one pass rather than splitting extraction, analysis, and policy evaluation \u2192 mid tier. No separate policy_action needed because renewal recommendation generation is part of the reconciliation analysis, not a discrete policy compliance check. No multitool_plan needed because all data comes from SQL+Mongo standard sources."
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_fetch_trends",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 743,
+      "output_tokens": 779,
+      "cached_tokens": 0,
+      "latency_ms": 7821,
+      "output": {
+        "sql": "WITH quarterly AS (SELECT publisher, fiscal_quarter, SUM(amount_usd) AS revenue, SUM(daily_active_seats) AS seats FROM consumption_facts WHERE event_date >= '2024-01-01' AND event_date < '2025-01-01' AND fiscal_year = 2024 GROUP BY publisher, fiscal_quarter), pivoted AS (SELECT publisher, MAX(CASE WHEN fiscal_quarter = 1 THEN revenue END) AS q1_rev, MAX(CASE WHEN fiscal_quarter = 2 THEN revenue END) AS q2_rev, MAX(CASE WHEN fiscal_quarter = 3 THEN revenue END) AS q3_rev, MAX(CASE WHEN fiscal_quarter = 4 THEN revenue END) AS q4_rev, MAX(CASE WHEN fiscal_quarter = 1 THEN seats END) AS q1_seats, MAX(CASE WHEN fiscal_quarter = 2 THEN seats END) AS q2_seats, MAX(CASE WHEN fiscal_quarter = 3 THEN seats END) AS q3_seats, MAX(CASE WHEN fiscal_quarter = 4 THEN seats END) AS q4_seats FROM quarterly GROUP BY publisher) SELECT publisher, q1_rev, q2_rev, q3_rev, q4_rev, q1_seats, q2_seats, q3_seats, q4_seats, CASE WHEN q2_rev < q1_rev THEN 1 ELSE 0 END + CASE WHEN q3_rev < q2_rev THEN 1 ELSE 0 END + CASE WHEN q4_rev < q3_rev THEN 1 ELSE 0 END AS declining_quarters FROM pivoted WHERE (CASE WHEN q2_rev < q1_rev THEN 1 ELSE 0 END + CASE WHEN q3_rev < q2_rev THEN 1 ELSE 0 END + CASE WHEN q4_rev < q3_rev THEN 1 ELSE 0 END) >= 2 ORDER BY declining_quarters DESC, publisher"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_recommendations",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1253,
+      "output_tokens": 73,
+      "cached_tokens": 0,
+      "latency_ms": 1848,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "sql_fetch_trends",
+            "mongo_value": null,
+            "sql_value": "query_only_no_results_provided",
+            "classification": "no_recent_activity"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.03128,
+  "total_latency_ms": 9669,
+  "cumulative_spend_usd": 1.1610129999999996,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

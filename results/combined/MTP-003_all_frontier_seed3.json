@@ -1,0 +1,134 @@
+{
+  "task_id": "MTP-003",
+  "task_class": "multitool_plan",
+  "router": "all_frontier",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "fetch_adobe_mongo",
+        "description": "Query MongoDB for Adobe license data including license ID, product type, quantity, cost, renewal date, and status",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_adobe_q4_snowflake",
+        "description": "Query Snowflake for Adobe Q4 usage metrics including product, consumed units, utilization %, and cost",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_summarize",
+        "description": "Reconcile MongoDB license data with Snowflake Q4 usage, identify discrepancies, calculate utilization variance, and generate a summary report for Slack posting",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "fetch_adobe_mongo",
+          "fetch_adobe_q4_snowflake"
+        ]
+      },
+      {
+        "id": "post_to_slack",
+        "description": "Post the reconciliation summary to the #sam-team Slack channel",
+        "specialist": "multitool_plan",
+        "tier": "small",
+        "depends_on": [
+          "reconcile_and_summarize"
+        ]
+      }
+    ],
+    "cost_rationale": "Minimum decomposition: 4 subtasks (not 6). Two parallel fetches (Mongo and SQL) execute independently in tier-small as they are single-source, explicit queries. Cross_recon at tier-mid reconciles both sources and generates the summary\u2014classification and reconciliation logic stay in one specialist, not split further. Multitool_plan at tier-small orchestrates the Slack post. Budget of 6 tool calls accommodates: mongo_query call + sql_gen call + cross_recon reasoning + Slack API invocation + overhead. Tiers are minimal: simple single-source fetches use small; reconciliation with two inputs uses mid; Slack posting uses small."
+  },
+  "node_results": [
+    {
+      "subtask_id": "fetch_adobe_mongo",
+      "specialist": "mongo_query",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1762,
+      "output_tokens": 90,
+      "cached_tokens": 0,
+      "latency_ms": 1369,
+      "output": {
+        "collection": "sam_licenses",
+        "pipeline": [
+          {
+            "$match": {
+              "publisher": "Adobe"
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_adobe_q4_snowflake",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 735,
+      "output_tokens": 158,
+      "cached_tokens": 0,
+      "latency_ms": 3416,
+      "output": {
+        "sql": "SELECT product, SUM(daily_active_seats) AS consumed_units, ROUND(AVG(daily_active_seats)::numeric, 2) AS utilization_pct, SUM(amount_usd) AS cost FROM consumption_facts WHERE publisher = 'Adobe' AND event_date >= '2024-10-01' AND event_date <= '2024-12-31' GROUP BY product ORDER BY cost DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_summarize",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 683,
+      "output_tokens": 70,
+      "cached_tokens": 0,
+      "latency_ms": 1528,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "adobe_mongo_vs_snowflake_q4",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "no_data_provided"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "post_to_slack",
+      "specialist": "multitool_plan",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 715,
+      "output_tokens": 138,
+      "cached_tokens": 0,
+      "latency_ms": 2192,
+      "output": {
+        "plan": [
+          {
+            "tool": "slack.post_message",
+            "arguments": {
+              "channel": "#sam-team",
+              "message": "Adobe Reconciliation Summary (Mongo vs Snowflake Q4): 1 entity reconciled - adobe_mongo_vs_snowflake_q4: classification=no_data_provided (mongo_value=null, sql_value=null)."
+            },
+            "depends_on": []
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.030875,
+  "total_latency_ms": 8505,
+  "cumulative_spend_usd": 4.482227000000002,
+  "evaluator_reason": "missing_tools: {'mongo.find', 'sql.snowflake.query'}"
+}

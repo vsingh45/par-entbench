@@ -1,0 +1,57 @@
+{
+  "task_id": "EXT-007",
+  "task_class": "extract",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "extract_vendor_details",
+        "description": "Extract company details (name, address, registration number, tax ID), primary contact information (name, email, phone), and banking details (account holder, bank name, account number, routing number, SWIFT code) from the vendor onboarding form",
+        "specialist": "extract",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single extract subtask assigned to small tier. This is a straightforward structured field extraction from a single document with well-defined schemas for company info, contact details, and banking data. No multi-document processing, inference, or cross-source reconciliation is required. Small tier (Haiku 4.5) is fully capable of handling explicit field mapping and JSON schema matching for vendor onboarding forms."
+  },
+  "node_results": [
+    {
+      "subtask_id": "extract_vendor_details",
+      "specialist": "extract",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 643,
+      "output_tokens": 203,
+      "cached_tokens": 0,
+      "latency_ms": 2634,
+      "output": {
+        "company_details": {
+          "name": "TechVendor Solutions Inc.",
+          "address": "999 Tech Lane, Austin, TX 78701",
+          "registration_number": "NV-987654",
+          "tax_id": null
+        },
+        "primary_contact": {
+          "name": "Sarah Johnson",
+          "email": "sarah.johnson@techvendor.com",
+          "phone": "(512) 555-0123"
+        },
+        "banking_details": {
+          "account_holder": "TechVendor Solutions Inc.",
+          "bank_name": "Chase Bank",
+          "account_number": "4567890123",
+          "routing_number": "021000021",
+          "swift_code": null
+        }
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.00829,
+  "total_latency_ms": 2634,
+  "cumulative_spend_usd": 5.594481000000008,
+  "evaluator_reason": "f1=0.222_below_0.85"
+}

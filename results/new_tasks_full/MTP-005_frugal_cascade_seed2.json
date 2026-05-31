@@ -1,0 +1,203 @@
+{
+  "task_id": "MTP-005",
+  "task_class": "multitool_plan",
+  "router": "frugal_cascade",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "check_iam_role",
+        "description": "Fetch user's current IAM role and existing permissions from identity management system",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "fetch_manager_approval",
+        "description": "Retrieve pending manager approval status and approval details from workflow system",
+        "specialist": "mongo_query",
+        "tier": "small",
+        "depends_on": []
+      },
+      {
+        "id": "provision_workflow",
+        "description": "Orchestrate IAM permission updates and email confirmation across enterprise tools (IAM service, email service) based on approval status",
+        "specialist": "multitool_plan",
+        "tier": "mid",
+        "depends_on": [
+          "check_iam_role",
+          "fetch_manager_approval"
+        ]
+      }
+    ],
+    "cost_rationale": "Three subtasks required: (1) IAM role lookup (sql_gen, small) for straightforward permission query; (2) Workflow approval fetch (mongo_query, small) for simple document retrieval; (3) Multi-tool orchestration (multitool_plan, mid) to coordinate IAM service update and email notification based on approval outcome. The multitool_plan is required because the query explicitly asks for multi-step provisioning involving different enterprise tools (IAM system + email service). Kept at mid tier rather than frontier because the orchestration logic is standard conditional sequencing, not complex multi-signal decision-making. Single subtasks for queries (1) and (2) as each targets one source and returns bounded result sets."
+  },
+  "node_results": [
+    {
+      "subtask_id": "check_iam_role",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 460,
+      "output_tokens": 48,
+      "cached_tokens": 0,
+      "latency_ms": 946,
+      "output": {
+        "sql": "SELECT user_id, permission, resource, action, result FROM access_log_facts WHERE user_id IS NOT NULL ORDER BY access_time DESC LIMIT 100"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "fetch_manager_approval",
+      "specialist": "mongo_query",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 1211,
+      "output_tokens": 96,
+      "cached_tokens": 0,
+      "latency_ms": 1589,
+      "output": {
+        "collection": "iam_roles",
+        "pipeline": [
+          {
+            "$match": {
+              "role_name": {
+                "$exists": true
+              }
+            }
+          },
+          {
+            "$project": {
+              "role_name": 1,
+              "permissions": 1,
+              "is_elevated": 1
+            }
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "provision_workflow",
+      "specialist": "multitool_plan",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 560,
+      "output_tokens": 745,
+      "cached_tokens": 0,
+      "latency_ms": 4864,
+      "output": {
+        "plan": [
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "action": "read_access_log",
+              "resource": "access_log_facts"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "sql.postgres.query",
+            "arguments": {
+              "query": "SELECT user_id, permission, resource, action, result FROM access_log_facts WHERE user_id IS NOT NULL ORDER BY access_time DESC LIMIT 100"
+            },
+            "depends_on": [
+              1
+            ]
+          },
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "action": "read_iam_roles",
+              "resource": "iam_roles"
+            },
+            "depends_on": []
+          },
+          {
+            "tool": "mongo.aggregate",
+            "arguments": {
+              "collection": "iam_roles",
+              "pipeline": [
+                {
+                  "$match": {
+                    "role_name": {
+                      "$exists": true
+                    }
+                  }
+                },
+                {
+                  "$project": {
+                    "role_name": 1,
+                    "permissions": 1,
+                    "is_elevated": 1
+                  }
+                }
+              ]
+            },
+            "depends_on": [
+              3
+            ]
+          },
+          {
+            "tool": "iam.check_permission",
+            "arguments": {
+              "action": "update_iam_permissions",
+              "resource": "iam_roles"
+            },
+            "depends_on": [
+              2,
+              4
+            ]
+          },
+          {
+            "tool": "iam.grant_role",
+            "arguments": {
+              "user_ids": "$2.results[*].user_id",
+              "roles": "$4.results[*].role_name",
+              "conditions": {
+                "approval_status": "approved",
+                "is_elevated": "$4.results[*].is_elevated"
+              }
+            },
+            "depends_on": [
+              5
+            ]
+          },
+          {
+            "tool": "audit.log_action",
+            "arguments": {
+              "action": "iam_role_grant",
+              "resource": "iam_roles",
+              "user_ids": "$2.results[*].user_id",
+              "roles_granted": "$4.results[*].role_name",
+              "timestamp": "now()"
+            },
+            "depends_on": [
+              6
+            ]
+          },
+          {
+            "tool": "email.send",
+            "arguments": {
+              "recipients": "$2.results[*].user_id",
+              "subject": "IAM Permission Update Confirmation",
+              "body": "Your IAM permissions have been successfully updated. Roles granted: $4.results[*].role_name. Please review your access at the IAM portal.",
+              "template": "iam_permission_confirmation"
+            },
+            "depends_on": [
+              7
+            ]
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.0066760000000000005,
+  "total_latency_ms": 7399,
+  "cumulative_spend_usd": 6.759518000000007
+}

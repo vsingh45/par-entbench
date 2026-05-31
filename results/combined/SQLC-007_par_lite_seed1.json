@@ -1,0 +1,95 @@
+{
+  "task_id": "SQLC-007",
+  "task_class": "sql_compose",
+  "router": "par_lite",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "get_publisher_spend",
+        "description": "Query SQL warehouse to identify top spending publishers and their total spend, ranked by spend amount",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "get_product_mix",
+        "description": "Query SQL warehouse to get product/service mix breakdown by publisher, including product categories, volume, and spend per product for top publishers",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "reconcile_and_assess_leverage",
+        "description": "Reconcile publisher spend and product mix data from SQL, then assess negotiation leverage for each top publisher based on spend concentration, product criticality, contract terms, market alternatives, and vendor consolidation opportunities",
+        "specialist": "cross_recon",
+        "tier": "frontier",
+        "depends_on": [
+          "get_publisher_spend",
+          "get_product_mix"
+        ]
+      }
+    ],
+    "cost_rationale": "Two independent SQL queries (mid tier each) fetch publisher spend and product mix\u2014both are multi-table joins with aggregation, requiring moderate complexity but no special inference. The cross_recon subtask (frontier tier) then reconciles both data sources and performs multi-signal leverage assessment (spend concentration, product substitutability, contract flexibility, market competition), which requires sophisticated reasoning to produce actionable negotiation recommendations. This is a 3-subtask plan: two data retrieval queries are independent and run in parallel, then a single reconciliation and leverage assessment consolidates the results. No policy_action is needed because the query asks for leverage assessment and recommendation, not compliance or governance approval.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "get_publisher_spend",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 449,
+      "output_tokens": 134,
+      "cached_tokens": 0,
+      "latency_ms": 2628,
+      "output": {
+        "sql": "SELECT publisher, COUNT(DISTINCT product) AS distinct_products, COUNT(DISTINCT license_id) AS distinct_licenses, SUM(amount_usd) AS total_spend_usd, ROUND(AVG(amount_usd), 2) AS avg_transaction_usd, MIN(event_date) AS first_event_date, MAX(event_date) AS last_event_date, SUM(daily_active_seats) AS total_active_seats FROM consumption_facts GROUP BY publisher ORDER BY total_spend_usd DESC LIMIT 25"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "get_product_mix",
+      "specialist": "sql_gen",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 458,
+      "output_tokens": 252,
+      "cached_tokens": 0,
+      "latency_ms": 4438,
+      "output": {
+        "sql": "SELECT publisher, product, COUNT(*) AS event_count, SUM(daily_active_seats) AS total_active_seats, SUM(amount_usd) AS total_spend_usd, ROUND(SUM(amount_usd) / NULLIF(SUM(SUM(amount_usd)) OVER (PARTITION BY publisher), 0) * 100, 2) AS pct_of_publisher_spend, COUNT(DISTINCT user_id) AS unique_users, COUNT(DISTINCT event_type) AS event_type_diversity, MIN(event_date) AS first_event_date, MAX(event_date) AS last_event_date, SUM(SUM(amount_usd)) OVER (PARTITION BY publisher) AS publisher_total_spend, RANK() OVER (ORDER BY SUM(SUM(amount_usd)) OVER (PARTITION BY publisher) DESC) AS publisher_spend_rank FROM consumption_facts GROUP BY publisher, product ORDER BY publisher_total_spend DESC, publisher ASC, total_spend_usd DESC"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "reconcile_and_assess_leverage",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1038,
+      "output_tokens": 129,
+      "cached_tokens": 0,
+      "latency_ms": 3282,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "publisher_top_spend",
+            "mongo_value": null,
+            "sql_value": "see get_publisher_spend",
+            "classification": "sql_only_no_mongo_source"
+          }
+        ],
+        "note": "Upstream provided only SQL outputs; no MongoDB operational data supplied for LEFT JOIN reconciliation. Returning passthrough classification."
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.016926,
+  "total_latency_ms": 10348,
+  "cumulative_spend_usd": 1.404948000000001,
+  "evaluator_reason": "step1_sql_fail: result_bag_mismatch"
+}

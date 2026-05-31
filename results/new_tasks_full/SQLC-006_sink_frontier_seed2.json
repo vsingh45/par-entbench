@@ -1,0 +1,70 @@
+{
+  "task_id": "SQLC-006",
+  "task_class": "sql_compose",
+  "router": "sink_frontier",
+  "seed": 2,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "sql_spend_analysis",
+        "description": "Generate SQL to calculate current month spend and 3-month rolling average by category/vendor, compute variance ratio, and flag anomalies. Return spend_amount, 3month_avg, variance_ratio, and raw anomaly indicator.",
+        "specialist": "sql_gen",
+        "tier": "mid",
+        "depends_on": []
+      },
+      {
+        "id": "cross_recon_classification",
+        "description": "Reconcile SQL spend anomaly results with historical variance thresholds. Classify each anomaly as normal_variance (within 1 std dev), concerning (1-2 std dev), or critical (>2 std dev). Output classified anomaly records with justification.",
+        "specialist": "cross_recon",
+        "tier": "mid",
+        "depends_on": [
+          "sql_spend_analysis"
+        ]
+      }
+    ],
+    "cost_rationale": "Two subtasks: (1) sql_gen (mid-tier) for multi-month aggregation with variance calculation across vendor/category dimensions—requires window functions and multi-CTE logic; (2) cross_recon (mid-tier) to apply classification thresholds to anomalies and provide reconciled anomaly posture. Classification logic is part of cross_recon's reconciliation step, not a separate policy_action. Both mid-tier because they involve moderate complexity in aggregation, multi-signal reasoning, and statistical classification without requiring frontier-level inference or complex policy interaction.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "sql_spend_analysis",
+      "specialist": "sql_gen",
+      "tier_assigned": "small",
+      "model_used": "claude-haiku-4-5-20251001",
+      "input_tokens": 495,
+      "output_tokens": 457,
+      "cached_tokens": 0,
+      "latency_ms": 2959,
+      "output": {
+        "sql": "WITH monthly_spend AS (SELECT DATE_TRUNC('month', invoice_date)::DATE AS month_date, vendor_name, SUM(amount_usd) AS monthly_spend FROM invoice_facts WHERE invoice_date >= CURRENT_DATE - INTERVAL '4 months' GROUP BY DATE_TRUNC('month', invoice_date), vendor_name), rolling_avg AS (SELECT vendor_name, month_date, monthly_spend, AVG(monthly_spend) OVER (PARTITION BY vendor_name ORDER BY month_date ROWS BETWEEN 3 PRECEDING AND 1 PRECEDING) AS three_month_avg FROM monthly_spend), anomaly_calc AS (SELECT vendor_name, month_date, monthly_spend, three_month_avg, CASE WHEN three_month_avg = 0 OR three_month_avg IS NULL THEN 0 ELSE ABS(monthly_spend - three_month_avg) / three_month_avg END AS variance_ratio, CASE WHEN three_month_avg IS NULL OR three_month_avg = 0 THEN 0 ELSE 1 END AS has_history FROM rolling_avg WHERE month_date = DATE_TRUNC('month', CURRENT_DATE)::DATE) SELECT vendor_name, monthly_spend AS spend_amount, COALESCE(three_month_avg, 0) AS three_month_avg, ROUND(variance_ratio::NUMERIC, 4) AS variance_ratio, CASE WHEN has_history = 0 THEN 'insufficient_data' WHEN variance_ratio <= 0.15 THEN 'normal_variance' WHEN variance_ratio <= 0.35 THEN 'concerning' WHEN variance_ratio > 0.35 THEN 'critical' ELSE 'normal_variance' END AS anomaly_indicator FROM anomaly_calc ORDER BY variance_ratio DESC, vendor_name"
+      },
+      "node_correct": null,
+      "error": null
+    },
+    {
+      "subtask_id": "cross_recon_classification",
+      "specialist": "cross_recon",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 1179,
+      "output_tokens": 55,
+      "cached_tokens": 0,
+      "latency_ms": 1771,
+      "output": {
+        "reconciled": [
+          {
+            "entity_key": "unknown",
+            "mongo_value": null,
+            "sql_value": null,
+            "classification": "insufficient_data"
+          }
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": false,
+  "total_cost_usd": 0.01005,
+  "total_latency_ms": 4730,
+  "cumulative_spend_usd": 1.0173050000000001
+}

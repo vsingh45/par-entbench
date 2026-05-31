@@ -1,0 +1,52 @@
+{
+  "task_id": "PAC-004",
+  "task_class": "policy_action",
+  "router": "par",
+  "seed": 3,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "policy_check_1",
+        "description": "Evaluate whether the developer's access request for production database live debugging complies with security and access control policies. Check authorization level, approval requirements, audit trail needs, and any compliance constraints.",
+        "specialist": "policy_action",
+        "tier": "mid",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Single subtask required: This is an explicit policy evaluation scenario. The developer's request for production database access for debugging involves governance, access control, and compliance assessment\u2014the core domain of policy_action. The task is assigned mid tier because it requires reasoning across multiple policy dimensions (authorization, approval workflows, compliance rules, audit requirements) rather than a simple single-policy check. No cross-source reconciliation, SQL query, or multi-tool orchestration is needed at this stage. The policy_action agent will determine approval/denial and any required conditions or escalations.\""
+  },
+  "node_results": [
+    {
+      "subtask_id": "policy_check_1",
+      "specialist": "policy_action",
+      "tier_assigned": "mid",
+      "model_used": "claude-sonnet-4-6",
+      "input_tokens": 470,
+      "output_tokens": 225,
+      "cached_tokens": 0,
+      "latency_ms": 4964,
+      "output": {
+        "selected_action": "deny_with_reason",
+        "policy_compliance": {
+          "POL-401": "fail",
+          "POL-402": "fail"
+        },
+        "reason": "dev-alice does not hold the on-call role and has not obtained Manager approval, violating POL-401. Additionally, POL-402 explicitly restricts debug access to designated staging environments, prohibiting live debugging on prod-mysql-primary. Both applicable policies are violated; access must be denied.",
+        "applied_constraints": [
+          "Manager approval required before production database access can be granted",
+          "On-call role assignment required for production database access",
+          "Debugging activities must be redirected to the designated staging environment (not prod-mysql-primary)",
+          "Any future approved access must include full audit trail logging of all queries executed",
+          "Access request should be formally submitted through the change management process for review"
+        ]
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.004785,
+  "total_latency_ms": 4964,
+  "cumulative_spend_usd": 8.27484,
+  "evaluator_reason": "ok"
+}

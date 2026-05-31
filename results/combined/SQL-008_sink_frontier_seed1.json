@@ -1,0 +1,40 @@
+{
+  "task_id": "SQL-008",
+  "task_class": "sql_gen",
+  "router": "sink_frontier",
+  "seed": 1,
+  "plan": {
+    "subtasks": [
+      {
+        "id": "subtask_1",
+        "description": "Show the daily active seats trend for Adobe across November 2024. Return date and daily active seat count ordered by date.",
+        "specialist": "sql_gen",
+        "tier": "small",
+        "depends_on": []
+      }
+    ],
+    "cost_rationale": "Simple task \u2014 Haiku classifier, small tier"
+  },
+  "node_results": [
+    {
+      "subtask_id": "subtask_1",
+      "specialist": "sql_gen",
+      "tier_assigned": "frontier",
+      "model_used": "claude-opus-4-7",
+      "input_tokens": 703,
+      "output_tokens": 112,
+      "cached_tokens": 0,
+      "latency_ms": 1936,
+      "output": {
+        "sql": "SELECT event_date, SUM(daily_active_seats) AS daily_active_seats FROM consumption_facts WHERE publisher = 'Adobe' AND event_date >= '2024-11-01' AND event_date < '2024-12-01' GROUP BY event_date ORDER BY event_date"
+      },
+      "node_correct": null,
+      "error": null
+    }
+  ],
+  "task_correct": true,
+  "total_cost_usd": 0.006315,
+  "total_latency_ms": 1936,
+  "cumulative_spend_usd": 0.38607400000000003,
+  "evaluator_reason": "ok"
+}
