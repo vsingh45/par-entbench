@@ -32,11 +32,23 @@ Click the badge above to open the interactive architecture diagram in draw.io vi
   - Export: Save as PNG, PDF, SVG after editing
 
 **System Overview:**
-- **Planner** (Haiku classifier + Sonnet planner + BatchPlanner) decomposes queries and assigns model tiers
+- **Planner** (Haiku 4.5 classifier + BatchPlanner) decomposes queries and assigns model tiers
 - **8 Routers** (PaR, PaR-Lite, frugal_cascade, etc.) dispatch subtasks with different strategies
 - **6 Specialists** (SQL, Mongo, Extract, Cross-Recon, Multitool, Policy) execute subtasks
 - **Evaluation** layer tracks cost, accuracy, and composition penalty (ρ)
 - **Outputs** in JSON, CSV, and archive formats for analysis
+
+### System Architecture Diagram
+
+![PaR-EntBench System Architecture](./ARCH_SYSTEM.svg)
+
+*Shows the data flow from user query through planner, routers, specialists, live databases, evaluators, and final analysis. The key insight: **planner (Haiku 4.5) and specialist infrastructure are held fixed** across all routers — only the **tier assignment strategy** changes.*
+
+### Execution-Based Evaluation Pipeline
+
+![Evaluation Pipeline](./EVAL_PIPELINE.svg)
+
+*The 6-step pipeline that makes EntBench execution-based rather than reference-based: task definition → planner + router → specialist execution → live database hit → task-specific evaluator → logged result. Each task's verdict depends on real Postgres/MongoDB execution, not just model output comparison.*
 
 **Key Results (Haiku Planner, 21 tasks × 8 routers × 3 seeds):**
 - Best accuracy: PaR & frugal_cascade at 33.3%

@@ -1,0 +1,103 @@
+<svg viewBox="0 0 1000 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .box { fill: #e8f4f8; stroke: #2c3e50; stroke-width: 2; }
+      .header { fill: #2c3e50; color: white; font-weight: bold; }
+      .label { fill: #2c3e50; font-size: 14px; font-family: monospace; }
+      .title { fill: #2c3e50; font-size: 18px; font-weight: bold; }
+      .arrow { stroke: #34495e; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+      .db { fill: #fff3cd; stroke: #856404; stroke-width: 2; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#34495e" />
+    </marker>
+  </defs>
+
+  <text x="500" y="30" text-anchor="middle" class="title">PaR-EntBench: System Architecture</text>
+
+  <!-- User Input -->
+  <rect x="50" y="80" width="150" height="60" class="box" rx="5"/>
+  <text x="125" y="105" text-anchor="middle" class="label">User Query</text>
+  <text x="125" y="125" text-anchor="middle" font-size="12">task definition</text>
+
+  <!-- Planner -->
+  <rect x="280" y="80" width="160" height="60" class="box" rx="5"/>
+  <text x="360" y="105" text-anchor="middle" class="label">Planner</text>
+  <text x="360" y="125" text-anchor="middle" font-size="12">Haiku 4.5</text>
+
+  <!-- Arrow -->
+  <path d="M 200 110 L 280 110" class="arrow"/>
+
+  <!-- Routers -->
+  <rect x="520" y="60" width="160" height="100" class="box" rx="5"/>
+  <text x="600" y="85" text-anchor="middle" class="label">Router</text>
+  <text x="600" y="105" text-anchor="middle" font-size="11">PaR</text>
+  <text x="600" y="120" text-anchor="middle" font-size="11">FrugalCascade</text>
+  <text x="600" y="135" text-anchor="middle" font-size="11">AllSmall/AllFrontier</text>
+  <text x="600" y="150" text-anchor="middle" font-size="11">SinkFrontier...</text>
+
+  <!-- Arrow -->
+  <path d="M 440 110 L 520 110" class="arrow"/>
+
+  <!-- Dispatcher -->
+  <rect x="760" y="80" width="140" height="60" class="box" rx="5"/>
+  <text x="830" y="105" text-anchor="middle" class="label">Dispatcher</text>
+  <text x="830" y="125" text-anchor="middle" font-size="12">tier assign</text>
+
+  <!-- Arrow -->
+  <path d="M 680 110 L 760 110" class="arrow"/>
+
+  <!-- Specialists -->
+  <rect x="100" y="250" width="140" height="80" class="box" rx="5"/>
+  <text x="170" y="275" text-anchor="middle" class="label">Specialists</text>
+  <text x="170" y="295" text-anchor="middle" font-size="11">SQL, Mongo</text>
+  <text x="170" y="310" text-anchor="middle" font-size="11">Extract, MultiTool</text>
+  <text x="170" y="325" text-anchor="middle" font-size="11">Policy, CrossRecon</text>
+
+  <!-- Databases -->
+  <rect x="340" y="270" width="120" height="60" class="db" rx="5"/>
+  <text x="400" y="295" text-anchor="middle" class="label">Live Data</text>
+  <text x="400" y="315" text-anchor="middle" font-size="11">Postgres, MongoDB</text>
+
+  <!-- Arrow from dispatcher to specialists -->
+  <path d="M 830 140 L 830 180 L 170 180 L 170 250" class="arrow"/>
+
+  <!-- Arrow from specialists to DB -->
+  <path d="M 240 290 L 340 290" class="arrow"/>
+
+  <!-- Evaluators -->
+  <rect x="560" y="250" width="140" height="80" class="box" rx="5"/>
+  <text x="630" y="275" text-anchor="middle" class="label">Evaluators</text>
+  <text x="630" y="295" text-anchor="middle" font-size="11">Task-specific</text>
+  <text x="630" y="310" text-anchor="middle" font-size="11">execution based</text>
+  <text x="630" y="325" text-anchor="middle" font-size="11">F1, accuracy, cost</text>
+
+  <!-- Arrow from DB to evaluators -->
+  <path d="M 460 300 L 560 300" class="arrow"/>
+
+  <!-- Results -->
+  <rect x="800" y="250" width="140" height="80" class="box" rx="5"/>
+  <text x="870" y="275" text-anchor="middle" class="label">Results</text>
+  <text x="870" y="295" text-anchor="middle" font-size="11">Per-node metrics</text>
+  <text x="870" y="310" text-anchor="middle" font-size="11">accuracy, cost,</text>
+  <text x="870" y="325" text-anchor="middle" font-size="11">latency, ρ</text>
+
+  <!-- Arrow from evaluators to results -->
+  <path d="M 700 290 L 800 290" class="arrow"/>
+
+  <!-- Analysis -->
+  <rect x="400" y="420" width="200" height="80" class="box" rx="5"/>
+  <text x="500" y="445" text-anchor="middle" class="label">Analysis</text>
+  <text x="500" y="465" text-anchor="middle" font-size="11">Accuracy, cost, Pareto</text>
+  <text x="500" y="485" text-anchor="middle" font-size="11">ρ composition penalty</text>
+
+  <!-- Arrow from results to analysis -->
+  <path d="M 870 330 L 870 360 L 500 360 L 500 420" class="arrow"/>
+
+  <!-- Key insight box -->
+  <rect x="50" y="420" width="280" height="80" class="box" rx="5"/>
+  <text x="190" y="445" text-anchor="middle" font-weight="bold" font-size="12">Held Fixed:</text>
+  <text x="190" y="465" text-anchor="middle" font-size="11">• Planner: Haiku 4.5</text>
+  <text x="190" y="485" text-anchor="middle" font-size="11">• Specialists: same per router</text>
+
+</svg>
