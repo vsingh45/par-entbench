@@ -1,5 +1,12 @@
 # PaR (Planner-as-Router) Experiment Results
 
+> **Historical record — original 21-task pilot.** This document describes the
+> *original* pilot sweep (21 tasks, 3 per class, 449/504 runs, $5.11), kept for
+> provenance. The **current paper reports a separate, larger 54-task evaluation
+> subset** (162 runs per router); see `paper_stats.txt` and the README "Key
+> Results" table for the canonical numbers. Figures below are accurate for the
+> 21-task pilot only and should not be cited as the paper's headline results.
+
 **Date**: 2026-05-28 to 2026-05-29  
 **Model**: claude-haiku-4-5-20251001 (Haiku planner)  
 **Configuration**: Cascaded complexity classifier + prompt caching  
@@ -7,7 +14,7 @@
 
 ---
 
-## Final Sweep Results (21 tasks × 8 routers × 3 seeds)
+## Original Pilot Sweep Results (21 tasks × 8 routers × 3 seeds)
 
 **Completion**: 449/504 tasks (89.1%)  
 **Total Cost**: $5.11 USD  

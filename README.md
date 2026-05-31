@@ -52,15 +52,23 @@ Click the badge above to open the interactive architecture diagram in draw.io vi
 
 *The six-stage pipeline that makes EntBench execution-based rather than reference-based: task definition → planner + router → specialist execution → live database execution → task-specific evaluator → logged result. Each task's verdict depends on real Postgres/MongoDB execution, not just model output comparison. The reported evaluation uses a 54-task subset (×3 seeds = 162 runs) of the full 300-task benchmark.*
 
-**Key Results (Haiku Planner, 21 tasks × 8 routers × 3 seeds):**
-- Best accuracy: PaR & frugal_cascade at 33.3%
-- Best cost efficiency: frugal_cascade at $0.0041/task
-- Composition penalty (ρ): PaR 3.33 vs all_frontier 1.27
-- Total cost: $5.11 USD
+**Key Results (Haiku 4.5 planner, 54-task evaluation subset × 8 routers × 3 seeds = 162 runs per router):**
 
-> **Note:** `frugal_cascade` results above predate a fix to its confidence
-> scorer (the cascade previously never escalated; see `frugal_cascade` in the
-> Routers section). These figures are being regenerated and will change.
+| Router | Accuracy (54 tasks) | Cost / task | Excl. SQL-Compose (n=138) |
+|--------|--------------------:|------------:|--------------------------:|
+| `all_frontier` — accuracy upper bound | 24.7% | $0.0189 | 29.0% |
+| `source_frontier` | 24.2% | $0.0150 | 28.5% |
+| **`par` — proposed** | **22.2%** | **$0.0114** | **26.1%** |
+| `sink_frontier` | 21.6% | $0.0125 | 25.4% |
+| `all_small` — cost lower bound | 21.0% | $0.0042 | 24.6% |
+| `par_lite` | 21.0% | $0.0115 | 24.6% |
+| `frugal_cascade` | _pending re-run_ | _pending_ | _pending_ |
+
+- **PaR is Pareto-optimal**: no router achieves both higher accuracy *and* lower cost. PaR strictly dominates `sink_frontier` and `par_lite`, and trades ~10% relative accuracy for ~40% lower cost than `all_frontier`.
+- **PaR tier mix**: 45.4% small / 46.4% mid / 8.2% frontier (avg 1.80 subtasks per plan) — the planner routes most work to cheaper tiers and reserves frontier for the hardest 8%.
+- **SQL-Compose scores 0% for every router**, so the excl-SQL-Compose column (n=138) is the cleaner routing signal.
+
+> **Notes:** (1) `frugal_cascade` numbers are withheld — the current data predates the cascade-scorer fix, and the fixed re-run still needs a valid run against live databases. (2) The composition penalty ρ (PaR 3.33 vs all_frontier 1.27) was measured on the earlier 21-task pilot and should be recomputed on the 54-task set before publication.
 
 ## Quick start
 
@@ -216,6 +224,8 @@ Seven routing strategies are compared:
 | MultiTool-Plan     | 53    | Compositional         | Plan generation over 25-tool registry           |
 | Policy-Action      | 30    | Compositional         | Policy-constrained action selection             |
 | **Total**          | **300** | 132 calibration + 168 compositional               |
+
+> **Benchmark design vs. evaluated subset:** EntBench *defines* 300 tasks across the 7 classes above. The results reported in this README (and the current paper) are measured on a **54-task evaluation subset** (8 SQL-Gen, 8 SQL-Compose, 8 Mongo-Gen, 8 Cross-Recon, 7 Extract, 8 MultiTool-Plan, 7 Policy-Action) run with 3 seeds = 162 runs per router. The earlier `results/final_sweep` artifacts describe a separate, older 21-task pilot (3 tasks per class).
 
 ## Cost controls
 

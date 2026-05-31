@@ -1,5 +1,10 @@
 # PaR Experiment Data Index
 
+> **Scope:** This index catalogs the **original 21-task pilot** dataset (449
+> result files). The current paper's canonical results come from a separate
+> **54-task evaluation subset** (see `paper_stats.txt` and the README "Key
+> Results" table). Numbers here describe the 21-task pilot only.
+
 **Complete experiment dataset from 2026-05-28 to 2026-05-29**
 
 ## Quick Links
