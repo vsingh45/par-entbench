@@ -9,7 +9,7 @@
 
 PaR is an architectural pattern in which the planner agent simultaneously decomposes a user query into subtasks AND assigns each subtask to a specific LLM tier (small, mid, or frontier) at plan time. This removes the need for a separate routing component and lets cost-accuracy tradeoffs be reasoned about with full query context.
 
-EntBench is an enterprise-task benchmark for evaluating cost-aware routing in multi-agent LangGraph workflows. It *defines* 300 tasks across 7 classes; the results reported here are measured on a **54-task evaluation subset** (162 runs per router across 3 seeds). It is the first benchmark specifically designed to measure per-node tier routing decisions and compounding error (ρ) across multi-step agent workflows with structured enterprise data backends.
+EntBench is an enterprise-task benchmark for evaluating cost-aware routing in multi-agent LangGraph workflows. It comprises **54 tasks across 7 classes** (8 SQL-Gen, 8 SQL-Compose, 8 Mongo-Gen, 8 Cross-Recon, 7 Extract, 8 MultiTool-Plan, 7 Policy-Action), evaluated across 8 routers × 3 seeds = 162 runs per router. It is the first benchmark specifically designed to measure per-node tier routing decisions and compounding error (ρ) across multi-step agent workflows with structured enterprise data backends.
 
 ## Architecture
 
@@ -164,7 +164,7 @@ par-entbench/
 │       └── evaluators/           # Class-specific evaluators
 ├── entbench/
 │   ├── config.yaml               # Parameterized defaults
-│   ├── tasks/                    # 300 task JSON files by class
+│   ├── tasks/                    # 54 task JSON files across 7 classes
 │   └── data/                     # DB seed scripts
 ├── tests/                        # Test suite
 ├── docs/                         # Dataset card, convention spec, manifest
@@ -216,16 +216,16 @@ Seven routing strategies are compared:
 
 | Class              | Tasks | Type                  | Purpose                                          |
 |--------------------|-------|-----------------------|--------------------------------------------------|
-| SQL-Gen            | 25    | Capability calibration| Per-tier SQL generation baseline                |
-| SQL-Compose        | 25    | Compositional         | SQL feeds downstream LLM-reasoning consumer     |
-| Mongo-Gen          | 53    | Capability calibration| Per-tier MongoDB aggregation baseline           |
-| Cross-Recon        | 60    | Compositional         | Cross-backend reconciliation (headline class)   |
-| Extract            | 54    | Capability calibration| Structured extraction from documents            |
-| MultiTool-Plan     | 53    | Compositional         | Plan generation over 25-tool registry           |
-| Policy-Action      | 30    | Compositional         | Policy-constrained action selection             |
-| **Total**          | **300** | 132 calibration + 168 compositional               |
+| SQL-Gen            | 8     | Capability calibration| Per-tier SQL generation baseline                |
+| SQL-Compose        | 8     | Compositional         | SQL feeds downstream LLM-reasoning consumer     |
+| Mongo-Gen          | 8     | Capability calibration| Per-tier MongoDB aggregation baseline           |
+| Cross-Recon        | 8     | Compositional         | Cross-backend reconciliation (headline class)   |
+| Extract            | 7     | Capability calibration| Structured extraction from documents            |
+| MultiTool-Plan     | 8     | Compositional         | Plan generation over 25-tool registry           |
+| Policy-Action      | 7     | Compositional         | Policy-constrained action selection             |
+| **Total**          | **54** | 23 calibration + 31 compositional               |
 
-> **Benchmark design vs. evaluated subset:** EntBench *defines* 300 tasks across the 7 classes above. The results reported in this README (and the current paper) are measured on a **54-task evaluation subset** (8 SQL-Gen, 8 SQL-Compose, 8 Mongo-Gen, 8 Cross-Recon, 7 Extract, 8 MultiTool-Plan, 7 Policy-Action) run with 3 seeds = 162 runs per router. The earlier `results/final_sweep` artifacts describe a separate, older 21-task pilot (3 tasks per class).
+> The earlier `results/final_sweep` artifacts describe a separate 21-task pilot (3 tasks per class) run during development.
 
 ## Cost controls
 
