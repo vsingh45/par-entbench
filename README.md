@@ -249,6 +249,69 @@ ruff format src/
 mypy src/
 ```
 
+## Reproducing the reported results
+
+All commands assume the virtualenv is active and the databases are seeded (see
+Quick start). Raw per-task traces are committed under `results/` so the
+aggregate tables can be regenerated without re-running the experiments.
+
+```bash
+# 1. Regenerate the aggregate paper statistics (per-router accuracy/cost,
+#    per-class matrix, per-seed variance, failure modes) from committed traces
+python analyze_for_paper.py results/combined/ > paper_stats.txt
+
+# 2. Re-run the 54-task evaluation from scratch (optional; costs API spend)
+par-entbench --tasks all --routers all --seeds 3 --output results/combined/
+
+# 3. Re-score existing traces without new API calls (e.g. after an evaluator fix)
+par-entbench --reeval results/combined/
+
+# 4. Composition penalty (ρ) — requires a standalone capability-calibration
+#    baseline across all three tiers (see Limitations)
+par-entbench --compute-rho results/combined/ \
+    --standalone results/standalone/ --rho-output results/rho_analysis.json
+```
+
+| Paper artifact | How to regenerate |
+|----------------|-------------------|
+| Per-router accuracy/cost table | `analyze_for_paper.py` → Section 1–2 |
+| Per-class × per-router matrix | `analyze_for_paper.py` → Section 3–4 |
+| Per-seed variance | `analyze_for_paper.py` → Section 5 |
+| PaR tier-assignment distribution | `analyze_for_paper.py` → Section 7 |
+| Failure-mode frequencies | `analyze_for_paper.py` → Section 8 |
+
+## Paper-to-code map
+
+| Concept in the paper | Implementation |
+|----------------------|----------------|
+| Planner-as-Router (joint decompose + tier assignment) | [src/par/planner.py](src/par/planner.py) |
+| Tier dispatcher + bounded retry | [src/par/dispatcher.py](src/par/dispatcher.py) |
+| Cost model, pricing, kill-switch | [src/par/observability.py](src/par/observability.py) |
+| `Plan` / `Subtask` schemas | [src/par/types.py](src/par/types.py) |
+| Baseline routers (AllFrontier, AllSmall, Sink/Source, FrugalGPT) | [src/baselines/routers.py](src/baselines/routers.py) |
+| FrugalGPT cascade confidence scorer | [src/baselines/frugal_confidence.py](src/baselines/frugal_confidence.py) |
+| EntBench tasks (7 classes) | [entbench/tasks/](entbench/tasks/) |
+| Execution-based evaluators | [src/entbench/evaluators/](src/entbench/evaluators/) |
+| Experiment runner / CLI | [src/entbench/harness.py](src/entbench/harness.py) |
+| DB seed scripts | [entbench/data/](entbench/data/) |
+
+## Limitations
+
+- **Evaluation scale.** Reported results use a **54-task subset** (162 runs per
+  router) of the 300-task benchmark design; broader runs are future work.
+- **Composition penalty (ρ).** The reported ρ = 3.33 was measured on the earlier
+  **21-task calibration pilot**. Recomputing ρ on the 54-task set requires
+  standalone per-tier baselines at all three tiers (small/mid/frontier) across
+  every specialist; that calibration sweep has not yet been run, so ρ is
+  reported as a preliminary indicator rather than a 54-task headline result.
+- **FrugalGPT baseline.** The cascade's confidence scorer was recently corrected
+  (it previously never escalated); fixed-scorer numbers against live databases
+  are pending and are withheld from the results tables until available.
+- **Single provider.** All tiers are Anthropic models (Haiku/Sonnet/Opus 4.x);
+  cross-provider routing is not evaluated.
+- **Domain.** Tasks center on the Software Asset Management (SAM) enterprise
+  domain with Postgres/MongoDB backends.
+
 ## Citation
 
 If you use PaR or EntBench in your research, please cite:
