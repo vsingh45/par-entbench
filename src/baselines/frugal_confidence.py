@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 
 import anthropic
+from anthropic.types import TextBlock
 
 # The judge runs on the cheapest model so the scorer itself adds minimal cost.
 JUDGE_MODEL = "claude-haiku-4-5-20251001"
@@ -94,7 +95,7 @@ def score_confidence(
             messages=[{"role": "user", "content": judge_prompt}],
         )
         text = "".join(
-            block.text for block in resp.content if getattr(block, "type", None) == "text"
+            block.text for block in resp.content if isinstance(block, TextBlock)
         ).strip()
         usage = {
             "input_tokens": getattr(resp.usage, "input_tokens", 0),
