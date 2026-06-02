@@ -78,3 +78,13 @@ logs/
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb_checkpoints
+
+# Paper manuscript drafts (NOT part of the public code artifact)
+final/
+*.docx
+*.doc
+~$*
+# Invalid/superseded local result dirs (debugging artifacts)
+results/frugal_pilot/
+results/frugal_fixed/
+results/results/
