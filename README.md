@@ -115,7 +115,7 @@ All setup checks passed. Ready to run experiments.
 
 ### 5. Run experiments
 
-**Standalone sweep** (per-node accuracy baseline for ρ, ~$8):
+**Standalone sweep** (per-node accuracy baseline for ρ):
 
 ```bash
 par-entbench --tasks capability_calibration \
@@ -123,7 +123,7 @@ par-entbench --tasks capability_calibration \
     --output results/standalone/
 ```
 
-**Pilot run** (100-task sanity check, ~$5):
+**Pilot run** (100-task sanity check):
 
 ```bash
 par-entbench --tasks pilot_100 \
@@ -131,7 +131,7 @@ par-entbench --tasks pilot_100 \
     --output results/pilot/
 ```
 
-**Full sweep** (overnight, ~$40-55):
+**Full sweep** (overnight):
 
 ```bash
 par-entbench --tasks all \
@@ -229,9 +229,7 @@ Seven routing strategies are compared:
 
 ## Cost controls
 
-Hard kill-switch fires at $75 cumulative API spend. Configurable via `--kill-switch-usd` flag or `cost.kill_switch_usd` in `entbench/config.yaml`.
-
-Expected total spend for full sweep: $50-70 with prompt caching enabled.
+A hard kill-switch stops execution when cumulative API spend reaches the configured ceiling. Set it conservatively before running — actual spend depends on task mix, model tier distribution, and caching. Configurable via `--kill-switch-usd` flag or `cost.kill_switch_usd` in `entbench/config.yaml`.
 
 ## Development
 
