@@ -50,7 +50,7 @@ Click the badge above to open the interactive architecture diagram in draw.io vi
 
 ![Evaluation Pipeline](./EVAL_PIPELINE.svg)
 
-*The six-stage pipeline that makes EntBench execution-based rather than reference-based: task definition → planner + router → specialist execution → live database execution → task-specific evaluator → logged result. Each task's verdict depends on real Postgres/MongoDB execution, not just model output comparison. The reported evaluation uses a 54-task subset (×3 seeds = 162 runs) of the full 300-task benchmark.*
+*The six-stage pipeline that makes EntBench execution-based rather than reference-based: task definition → planner + router → specialist execution → live database execution → task-specific evaluator → logged result. Each task's verdict depends on real Postgres/MongoDB execution, not just model output comparison. The evaluation comprises 54 tasks × 3 seeds = 162 runs per router.*
 
 **Key Results (Haiku 4.5 planner, 54-task evaluation subset × 8 routers × 3 seeds = 162 runs per router):**
 
@@ -295,8 +295,8 @@ par-entbench --compute-rho results/combined/ \
 
 ## Limitations
 
-- **Evaluation scale.** Reported results use a **54-task subset** (162 runs per
-  router) of the 300-task benchmark design; broader runs are future work.
+- **Evaluation scale.** The benchmark comprises 54 tasks (162 runs per router
+  across 3 seeds). Broader expansion is future work.
 - **Composition penalty (ρ).** The reported ρ = 3.33 was measured on the earlier
   **21-task calibration pilot**. Recomputing ρ on the 54-task set requires
   standalone per-tier baselines at all three tiers (small/mid/frontier) across
