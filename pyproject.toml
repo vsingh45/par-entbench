@@ -58,10 +58,10 @@ analysis = [
 par-entbench = "entbench.harness:main"
 
 [project.urls]
-Homepage = "https://github.com/vksingh/par-entbench"
-Documentation = "https://github.com/vksingh/par-entbench/tree/main/docs"
-Repository = "https://github.com/vksingh/par-entbench"
-Issues = "https://github.com/vksingh/par-entbench/issues"
+Homepage = "https://github.com/vsingh45/par-entbench"
+Documentation = "https://github.com/vsingh45/par-entbench/tree/main/docs"
+Repository = "https://github.com/vsingh45/par-entbench"
+Issues = "https://github.com/vsingh45/par-entbench/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/par", "src/baselines", "src/entbench"]

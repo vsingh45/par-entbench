@@ -9,7 +9,7 @@
 
 PaR is an architectural pattern in which the planner agent simultaneously decomposes a user query into subtasks AND assigns each subtask to a specific LLM tier (small, mid, or frontier) at plan time. This removes the need for a separate routing component and lets cost-accuracy tradeoffs be reasoned about with full query context.
 
-EntBench is a 300-task pilot benchmark across 7 task classes for evaluating cost-aware routing in multi-agent LangGraph workflows. It is the first benchmark specifically designed to measure per-node tier routing decisions and compounding error (ρ) across multi-step agent workflows with structured enterprise data backends.
+EntBench is an enterprise-task benchmark for evaluating cost-aware routing in multi-agent LangGraph workflows. It *defines* 300 tasks across 7 classes; the results reported here are measured on a **54-task evaluation subset** (162 runs per router across 3 seeds). It is the first benchmark specifically designed to measure per-node tier routing decisions and compounding error (ρ) across multi-step agent workflows with structured enterprise data backends.
 
 ## Architecture
 
