@@ -116,13 +116,41 @@ def load_tasks(task_set: str, tasks_dir: str | None = None) -> list[dict]:
     elif task_set == "capability_calibration":
         return [t for t in all_tasks if t["task_class"] in CAPABILITY_CLASSES]
     elif task_set == "new":
-        new_ids = {"SQL-004", "SQL-005", "SQL-006", "SQL-007", "SQL-008",
-                   "MGO-004", "MGO-005", "MGO-006", "MGO-007", "MGO-008",
-                   "EXT-004", "EXT-005", "EXT-006", "EXT-007",
-                   "SQLC-004", "SQLC-005", "SQLC-006", "SQLC-007", "SQLC-008",
-                   "XR-004", "XR-005", "XR-006", "XR-007", "XR-008",
-                   "MTP-004", "MTP-005", "MTP-006", "MTP-007", "MTP-008",
-                   "PAC-004", "PAC-005", "PAC-006", "PAC-007"}
+        new_ids = {
+            "SQL-004",
+            "SQL-005",
+            "SQL-006",
+            "SQL-007",
+            "SQL-008",
+            "MGO-004",
+            "MGO-005",
+            "MGO-006",
+            "MGO-007",
+            "MGO-008",
+            "EXT-004",
+            "EXT-005",
+            "EXT-006",
+            "EXT-007",
+            "SQLC-004",
+            "SQLC-005",
+            "SQLC-006",
+            "SQLC-007",
+            "SQLC-008",
+            "XR-004",
+            "XR-005",
+            "XR-006",
+            "XR-007",
+            "XR-008",
+            "MTP-004",
+            "MTP-005",
+            "MTP-006",
+            "MTP-007",
+            "MTP-008",
+            "PAC-004",
+            "PAC-005",
+            "PAC-006",
+            "PAC-007",
+        }
         return [t for t in all_tasks if t.get("task_id") in new_ids]
     elif task_set == "pilot_100":
         sampled = []

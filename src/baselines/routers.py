@@ -243,7 +243,9 @@ def frugal_cascade_dispatch(
 
                 # A hard error escalates; otherwise accept iff confident enough,
                 # or once we've reached the top tier (nowhere left to escalate).
-                if (not result.error) and (confidence >= confidence_threshold or tier == "frontier"):
+                if (not result.error) and (
+                    confidence >= confidence_threshold or tier == "frontier"
+                ):
                     break
                 if result.error and tier == "frontier":
                     break
