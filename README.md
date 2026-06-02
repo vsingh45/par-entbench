@@ -316,11 +316,11 @@ If you use PaR or EntBench in your research, please cite:
 
 ```bibtex
 @article{singh2026par,
-  title   = {Planner-as-Router: Cost-Efficient Model Selection in Multi-Agent LangGraph Workflows},
-  author  = {Singh, Vivek Kumar},
-  journal = {ACM Transactions on Intelligent Systems and Technology},
+  title   = {Planner-as-Router: Cost-Efficient Model Selection in Multi-Agent LLM Workflows},
+  author  = {Singh, Vivek Kumar and Priyam, Preeti and Bhowmick, Gautam},
+  journal = {IEEE Access},
   year    = {2026},
-  note    = {Under submission}
+  note    = {Under review}
 }
 ```
 
