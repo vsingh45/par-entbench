@@ -54,17 +54,20 @@ Click the badge above to open the interactive architecture diagram in draw.io vi
 
 **Key Results (Haiku 4.5 planner, 54-task evaluation subset × 8 routers × 3 seeds = 162 runs per router):**
 
-| Router | Accuracy (54 tasks) | Cost / task | Excl. SQL-Compose (n=138) |
-|--------|--------------------:|------------:|--------------------------:|
-| `all_frontier` — accuracy upper bound | 24.7% | $0.0189 | 29.0% |
-| `source_frontier` | 24.2% | $0.0150 | 28.5% |
-| **`par` — proposed** | **22.2%** | **$0.0114** | **26.1%** |
-| `sink_frontier` | 21.6% | $0.0125 | 25.4% |
-| `all_small` — cost lower bound | 21.0% | $0.0042 | 24.6% |
-| `par_lite` | 21.0% | $0.0115 | 24.6% |
+| Router | Accuracy (95% CI) | Cost / task | Excl. SQL-Compose (n=138) |
+|--------|------------------:|------------:|--------------------------:|
+| `all_frontier` — accuracy upper bound | 24.7% [13.6–37.0] | $0.0189 | 29.0% |
+| `source_frontier` | 24.2% [13.6–35.8] | $0.0150 | 28.5% |
+| **`par` — proposed** | **22.2% [12.3–33.3]** | **$0.0114** | **26.1%** |
+| `sink_frontier` | 21.6% [11.1–32.7] | $0.0125 | 25.4% |
+| `all_small` — cost lower bound | 21.0% [11.1–32.1] | $0.0042 | 24.6% |
+| `par_lite` | 21.0% [11.1–32.1] | $0.0115 | 24.6% |
 | `frugal_cascade` | _pending re-run_ | _pending_ | _pending_ |
 
-- **PaR is Pareto-optimal**: no router achieves both higher accuracy *and* lower cost. PaR strictly dominates `sink_frontier` and `par_lite`, and trades ~10% relative accuracy for ~40% lower cost than `all_frontier`.
+Accuracy 95% CIs are paired bootstrap intervals (10,000 resamples, task as the resampling unit, seeds averaged per task; reproduce with [analyze_significance.py](analyze_significance.py)).
+
+- **PaR matches the frontier on accuracy at significantly lower cost.** PaR's accuracy is statistically indistinguishable from `all_frontier` (paired Δ = +2.5pp, 95% CI [−4.3, +9.9]) while its cost is significantly lower (−$0.0075/task ≈ −39%, CI [−0.0101, −0.0049]). PaR is also significantly cheaper than `source_frontier` (−$0.0036, CI [−0.0054, −0.0015]) with no significant accuracy difference.
+- **The accuracy differences between routers are not statistically significant** at n=54 — the per-router CIs overlap heavily. The benchmark separates routers on **cost**, not accuracy: PaR is statistically indistinguishable from `sink_frontier` and `par_lite` on both axes, and the cheapest routers (`all_small`) are significantly cheaper than PaR with no significant accuracy gap. The contribution is cost efficiency at matched accuracy, not an accuracy win.
 - **PaR tier mix**: 45.4% small / 46.4% mid / 8.2% frontier (avg 1.80 subtasks per plan) — the planner routes most work to cheaper tiers and reserves frontier for the hardest 8%.
 - **SQL-Compose scores 0% for every router**, so the excl-SQL-Compose column (n=138) is the cleaner routing signal.
 
