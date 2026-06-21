@@ -205,7 +205,7 @@ def _run_full_planner(
     client: anthropic.Anthropic,
     no_rationale: bool = False,
 ) -> WorkflowState:
-    """Run the full Claude Haiku 4.5 (small tier) planner and charge mid-tier cost."""
+    """Run the full Claude Haiku 4.5 (small tier) planner and charge small-tier cost."""
     system_prompt = PLANNER_SYSTEM_PROMPT_NO_RATIONALE if no_rationale else PLANNER_SYSTEM_PROMPT
     tool = PLANNER_TOOL_NO_RATIONALE if no_rationale else PLANNER_TOOL
 
@@ -231,7 +231,7 @@ def _run_full_planner(
     output_tokens = response.usage.output_tokens
     cached_tokens = getattr(response.usage, "cache_read_input_tokens", 0)
     planner_cost = compute_cost(
-        tier="mid",
+        tier="small",
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         cached_tokens=cached_tokens,
