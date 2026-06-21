@@ -205,7 +205,7 @@ def _run_full_planner(
     client: anthropic.Anthropic,
     no_rationale: bool = False,
 ) -> WorkflowState:
-    """Run the Sonnet planner and charge mid-tier cost."""
+    """Run the full Claude Haiku 4.5 (small tier) planner and charge mid-tier cost."""
     system_prompt = PLANNER_SYSTEM_PROMPT_NO_RATIONALE if no_rationale else PLANNER_SYSTEM_PROMPT
     tool = PLANNER_TOOL_NO_RATIONALE if no_rationale else PLANNER_TOOL
 
@@ -252,7 +252,7 @@ def run_planner(
     Cascaded planner: classify complexity with Haiku first.
 
     SIMPLE tasks get a single-subtask plan at small tier immediately —
-    no Sonnet call. COMPLEX tasks fall through to the full Sonnet planner.
+    no full-planner call. COMPLEX tasks fall through to the full Claude Haiku 4.5 (small tier) planner.
     no_rationale=True activates the PaR-no-rationale ablation variant.
     """
     complexity = classify_complexity(state.query, client)
@@ -275,5 +275,5 @@ def run_planner(
         state.pending_subtasks = list(plan.subtasks)
         return state
 
-    # COMPLEX: run full Sonnet planner
+    # COMPLEX: run full Claude Haiku 4.5 (small tier) planner
     return _run_full_planner(state, client, no_rationale=no_rationale)

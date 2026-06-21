@@ -190,7 +190,7 @@ class Plan(BaseModel):
     cost_rationale: str               # Forces explicit reasoning
 ```
 
-The planner runs on Claude Sonnet 4.6 across all routers (held constant). The dispatcher routes each subtask to the assigned tier:
+The planner runs on Claude Haiku 4.5 (small tier) across all routers (held constant). The dispatcher routes each subtask to the assigned tier:
 
 | Tier     | Model               | Input / Output (per MTok) |
 |----------|---------------------|---------------------------|
@@ -200,11 +200,12 @@ The planner runs on Claude Sonnet 4.6 across all routers (held constant). The di
 
 ## Routers
 
-Seven routing strategies are compared:
+Eight routing strategies are compared:
 
 | Router              | Description                                                  |
 |---------------------|--------------------------------------------------------------|
 | `par`               | Proposed: planner assigns tier per subtask at plan time     |
+| `par_lite`          | Cascaded: Haiku classifier skips the planner on simple tasks |
 | `all_frontier`      | Every node uses Opus 4.7 — accuracy upper bound             |
 | `all_small`         | Every node uses Haiku 4.5 — cost lower bound                |
 | `sink_frontier`     | Frontier on terminal nodes only                              |
@@ -229,7 +230,7 @@ Seven routing strategies are compared:
 
 ## Cost controls
 
-A hard kill-switch stops execution when cumulative API spend reaches the configured ceiling. Set it conservatively before running — actual spend depends on task mix, model tier distribution, and caching. Configurable via `--kill-switch-usd` flag or `cost.kill_switch_usd` in `entbench/config.yaml`.
+A hard kill-switch stops execution when cumulative API spend reaches the configured ceiling. Set it conservatively before running — actual spend depends on task mix and model-tier distribution. Note: prompt caching did not activate for our specialist prompts (shorter than the provider's minimum cacheable length), so totals do not assume caching — see the paper's Design Rationale. Configurable via `--kill-switch-usd` flag or `cost.kill_switch_usd` in `entbench/config.yaml`.
 
 ## Development
 
@@ -314,13 +315,15 @@ par-entbench --compute-rho results/combined/ \
 
 If you use PaR or EntBench in your research, please cite:
 
+<!-- TODO: set the real booktitle/note once the venue is confirmed. -->
 ```bibtex
-@article{singh2026par,
-  title   = {Planner-as-Router: Cost-Efficient Model Selection in Multi-Agent LLM Workflows},
-  author  = {Singh, Vivek Kumar and Priyam, Preeti and Bhowmick, Gautam},
-  journal = {IEEE Access},
-  year    = {2026},
-  note    = {Under review}
+@inproceedings{singh2026par,
+  title     = {Planner-as-Router: Joint Plan-Time Model Routing for
+               Cost-Efficient Multi-Agent LangGraph Workflows},
+  author    = {Singh, Vivek Kumar and Priyam, Preeti and Bhowmick, Gautam},
+  booktitle = {Proc. IEEE Conference},
+  year      = {2026},
+  note      = {To appear}
 }
 ```
 
