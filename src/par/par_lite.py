@@ -2,10 +2,10 @@
 PaR-Lite — cost-optimized PaR variant.
 
 Uses Haiku classifier to decide complexity, then:
-- SIMPLE tasks: Haiku specialist directly (no Sonnet planner)
-- COMPLEX tasks: full PaR with Sonnet planner + tier routing
+- SIMPLE tasks: Haiku specialist directly (no full planner call)
+- COMPLEX tasks: full PaR with the Haiku 4.5 (small-tier) planner + tier routing
 
-This is the 7th router in the comparison table.
+This is one of the eight routers in the comparison table.
 Expected cost: ~$0.004-0.007/task blended.
 Expected accuracy: similar to PaR on complex tasks, similar to AllSmall on simple.
 """

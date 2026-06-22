@@ -157,7 +157,7 @@ par-entbench/
 ├── src/
 │   ├── par/                      # PaR reference implementation
 │   │   ├── types.py              # Pydantic schemas
-│   │   ├── planner.py            # Planner agent (Sonnet 4.6)
+│   │   ├── planner.py            # Planner agent (Haiku 4.5, small tier)
 │   │   ├── dispatcher.py         # Tier dispatcher + bounded retry
 │   │   └── observability.py      # Cost tracking + kill-switch
 │   ├── baselines/                # 5 baseline routers
