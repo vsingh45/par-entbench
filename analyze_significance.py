@@ -13,17 +13,25 @@ at n=54) rather than treating each seed as independent. A paired difference is
 Cost here is `total_cost_usd` (specialist-only; the planner is held constant
 across all routers and excluded — see README "Cost controls").
 
+The SQL-Compose class scores 0% for every router (a degenerate floor class),
+so the paper reports accuracy excluding it ("the cleaner routing signal").
+Pass --excl-sql-compose to reproduce that view. Cost significance is reported
+on the full 54-task set by default, since every task incurs real spend and the
+full set makes no exclusion that could look outcome-motivated; the excl view is
+a robustness check, not the primary basis.
+
 Usage:
-    python analyze_significance.py [results_dir]   # default: results/combined
+    python analyze_significance.py [results_dir]                  # full 54-task
+    python analyze_significance.py [results_dir] --excl-sql-compose  # n=138 view
 """
 
 from __future__ import annotations
 
+import argparse
 import collections
 import glob
 import json
 import random
-import sys
 
 N_BOOT = 10_000
 SEED = 42
@@ -38,7 +46,9 @@ MAIN_ROUTERS = [
 ]
 
 
-def load(results_dir: str) -> dict[str, dict[str, list[tuple[float, float]]]]:
+def load(
+    results_dir: str, excl_sql_compose: bool = False
+) -> dict[str, dict[str, list[tuple[float, float]]]]:
     """router -> task_id -> list of (correct, cost) across seeds."""
     rows: dict[str, dict[str, list[tuple[float, float]]]] = collections.defaultdict(
         lambda: collections.defaultdict(list)
@@ -46,6 +56,8 @@ def load(results_dir: str) -> dict[str, dict[str, list[tuple[float, float]]]]:
     files = glob.glob(f"{results_dir}/**/*.json", recursive=True)
     for f in files:
         d = json.load(open(f))
+        if excl_sql_compose and d["task_class"] == "sql_compose":
+            continue
         rows[d["router"]][d["task_id"]].append(
             (1.0 if d["task_correct"] else 0.0, d["total_cost_usd"])
         )
@@ -75,13 +87,21 @@ def paired_boot(
 
 
 def main() -> None:
-    results_dir = sys.argv[1] if len(sys.argv) > 1 else "results/combined"
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("results_dir", nargs="?", default="results/combined")
+    parser.add_argument(
+        "--excl-sql-compose",
+        action="store_true",
+        help="drop the degenerate SQL-Compose class (n=138 robustness view)",
+    )
+    a = parser.parse_args()
     rng = random.Random(SEED)
-    rows = load(results_dir)
+    rows = load(a.results_dir, excl_sql_compose=a.excl_sql_compose)
     routers = [r for r in MAIN_ROUTERS if r in rows]
     tm = {r: task_means(rows[r]) for r in routers}
 
-    print(f"Results dir: {results_dir}  |  bootstrap n={N_BOOT}, seed={SEED}\n")
+    basis = "excl SQL-Compose (n=138)" if a.excl_sql_compose else "full 54-task set"
+    print(f"Results dir: {a.results_dir}  |  basis: {basis}  |  bootstrap n={N_BOOT}, seed={SEED}\n")
     print("=== Per-router accuracy and cost (95% bootstrap CI, unit = task) ===")
     print(f"{'router':18} {'accuracy':>22}  {'cost/task':>22}")
     for r in routers:
