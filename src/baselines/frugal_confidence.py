@@ -94,9 +94,7 @@ def score_confidence(
             max_tokens=JUDGE_MAX_TOKENS,
             messages=[{"role": "user", "content": judge_prompt}],
         )
-        text = "".join(
-            block.text for block in resp.content if isinstance(block, TextBlock)
-        ).strip()
+        text = "".join(block.text for block in resp.content if isinstance(block, TextBlock)).strip()
         usage = {
             "input_tokens": getattr(resp.usage, "input_tokens", 0),
             "output_tokens": getattr(resp.usage, "output_tokens", 0),

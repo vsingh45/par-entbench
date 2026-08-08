@@ -53,6 +53,27 @@ def collect_upstream_outputs(subtask: Subtask, node_results: list[NodeResult]) -
     return {dep: result_map.get(dep, {}) for dep in subtask.depends_on}
 
 
+def _null_node(subtask: Subtask, reason: str) -> NodeResult:
+    """Record a node as null WITHOUT executing it.
+
+    Used when an upstream dependency returned null (Algorithm 1, lines 3-5):
+    the failure propagates down the DAG rather than the node being run on
+    empty input. No model is called, so the node carries zero cost.
+    """
+    return NodeResult(
+        subtask_id=subtask.id,
+        specialist=subtask.specialist,
+        tier_assigned=subtask.tier,
+        model_used=TIER_MODELS[subtask.tier],
+        input_tokens=0,
+        output_tokens=0,
+        cached_tokens=0,
+        latency_ms=0,
+        output=None,
+        error=reason,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Single subtask execution with Flavor A retry
 # ---------------------------------------------------------------------------
@@ -143,6 +164,7 @@ def dispatch_plan(
     if plan is None:
         raise ValueError(f"No plan set for task {state.task_id}")
     completed_ids: set[str] = set()
+    failed_ids: set[str] = set()  # subtasks that returned null (hard failure or nulled upstream)
     node_results: list[NodeResult] = []
     cumulative_spend = state.cumulative_spend_usd
     kill_switch_triggered = False
@@ -160,6 +182,18 @@ def dispatch_plan(
         for subtask in ready:
             if kill_switch_triggered:
                 break
+
+            # Algorithm 1, lines 3-5: if any dependency returned null, record
+            # this node null and skip execution. Null propagates down the DAG
+            # instead of the node running on empty/partial input. No model call,
+            # so no cost is charged.
+            if any(dep in failed_ids for dep in subtask.depends_on):
+                node_results.append(
+                    _null_node(subtask, "skipped: upstream dependency returned null")
+                )
+                completed_ids.add(subtask.id)
+                failed_ids.add(subtask.id)
+                continue
 
             upstream = collect_upstream_outputs(subtask, node_results)
             specialist_fn = specialist_registry.get(subtask.specialist)
@@ -179,6 +213,8 @@ def dispatch_plan(
 
             node_results.append(node_result)
             completed_ids.add(subtask.id)
+            if node_result.output is None:  # hard failure after retries + escalation
+                failed_ids.add(subtask.id)
 
             node_cost = compute_cost(
                 tier=node_result.tier_assigned,
@@ -189,6 +225,11 @@ def dispatch_plan(
             cumulative_spend += node_cost
             if cumulative_spend >= kill_switch_ceiling:
                 kill_switch_triggered = True
+
+        # Kill switch is terminal: stop dispatching rather than re-entering the
+        # loop with the same unready set (which would spin forever).
+        if kill_switch_triggered:
+            break
 
         remaining = [s for s in remaining if s.id not in completed_ids]
 
