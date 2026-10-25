@@ -344,12 +344,16 @@ def run_task(
     output_dir: str,
     batch_planner: BatchPlanner | None = None,
     harness: ParHarness | None = None,
+    evaluate: bool = True,
 ) -> tuple[WorkflowTrace, float, bool]:
     """Run one task end to end.
 
     `harness` sets the planner and classifier prompts. Pass the same harness to
     make_specialist_registry() so specialists use matching prompts; None keeps
     the built-in v1 prompts.
+
+    `evaluate=False` skips grading and leaves trace.task_correct as None, for
+    callers (e.g. Harness² rollouts) that must not see the verdict yet.
     """
     random.seed(seed)
 
@@ -417,8 +421,8 @@ def run_task(
     for nr in node_results:
         trace, _ = record_node_result(trace, nr, kill_switch_ceiling)
 
-    task_correct = evaluate_task(task, trace)
-    trace = finalize_trace(trace, task_correct)
+    if evaluate:
+        trace = finalize_trace(trace, evaluate_task(task, trace))
 
     emit_trace(trace, output_dir)
 
