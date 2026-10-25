@@ -211,7 +211,7 @@ def make_specialist_registry(
 
         response = client.messages.create(
             model=model,
-            max_tokens=800,
+            max_tokens=max_tokens,
             system=[
                 {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}
             ],

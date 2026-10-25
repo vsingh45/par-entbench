@@ -223,3 +223,12 @@ def test_no_rationale_ablation_ignores_harness(tmp_path):
     state = WorkflowState(query="q", task_id="t", router="par_no_rationale", seed=1)
     _run_full_planner(state, client, no_rationale=True, planner_prompt="SHOULD BE IGNORED")
     assert client.calls[0]["system"][0]["text"] == PLANNER_SYSTEM_PROMPT_NO_RATIONALE
+
+
+def test_specialist_max_tokens_reaches_api():
+    """Regression: _call_specialist used to ignore its max_tokens and send 800."""
+    client = _FakeClient()
+    registry = make_specialist_registry(client)
+    registry["sql_gen"](_subtask("sql_gen"), "small", {}, client)
+    registry["cross_recon"](_subtask("cross_recon"), "small", {}, client)
+    assert [c["max_tokens"] for c in client.calls] == [2000, 1000]
