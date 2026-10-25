@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import anthropic
 
-from .planner import run_planner
+from .planner import PlannerHarness, run_planner
 from .types import Plan, WorkflowState
 
 
@@ -34,9 +34,15 @@ class BatchPlanner:
     they answer the correct question regardless.
     """
 
-    def __init__(self, client: anthropic.Anthropic, no_rationale: bool = False) -> None:
+    def __init__(
+        self,
+        client: anthropic.Anthropic,
+        no_rationale: bool = False,
+        harness: PlannerHarness | None = None,
+    ) -> None:
         self.client = client
         self.no_rationale = no_rationale
+        self.harness = harness
         self._templates: dict[str, Plan] = {}
 
     def run(self, state: WorkflowState) -> WorkflowState:
@@ -53,7 +59,9 @@ class BatchPlanner:
             state.plan = plan
             state.pending_subtasks = list(plan.subtasks)
         else:
-            state = run_planner(state, self.client, no_rationale=self.no_rationale)
+            state = run_planner(
+                state, self.client, no_rationale=self.no_rationale, harness=self.harness
+            )
             if state.plan is not None:
                 self._templates[task_class] = state.plan
 

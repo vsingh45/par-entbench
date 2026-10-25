@@ -12,6 +12,7 @@ tier assignments. PaR-no-rationale (ablation) uses a variant without it.
 from __future__ import annotations
 
 import os
+from typing import Protocol
 
 import anthropic
 
@@ -43,7 +44,11 @@ _SPECIALIST_MAP: dict[str, str] = {
 }
 
 
-def classify_complexity(query: str, client: anthropic.Anthropic) -> str:
+def classify_complexity(
+    query: str,
+    client: anthropic.Anthropic,
+    prompt: str = COMPLEXITY_CLASSIFIER_PROMPT,
+) -> str:
     """Return 'SIMPLE' or 'COMPLEX' for the given query using Haiku."""
     response = client.messages.create(
         model="claude-haiku-4-5-20251001",
@@ -51,7 +56,7 @@ def classify_complexity(query: str, client: anthropic.Anthropic) -> str:
         system=[
             {
                 "type": "text",
-                "text": COMPLEXITY_CLASSIFIER_PROMPT,
+                "text": prompt,
                 "cache_control": {"type": "ephemeral"},
             }
         ],
@@ -200,13 +205,31 @@ PLANNER_TOOL_NO_RATIONALE = {
 # ---------------------------------------------------------------------------
 
 
+class PlannerHarness(Protocol):
+    """The parts of an external harness the planner reads (see entbench.harness_files)."""
+
+    @property
+    def planner_system(self) -> str: ...
+
+    @property
+    def classifier_prompt(self) -> str: ...
+
+
 def _run_full_planner(
     state: WorkflowState,
     client: anthropic.Anthropic,
     no_rationale: bool = False,
+    planner_prompt: str | None = None,
 ) -> WorkflowState:
-    """Run the full Claude Haiku 4.5 (small tier) planner and charge small-tier cost."""
-    system_prompt = PLANNER_SYSTEM_PROMPT_NO_RATIONALE if no_rationale else PLANNER_SYSTEM_PROMPT
+    """Run the full Claude Haiku 4.5 (small tier) planner and charge small-tier cost.
+
+    `planner_prompt` overrides the default PaR prompt. It is ignored for the
+    no-rationale ablation, which always uses its fixed prompt.
+    """
+    if no_rationale:
+        system_prompt = PLANNER_SYSTEM_PROMPT_NO_RATIONALE
+    else:
+        system_prompt = planner_prompt or PLANNER_SYSTEM_PROMPT
     tool = PLANNER_TOOL_NO_RATIONALE if no_rationale else PLANNER_TOOL
 
     response = client.messages.create(  # type: ignore[call-overload]
@@ -247,6 +270,7 @@ def run_planner(
     state: WorkflowState,
     client: anthropic.Anthropic,
     no_rationale: bool = False,
+    harness: PlannerHarness | None = None,
 ) -> WorkflowState:
     """
     Cascaded planner: classify complexity with Haiku first.
@@ -254,8 +278,13 @@ def run_planner(
     SIMPLE tasks get a single-subtask plan at small tier immediately —
     no full-planner call. COMPLEX tasks fall through to the full Claude Haiku 4.5 (small tier) planner.
     no_rationale=True activates the PaR-no-rationale ablation variant.
+    harness, when given, supplies the planner and classifier prompts; None uses
+    the built-in prompts that produced the published EntBench v1 results.
     """
-    complexity = classify_complexity(state.query, client)
+    if harness is None:
+        complexity = classify_complexity(state.query, client)
+    else:
+        complexity = classify_complexity(state.query, client, prompt=harness.classifier_prompt)
 
     if complexity == "SIMPLE":
         specialist = _infer_specialist(state.task_class or "")
@@ -276,4 +305,9 @@ def run_planner(
         return state
 
     # COMPLEX: run full Claude Haiku 4.5 (small tier) planner
-    return _run_full_planner(state, client, no_rationale=no_rationale)
+    return _run_full_planner(
+        state,
+        client,
+        no_rationale=no_rationale,
+        planner_prompt=harness.planner_system if harness is not None else None,
+    )
