@@ -1,0 +1,10 @@
+{
+  "classifier": "31b514ed70a0735fc38cae5ab18ce32b0ea73a24e739ad5fbc548d96f9ddedf3",
+  "planner": "40582a351bf956478a543cd14ee187574c0a359a68777cbbe6d18284ef8c4f68",
+  "specialist:cross_recon": "6495d25b8305420673a0aa8577ddcaa958976b7e17073ee01b67b1260bf288d0",
+  "specialist:extract": "0079758cba420706f0a8233e26fff99618d285bd1fb5a62372754b266cc3d052",
+  "specialist:mongo_query": "d44ea2e472fe0669446e5f43716842430f6b00a4603bde6099ae68b0ed6c4ed4",
+  "specialist:multitool_plan": "8a4b414f58b5d06e50bd4516fc0bbdd876a6c80690d575b2e6015a2aec906762",
+  "specialist:policy_action": "3add56cc42c832e69f1f9b7d5a7185ad1a9a9eea2e54e8eb6db0aff669b03105",
+  "specialist:sql_gen": "f35f200f1cd6967e85bd490d39c36d6e9890dd67040b4e82e74dffeb8ba7fa0f"
+}
